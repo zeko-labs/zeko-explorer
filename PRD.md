@@ -1,22 +1,20 @@
 # PRD: Zeko Block Explorer & Indexing Substrate
 
 **Author:** Zeko Labs
-**Status:** Draft v5
-**Last Updated:** March 31, 2026
+**Status:** Draft v6 (post design review)
+**Last Updated:** April 1, 2026
 
 ---
 
 ## 1. Executive Summary
 
-Zeko currently relies on Zekoscan (third-party, Blockberry/Staketab) and a separate bridge actions indexer/API (`zeko-ui/services/actions/*`). Zekoscan suffers from reliability issues, stale data, and a lack of L2 concepts. The bridge actions services are a workaround for inadequate archive node data. Zeko has no control over either system's roadmap.
+Zeko currently relies on Zekoscan (third-party, Blockberry/Staketab), which suffers from reliability issues, stale data, and a complete lack of L2 concepts. Zeko has no control over its roadmap.
 
-This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, connector services publish raw blockchain events to NATS JetStream streams. Multiple independent consumers — the explorer indexer, the bridge indexer, and any future service — subscribe to these streams, normalize data according to their needs, and write to a shared SurrealDB instance with separate namespaces/tables as appropriate.
+This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, connector services publish raw blockchain events to NATS JetStream streams. A unified indexer consumes these streams, normalizes data, and writes to SurrealDB. The explorer is exposed via a code-first GraphQL API (Pothos) with SSE subscriptions, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
 
 The system replaces:
 - The archive relay adapter + Mina archive node + Archive-Node-API + Zekoscan pipeline.
-- The bridge actions indexer and API (`services/actions/indexer`, `services/actions/api`), which are rebuilt as a NATS consumer sharing the same indexing substrate and SurrealDB instance.
-
-The explorer is exposed via a code-first GraphQL API (Pothos) with SSE subscriptions and a code-mode MCP server for agent interaction. The bridge actions are exposed via a separate GraphQL API endpoint. Both APIs are federatable in the future. The frontend is a Nuxt 3 SPA deployed on Cloudflare Workers (static assets).
+- The bridge actions indexer and API (see Section 5.3).
 
 ---
 
@@ -27,9 +25,6 @@ The explorer is exposed via a code-first GraphQL API (Pothos) with SSE subscript
 ```
 Zeko Sequencer → Archive Relay (OCaml) → Mina Archive Node (PostgreSQL)
     → Archive-Node-API (GraphQL) → Zekoscan UI
-
-Zeko Sequencer + L1 Archive + L2 Archive
-    → Actions Indexer (PostgreSQL) → Actions API (GraphQL) → Bridge UI
 ```
 
 ### 2.2 Analysis of the Mina Archive Database
@@ -42,33 +37,22 @@ The Mina archive schema is designed around L1 consensus:
 
 **No L2 tables.** No batches, bridge operations, DA attestations, sequencer state, proof status.
 
-### 2.3 Analysis of the Existing Bridge Actions Services
-
-The `zeko-ui` services exist to provide indexed bridge data to the bridge UI. They:
-
-- Read **outer actions** (Commits, Witnesses) from the **L1 archive** — batch settlements and bridge proofs on the Mina L1 Zeko zkApp contract.
-- Read **inner actions** from the **L2 archive** — L2-side bridge actions on the inner account.
-- Insert into PostgreSQL, expose via GraphQL with queries: `outerActions(beforeState, afterState)`, `innerActions(beforeState, afterState)`, `commitAsePastSlot(slot)`, witness lookups by aux.
-
-These services are **not replaced by the explorer frontend** — they serve the bridge UI, which is a different product. Instead, the underlying indexing pipeline is unified: both the explorer and the bridge indexer consume from the same NATS streams, normalize according to their needs, and write to a shared SurrealDB instance. The bridge actions API becomes a separate GraphQL endpoint backed by the same database.
-
-### 2.4 Gaps Summary
+### 2.3 Gaps Summary
 
 - Data staleness with no signal.
 - No L2 concepts in the explorer.
 - Fragmented indexing infrastructure (separate pipelines for explorer and bridge).
 - No rollback modeling for either L1 settlement reversals or L2 sequencer rollbacks.
 - No control over explorer roadmap.
+- No indexed per-user bridge operation history (current system does full archive scans per wallet).
 
 ---
 
-## 3. Goals and Non-Goals
+## 3. Goals
 
-### 3.1 Goals
-
-1. **General-purpose indexing substrate** — NATS streams as shared event log, multiple consumers.
+1. **General-purpose indexing substrate** — NATS streams as shared event log, extensible consumers.
 2. **Greenfield block explorer** replacing Zekoscan.
-3. **Unified bridge indexing** replacing `services/actions/*`, sharing SurrealDB with the explorer.
+3. **Unified bridge indexing** — bridge data indexed by the same indexer, exposed via a dedicated API (see Section 5.3).
 4. **Zeko-native data model** — "1 block = 1 transaction," batches, bridge actions, rollback states.
 5. **Extreme reliability** with health monitoring, freshness indicators, self-healing.
 6. **Extreme clarity about system status.**
@@ -77,13 +61,6 @@ These services are **not replaced by the explorer frontend** — they serve the 
 9. **Agent-first** via code-mode MCP server.
 10. **TDD/DDD with Gherkin** acceptance tests.
 11. **Future-ready** for public API and GraphQL federation.
-
-### 3.2 Non-Goals
-
-1. Staking/delegation dashboards.
-2. Token price feeds / DeFi analytics.
-3. Smart contract source verification.
-4. Public API in initial milestones.
 
 ---
 
@@ -97,7 +74,7 @@ These services are **not replaced by the explorer frontend** — they serve the 
 | Zeko-E | `zeko-e-testnet-1` | Ethereum Testnet | Ethereum testing |
 | Zeko-E | `zeko-e-mainnet` | Ethereum Mainnet | Ethereum production |
 
-Each network runs its own sequencer, DA layer, and full explorer backend stack (connectors, NATS, indexers, SurrealDB, APIs).
+Each network runs its own sequencer, DA layer, and **full explorer backend stack** (connectors, NATS, indexer, SurrealDB, APIs). Full stack isolation per network — separate NATS and SurrealDB instances. No cross-network namespacing needed; the instance itself identifies the network.
 
 ---
 
@@ -106,105 +83,98 @@ Each network runs its own sequencer, DA layer, and full explorer backend stack (
 ### 5.1 High-Level Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          Data Sources                                │
-│  ┌─────────────┐  ┌────────────────┐  ┌──────────────────────────┐  │
-│  │    Zeko      │  │  L1 Live Node  │  │    DA Layer              │  │
-│  │  Sequencer   │  │  + L1 Archive  │  │  (Ethermint / Celestia)  │  │
-│  │  (internal   │  │  (Mina or ETH) │  │                          │  │
-│  │   protocol)  │  │                │  │                          │  │
-│  └──────┬───────┘  └───────┬────────┘  └────────────┬─────────────┘  │
-└─────────┼──────────────────┼────────────────────────┼────────────────┘
-          │                  │                        │
-          ▼                  ▼                        ▼
-┌─────────────────┐ ┌───────────────┐ ┌──────────────────────────────┐
-│ Sequencer       │ │ L1 Watcher    │ │ DA Monitor                   │
-│ Connector       │ │ (TypeScript)  │ │ (TypeScript)                 │
-│ (OCaml)         │ │               │ │                              │
-│                 │ │ L1 live node: │ │                              │
-│ Raw data →      │ │  tip, rollback│ │                              │
-│ NATS            │ │ L1 archive:   │ │                              │
-│                 │ │  actions,     │ │                              │
-│                 │ │  history      │ │                              │
-└────────┬────────┘ └──────┬────────┘ └─────────────┬────────────────┘
-         │                 │                        │
-         ▼                 ▼                        ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                       NATS JetStream                                 │
-│                   (shared indexing substrate)                         │
-│                                                                      │
-│  Streams (raw, unprocessed — consumers normalize independently):     │
-│  • zeko.l2.transactions     (raw L2 tx from sequencer)               │
-│  • zeko.l2.rollbacks        (L2 sequencer rollback events)           │
-│  • zeko.l1.settlements      (batch settlement events)                │
-│  • zeko.l1.rollbacks        (L1 block orphan events)                 │
-│  • zeko.l1.outer-actions    (Commits, Witnesses from L1 archive)     │
-│  • zeko.l1.bridge-events    (deposit/withdrawal events)              │
-│  • zeko.da.attestations     (DA confirmations)                       │
-│  • zeko.health              (service heartbeats)                     │
-└──────────────────────────┬───────────────────────────────────────────┘
-                           │
-              ┌────────────┼────────────────┐
-              ▼                             ▼
-┌──────────────────────────┐  ┌────────────────────────────────────────┐
-│  Explorer Indexer         │  │  Bridge Indexer                        │
-│  (language: TBD)         │  │  (language: TBD)                       │
-│                          │  │                                        │
-│  Consumes: all streams   │  │  Consumes: outer-actions, l2.txns,    │
-│  Writes: transactions,   │  │  bridge-events, l1.rollbacks,         │
-│  accounts, batches,      │  │  l2.rollbacks                         │
-│  network stats, etc.     │  │  Writes: outer_action, inner_action,  │
-│                          │  │  bridge_operation                     │
-└────────────┬─────────────┘  └──────────────┬─────────────────────────┘
-             │                               │
-             ▼                               ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                    SurrealDB (single node, shared)                    │
-│                                                                      │
-│  Explorer tables:  transaction, account, account_activity, batch,    │
-│                    zkapp_event, zkapp_action, sync_status,           │
-│                    network_stats                                     │
-│                                                                      │
-│  Bridge tables:    outer_action, inner_action, bridge_operation      │
-│                    (shared with explorer via record links)           │
-└────────────────┬──────────────────────────┬──────────────────────────┘
-                 │                          │
-                 ▼                          ▼
-┌────────────────────────────┐ ┌───────────────────────────────────────┐
-│  Explorer GraphQL API      │ │  Bridge GraphQL API                   │
-│  (TypeScript, Pothos)      │ │  (TypeScript, Pothos)                 │
-│  SSE subscriptions         │ │  Replaces services/actions/api        │
-│  CF Worker API gateway     │ │  Separate endpoint, federatable later │
-└─────────┬──────────────────┘ └───────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        Data Sources                             │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
+│  │ Zeko         │  │ L1 Live Node │  │ DA Layer              │  │
+│  │ Sequencer    │  │ + L1 Archive │  │ (Ethermint/Celestia)  │  │
+│  │ (internal    │  │ (Mina or     │  │                       │  │
+│  │  protocol)   │  │  Ethereum)   │  │                       │  │
+│  └──────┬───────┘  └──────┬───────┘  └───────────┬───────────┘  │
+└─────────┼─────────────────┼──────────────────────┼──────────────┘
+          │                 │                      │
+          ▼                 ▼                      ▼
+┌──────────────────┐ ┌──────────────┐ ┌────────────────────────────┐
+│ Sequencer        │ │ L1 Watcher   │ │ DA Monitor                 │
+│ Connector        │ │ (TypeScript) │ │ (TypeScript)               │
+│ (OCaml module)   │ │              │ │                            │
+│                  │ │ Live: tip,   │ │                            │
+│ Raw data → NATS  │ │  rollbacks   │ │                            │
+│                  │ │ Archive:     │ │                            │
+│                  │ │  actions,    │ │                            │
+│                  │ │  history     │ │                            │
+└────────┬─────────┘ └──────┬───────┘ └──────────┬─────────────────┘
+         │                  │                    │
+         ▼                  ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     NATS JetStream                              │
+│                 (indexing substrate)                             │
+│                                                                 │
+│  Streams (raw, unprocessed):                                    │
+│  • zeko.l2.transactions    • zeko.l1.settlements                │
+│  • zeko.l2.rollbacks       • zeko.l1.rollbacks                  │
+│  • zeko.l1.outer-actions   • zeko.l1.bridge-events              │
+│  • zeko.da.attestations    • zeko.health                        │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Zeko Indexer                                 │
+│                     (TypeScript)                                 │
+│                                                                 │
+│  Consumes all streams. Writes:                                  │
+│  • Explorer data: transactions, accounts, batches, stats, ...   │
+│  • Bridge data: outer_action, inner_action, bridge_operation    │
+│  • zkApp data: events, actions                                  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                SurrealDB (single node)                           │
+│          (rebuildable read model — NATS is source of truth)     │
+│                                                                 │
+│  Tables: transaction, account, account_activity, batch,         │
+│  zkapp_event, zkapp_action, outer_action, inner_action,         │
+│  bridge_operation, sync_status, network_stats                   │
+└──────────────┬──────────────────────────┬───────────────────────┘
+               │                          │
+               ▼                          ▼
+┌───────────────────────────┐  ┌──────────────────────────────────┐
+│ Explorer GraphQL API      │  │ Bridge GraphQL API               │
+│ (TypeScript, Pothos)      │  │ (TypeScript, Pothos)             │
+│ SSE subscriptions         │  │ Replaces services/actions/api    │
+│ Hosted on Hetzner         │  │ Hosted on Hetzner                │
+│ Cloudflare reverse proxy  │  │ Cloudflare reverse proxy         │
+└─────────┬─────────────────┘  └──────────────────────────────────┘
           │
-          ├──────────────────────────────┐
-          ▼                              ▼
-┌─────────────────────────────┐ ┌──────────────────────────────────────┐
-│  Explorer Frontend           │ │  Code-Mode MCP Server                │
-│  (Nuxt 3 SPA)               │ │  (CF Worker, search + execute        │
-│  CF Workers Static Assets    │ │   with generated typed SDK)          │
-└──────────────────────────────┘ └──────────────────────────────────────┘
+          ├─────────────────────────────┐
+          ▼                             ▼
+┌──────────────────────────┐  ┌──────────────────────────────────┐
+│ Explorer Frontend        │  │ Code-Mode MCP Server             │
+│ (Nuxt 3 SPA)            │  │ (CF Worker, search + execute     │
+│ CF Workers Static Assets │  │  with generated typed SDK)       │
+│                          │  │ Calls public Cloudflare-proxied  │
+│                          │  │  API                             │
+└──────────────────────────┘  └──────────────────────────────────┘
 ```
 
 ### 5.2 Component Details
 
 #### 5.2.1 Sequencer Connector (OCaml)
 
-Minimal OCaml service speaking the sequencer's internal binary protocol. Publishes **raw, unprocessed** data to NATS. No normalization.
+OCaml module speaking the sequencer's internal binary protocol. Publishes **raw, unprocessed** data to NATS. No normalization. May be implemented as a module within the sequencer itself rather than a standalone microservice — this simplifies the crash recovery / resume story since the sequencer owns the NATS publishing lifecycle.
 
-**Why OCaml:** The binary protocol is defined in the Mina/Zeko OCaml codebase. Reimplementing it would be error-prone and require continuous sync with protocol evolution.
+**Why OCaml:** The binary protocol is defined in the Mina/Zeko OCaml codebase. The Zeko team already uses OCaml. Both the connector and a hypothetical API approach would require OCaml code — the connector avoids an extra hop (sequencer → GraphQL API → TS adapter → NATS) by publishing directly to NATS.
 
 **Responsibilities:**
-- Connect to sequencer via `--zeko-uri`, subscribe to blocks/transactions.
-- Bootstrap (`--bootstrap`) for historical replay.
+- Connect to sequencer via internal protocol, subscribe to blocks/transactions.
+- Bootstrap for historical replay.
 - Publish raw data to `zeko.l2.transactions`.
-- **Detect and publish L2 rollback events** to `zeko.l2.rollbacks` (see Section 5.3 and 7.5).
+- **Detect and publish L2 rollback events** to `zeko.l2.rollbacks` (see Section 7.5).
 - Publish heartbeats to `zeko.health`.
 
-**L2 rollback signaling — prerequisite investigation:** The exact mechanism by which the sequencer signals rollbacks on its internal protocol must be determined before building the connector. The two rollback scenarios (L1 fork invalidation and time precondition expiry — see Section 7.5) may be signaled as explicit rollback events, chain reorganization signals, or state contradictions. **This investigation is a prerequisite task in Milestone 1.** The team must study the sequencer's OCaml source code (`zeko/` directory, particularly the sequencer's block production and recovery logic, which was part of the mainnet audit scope) to determine:
-1. What protocol messages indicate a rollback has occurred.
-2. Whether the connector sees the rollback as a new block that overwrites a previous state, or as an explicit "undo" message.
-3. How the connector should communicate this to downstream consumers via NATS.
+**L2 rollback detection (known mechanism):** The connector does not receive explicit rollback events from the sequencer. Instead, rollback detection is based on **ledger hash chain continuity** — the same mechanism used by the archive relay today. The connector fetches the latest state and checks whether there is a contiguous chain of transactions between the last processed ledger hash and the current sequencer state. If the chain is broken (i.e., no path from the last known ledger hash to the current one), a fork has occurred. In that case, the connector fetches transactions between the older (common ancestor) ledger hash and the current sequencer state, determines which transactions were rolled back and which are new, and publishes rollback events to `zeko.l2.rollbacks`. See `spikes/001-sequencer-connector.md` for the full spike on improving this mechanism over the archive relay's implementation.
 
 #### 5.2.2 L1 Watcher (TypeScript)
 
@@ -229,7 +199,7 @@ Monitors the L1 settlement chain. Requires **two distinct L1 connections**:
 - `zeko.l1.bridge-events` — deposit/withdrawal events.
 - `zeko.health` — heartbeats.
 
-**L1 adapter interface:** Mina implementation first (Zeko-M). Ethereum adapter added in Milestone 4. Finality model and rollback handling are Zeko-M specific (see Section 7.5); Zeko-E will define its own finality model based on Ethereum's consensus.
+**L1 adapter interface:** Abstract interface supporting both Mina and Ethereum L1s. Mina implementation first (Zeko-M). Ethereum adapter added in Milestone 4. The L1 Watcher emits events at multiple finality levels — consumers decide which level they care about. L1 reorg handling stays within the watcher; consumers receive clean rollback events.
 
 #### 5.2.3 DA Monitor (TypeScript)
 
@@ -237,19 +207,21 @@ Small, isolated service monitoring the DA layer for attestation status. Isolated
 
 #### 5.2.4 NATS JetStream
 
-Shared indexing substrate. Streams carry raw, unprocessed data. Each consumer normalizes independently.
+Shared indexing substrate and **authoritative source of truth**. Streams carry raw, unprocessed data. Each consumer normalizes independently. Retention is unbounded — the full event history is preserved from the moment JetStream starts ingesting.
+
+SurrealDB is a rebuildable read model. If the database ever needs to be rebuilt, replaying the full NATS history is sufficient. L1/L2 archives are only used for pre-NATS historical data or catastrophic scenarios.
 
 **Durable consumers** with at-least-once delivery. Combined with idempotent writes = exactly-once processing semantics.
 
 **Extensibility:** Any future service creates a durable consumer on existing streams and builds its own materialization.
 
-#### 5.2.5 Explorer Indexer (Language: TBD — Technical Spike Required)
+**NATS is dedicated to the indexing pipeline.** It is not used for UI real-time delivery (SSE fan-out uses SurrealDB live queries at the GraphQL layer).
 
-Consumes all NATS streams relevant to the explorer, normalizes raw data, writes to SurrealDB.
+#### 5.2.5 Zeko Indexer (TypeScript)
 
-**Language: Rust or TypeScript, determined by Milestone 1 spike.** The deciding factor is normalization complexity — deeply nested Account Update trees with preconditions, permissions, authorization kinds, balance changes, state changes, events, actions. **The spike must evaluate this empirically**, not theoretically.
+A single unified indexer consuming all NATS streams. Normalizes raw data and writes to SurrealDB — both explorer tables (transactions, accounts, batches, zkApp events/actions) and bridge tables (outer actions, inner actions, bridge operations).
 
-**Spike deliverable:** Implement normalization + SurrealDB write path for sample raw sequencer messages in both languages. Evaluate code complexity, correctness, performance, developer experience.
+**Language: TypeScript.** The indexer is I/O-bound (read from NATS, transform, write to SurrealDB). TypeScript enables shared domain types across the indexer, APIs, and the MCP server, reducing surface area for bugs. Rust remains an option only if profiling reveals a concrete performance bottleneck.
 
 **Consumes:**
 - `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`.
@@ -257,120 +229,106 @@ Consumes all NATS streams relevant to the explorer, normalizes raw data, writes 
 - `zeko.l1.settlements` → create/update `batch`, link to transactions.
 - `zeko.l1.rollbacks` → revert batch settlement status (Section 7.5).
 - `zeko.da.attestations` → attach status to batch records.
+- `zeko.l1.outer-actions` → `outer_action` (Commits, Witnesses). Queryable by state range.
+- `zeko.l2.transactions` → extract inner actions → `inner_action`. Queryable by state range.
+- `zeko.l1.bridge-events` → `bridge_operation` with graph edges to L1 and L2 transactions.
 - Maintains `sync_status`, computes `network_stats`.
 
-#### 5.2.6 Bridge Indexer (Language: TBD — Same Spike as Explorer Indexer)
+**Bridge operation correlation:** L1 and L2 sides of a bridge operation are correlated via the `aux` field (needs verification — see `spikes/002-bridge-correlation.md`). Partial records are created when the first side arrives and completed when the second side shows up. This enables indexed per-user bridge history, replacing the current full archive scan approach.
 
-A separate NATS consumer, sibling to the Explorer Indexer. Writes to the **same SurrealDB instance** — some tables are shared (e.g., `transaction`, `account` are read by both), some are bridge-specific.
+**Rollback handling:** The indexer subscribes to both `zeko.l2.rollbacks` and `zeko.l1.rollbacks`. On rollback events, it reverts affected explorer data (transactions, accounts, batches) and bridge data (bridge operations, outer/inner actions) in a single cascade.
 
-**Consumes:**
-- `zeko.l1.outer-actions` → `outer_action` (Commits: before/after state, inner_action_state, ledger, synchronized state, slot range. Witnesses: aux). Queryable by state range.
-- `zeko.l2.transactions` → extract inner actions → `inner_action` (before/after state, aux, fields). Queryable by state range.
-- `zeko.l1.bridge-events` → `bridge_operation` with graph edges to L1 and L2 transactions.
-- `zeko.l1.rollbacks` → update bridge operations affected by L1 rollbacks.
-- `zeko.l2.rollbacks` → update bridge operations affected by L2 rollbacks (e.g., accepted deposit reverted).
+#### 5.2.6 SurrealDB (Single Node)
 
-**Shared SurrealDB:** The bridge indexer reads `transaction` and `account` records written by the explorer indexer (via record links). It writes `outer_action`, `inner_action`, and `bridge_operation` tables. The explorer indexer can read these for display on transaction/account detail pages. Both share one database, avoiding data duplication.
+Graph relations, record links, full-text search, live queries, schemaful mode. **Rebuildable read model** — NATS JetStream is the source of truth.
 
-#### 5.2.7 SurrealDB (Single Node, Shared)
+Schema migrations managed via [surrealdb-migrations](https://github.com/Odonno/surrealdb-migrations).
 
-Graph relations, record links, full-text search, live queries, schemaful mode.
+**Live query scaling:** The GraphQL APIs fan out from shared live queries. One `LIVE SELECT` per watched subscription type, not per client. API servers manage per-client filtering and SSE fan-out at the GraphQL layer.
 
-**Live query scaling:** The GraphQL APIs fan out from shared live queries. One `LIVE SELECT` per watched table, not per client. API servers manage per-client filtering.
-
-**Data model:**
+**Guideline data model** (the following is indicative of the expected tables and relationships — the actual schema will be refined during implementation):
 
 *Explorer tables:*
-- `transaction` — hash, sequence_number, type, status (applied/failed/reverted), sender → account, receiver → account, amount, fee, nonce, memo, timestamp, state_hash, decoded account_updates, batch → batch, rollback_reason (null unless reverted).
-- `account` — public_key (indexed, full-text), balance, nonce, delegate → account, token_id, zkapp_state.
-- `account_activity` — per-account per-transaction changes. Includes rollback entries when state is reverted.
-- `batch` — id, transaction_range, proof_status, settlement_status (unsettled/submitted/settling/finalized/rolled_back), l1_settlement_tx_hash, l1_chain_id, l1_block_height, da_attestation_status, timestamps.
-- `zkapp_event` — emitting account → account, transaction → transaction, decoded fields, sequence.
-- `zkapp_action` — emitting account → account, transaction → transaction, decoded fields, action state hash.
+- `transaction` — hash, sequence_number, type, status, sender/receiver account links, amount, fee, nonce, memo, timestamp, state_hash, decoded account_updates, batch link, rollback_reason.
+- `account` — public_key (indexed, full-text searchable), balance, nonce, delegate link, token_id, zkapp_state.
+- `account_activity` — per-account per-transaction changes, including rollback entries.
+- `batch` — transaction range, proof/settlement status, L1 settlement details, DA attestation status, timestamps.
+- `zkapp_event` / `zkapp_action` — emitting account and transaction links, decoded fields, sequence/state hash.
 - `sync_status` — per-source health: last processed item, timestamp, lag, error state.
 - `network_stats` — aggregates.
 
-*Bridge tables (shared SurrealDB, written by Bridge Indexer):*
-- `outer_action` — kind (COMMIT/WITNESS), before_state, after_state, block_height, fields[], index, timestamp, txn_hash. Commits: inner_action_state, inner_action_state_length, ledger, synchronized_outer_action_state, synchronized_outer_action_state_length, slot_range_lower, slot_range_upper. Witnesses: aux. Record links to batch, bridge_operation.
-- `inner_action` — before_state, after_state, aux, block_height, fields[], index, timestamp, txn_hash. Record links to transaction.
-- `bridge_operation` — type (deposit/withdrawal), status (initiated/pending_proof/submitted/confirmed/failed/rolled_back), amount, source/destination accounts, timestamps. Graph edges: `l1_tx → bridge_op → l2_tx`.
+*Bridge tables:*
+- `outer_action` — kind (COMMIT/WITNESS), before/after state, block height, fields, timestamp. Commits include inner_action_state, ledger, slot range. Witnesses include aux. Links to batch, bridge_operation.
+- `inner_action` — before/after state, aux, block height, fields, timestamp. Links to transaction.
+- `bridge_operation` — type (deposit/withdrawal), status lifecycle, amount, source/destination accounts, timestamps. Graph edges: `l1_tx → bridge_op → l2_tx`. **Indexed by user public key** for efficient per-user queries.
 
 **Backup:**
 - `surreal export` cron: 6h (devnet/alphanet), 1h (mainnet).
 - Object storage (R2 or S3-compatible). Retention: 7d / 30d.
-- Full re-index from NATS retention + sequencer bootstrap always available as DR.
+- Full re-index from NATS always available as DR.
 - Restore procedure documented and tested.
 
-#### 5.2.8 Explorer GraphQL API (TypeScript, Pothos)
+#### 5.2.7 Explorer GraphQL API (TypeScript, Pothos)
 
-Code-first GraphQL. SSE subscriptions. Cloudflare Worker API gateway in front.
+Code-first GraphQL. SSE subscriptions (fan-out from SurrealDB live queries). Hosted on Hetzner, fronted by Cloudflare as a reverse proxy (rate limiting, DDoS protection, CORS, TLS).
+
+Cursor-based pagination (not necessarily full Relay spec — see `spikes/005-relay-pagination.md`).
 
 Queries: transactions, accounts, batches, search, system status, zkApp events/actions. Can read bridge tables for display on transaction/account detail pages.
 
 Every response includes `_meta` with `dataFreshness`, `syncLag`, `status`.
 
-#### 5.2.9 Bridge GraphQL API (TypeScript, Pothos)
-
-**Separate endpoint** from the explorer API. Serves the bridge UI. Replaces `services/actions/api`.
-
-```typescript
-// Bridge API schema (conceptual)
-builder.queryType({
-  fields: (t) => ({
-    outerActions: t.field({
-      type: [OuterAction],
-      args: { beforeState: t.arg.string({ required: true }), afterState: t.arg.string() },
-    }),
-    innerActions: t.field({
-      type: [InnerAction],
-      args: { beforeState: t.arg.string({ required: true }), afterState: t.arg.string() },
-    }),
-    outerWitnessesFromAuxes: t.field({
-      type: [Witness],
-      args: { auxes: t.arg.stringList({ required: true }) },
-    }),
-    innerWitnessesFromAuxes: t.field({
-      type: [InnerAction],
-      args: { auxes: t.arg.stringList({ required: true }) },
-    }),
-    commitAsePastSlot: t.field({
-      type: CommitAsePastSlotResult,
-      args: { slot: t.arg.int({ required: true }) },
-    }),
-    bridgeOperations: t.connection({ type: BridgeOperation }),
-    bridgeOperation: t.field({ type: BridgeOperation, args: { id: t.arg.string() } }),
-  }),
-});
-```
-
-**GraphQL federation:** The explorer and bridge APIs are separate services now. In the future, they can be composed into a federated supergraph via Apollo Federation or similar, providing a single endpoint that delegates to each service.
-
-#### 5.2.10 Code-Mode MCP Server (Cloudflare Worker)
+#### 5.2.8 Code-Mode MCP Server (Cloudflare Worker)
 
 Two tools: `search()` and `execute()`.
 
 - **`search()`**: Sandbox contains the GraphQL introspection result as a typed object. Agent writes JS to explore types, queries, fields.
 - **`execute()`**: Sandbox contains a **typed SDK auto-generated from the Pothos schema** via `graphql-codegen` as a build step, bundled into the Worker. Agent writes code against the SDK.
 
-~1,000 tokens. Full API access.
+~1,000 tokens. Full API access. Calls the public Cloudflare-proxied GraphQL APIs. Service bindings bypass HTTP-layer protections (rate limiting, etc.) since the MCP server implements its own protections.
 
-#### 5.2.11 Explorer Frontend (Nuxt 3, Cloudflare Workers Static Assets)
+**Why MCP first:** Shipping MCP + APIs is significantly faster than building a frontend. With graphql-codegen, the MCP server is nearly trivial. People will use agents to visualize and query explorer data more than the UI.
 
-Nuxt 3 SPA, no SSR. Deployed as static assets on Cloudflare Workers.
+#### 5.2.9 Explorer Frontend (Nuxt 3, Cloudflare Workers Static Assets)
+
+Nuxt 3 SPA, no SSR. Deployed as static assets on Cloudflare Workers. Ships an HTML skeleton that hydrates on the client — no blank page on initial load.
+
+**Why SPA:** No SEO requirements (account/transaction pages should not be indexed). Social sharing works with SPAs. SSR adds complexity with no concrete benefit for this use case.
 
 **Design work is delegated.** Deliverables needed from a designer: component library, page layouts, responsive breakpoints, status indicator treatment, loading states.
+
+### 5.3 Bridge Actions Services Migration
+
+The existing `zeko-ui` bridge actions services (`services/actions/indexer`, `services/actions/api`) provide indexed bridge data to the bridge UI. They:
+
+- Read **outer actions** (Commits, Witnesses) from the **L1 archive** — batch settlements and bridge proofs on the Mina L1 Zeko zkApp contract.
+- Read **inner actions** from the **L2 archive** — L2-side bridge actions on the inner account.
+- Insert into PostgreSQL, expose via GraphQL with queries: `outerActions(beforeState, afterState)`, `innerActions(beforeState, afterState)`, `commitAsePastSlot(slot)`, witness lookups by aux.
+
+These services are **not replaced by the explorer frontend** — they serve the bridge UI, which is a different product. Instead, the underlying indexing pipeline is unified: the Zeko Indexer (Section 5.2.5) indexes both explorer and bridge data from the same NATS streams into a single SurrealDB instance.
+
+A **Bridge GraphQL API** (TypeScript, Pothos) is a separate endpoint backed by the same database. It serves the bridge UI and replaces `services/actions/api`. Hosted on Hetzner, fronted by Cloudflare. Queries: outerActions, innerActions, witnesses by aux, commitAsePastSlot, bridgeOperations.
+
+**GraphQL federation:** The explorer and bridge APIs are separate services now. In the future, they can be composed into a federated supergraph, providing a single endpoint that delegates to each service.
+
+**Key improvement:** Per-user bridge operation history is indexed by public key, replacing the current full archive scan per wallet.
 
 ---
 
 ## 6. Project Structure — Monorepo
 
+The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces + moonrepo**. The OCaml sequencer connector lives in the sequencer repository (as a module of the sequencer), not in this monorepo.
+
 ```
 /zeko-explorer
 ├── flake.nix                          # Nix for reproducible builds + dev shells
-├── docker-compose.yml                 # Local development stack
+├── docker-compose.yml                 # Local development stack (NATS, SurrealDB, services)
+├── wrangler.toml                      # Cloudflare Worker configs
 │
 ├── packages/
-│   ├── sequencer-connector/           # OCaml
+│   ├── nats-protocol/                 # NATS subject constants + event schemas
+│   ├── domain/                        # Cross-cutting domain types
+│   ├── db/                            # SurrealDB schema definitions + migrations
 │   ├── l1-watcher/                    # TypeScript
 │   │   └── src/
 │   │       ├── domain/
@@ -378,34 +336,25 @@ Nuxt 3 SPA, no SSR. Deployed as static assets on Cloudflare Workers.
 │   │           ├── mina/              # Mina L1 adapter
 │   │           └── ethereum/          # Ethereum L1 adapter (Milestone 4)
 │   ├── da-monitor/                    # TypeScript
-│   ├── explorer-indexer/              # Rust or TypeScript (TBD)
+│   ├── zeko-indexer/                  # TypeScript — unified indexer
 │   │   └── src/
 │   │       ├── domain/
 │   │       ├── consumers/             # NATS stream consumers
 │   │       ├── normalizers/           # Raw → domain transformations
 │   │       └── repositories/          # SurrealDB adapters
-│   ├── bridge-indexer/                # Rust or TypeScript (TBD, same as explorer)
-│   │   └── src/
-│   │       ├── domain/                # OuterAction, InnerAction, BridgeOperation
-│   │       ├── consumers/
-│   │       ├── normalizers/
-│   │       └── repositories/
 │   ├── explorer-api/                  # TypeScript, Pothos
 │   ├── bridge-api/                    # TypeScript, Pothos
 │   ├── mcp-server/                    # TypeScript, CF Worker
-│   ├── frontend/                      # Nuxt 3
-│   └── shared/                        # Shared across packages
-│       ├── nats-subjects.ts           # Stream/subject constants
-│       ├── domain-types/              # Cross-cutting domain types
-│       └── surreal-schema/            # SurrealDB schema definitions
+│   └── frontend/                      # Nuxt 3
 │
 ├── tests/
 │   ├── acceptance/                    # Gherkin feature files + step definitions
-│   └── fixtures/                      # Shared test data
+│   └── fixtures/                      # Canned NATS messages captured from devnet
+│
+├── spikes/                            # Research spike documents
 │
 └── infra/
     ├── docker/                        # Dockerfiles per service
-    ├── cloudflare/                    # Worker configs
     └── nix/                           # Nix derivations per service
 ```
 
@@ -417,7 +366,9 @@ Each package: DDD internally (domain core, infrastructure boundary, repository i
 
 ### 7.1 Never Silently Show Stale Data
 
-Indexers write heartbeats to `sync_status`. GraphQL APIs include `_meta` freshness data. Frontend adjusts indicators.
+Indexers write heartbeats to `sync_status`. GraphQL APIs include `_meta` freshness data. Frontend shows two-tier health:
+- **User-facing:** Freshness badge on every page ("data is N seconds old" based on last indexed block timestamp vs. wall clock).
+- **Operator-facing:** Structured `/status` endpoint returning per-component health checks — NATS lag, last indexed heights, L1 watcher status, DB responsiveness. Dedicated `/status` page on frontend.
 
 ### 7.2 Self-Healing Ingestion
 
@@ -431,10 +382,9 @@ NATS durable consumers resume from last ack. Sequencer connector bootstrap for f
 | **L1 live node down** | Cannot track tip or detect L1 rollbacks. Settlement status frozen. | L1 Watcher heartbeat degrades → `sync_status` → "L1 status unknown." | Watcher reconnects, re-scans from last known L1 height. Reconciles settlements and rollbacks that occurred during outage. |
 | **L1 archive down** | Outer action indexing paused. Existing data still queryable. | Watcher reports archive unreachable. | Watcher reconnects, backfills missed actions from last indexed state. |
 | **DA layer down** | Attestation status "unknown." Everything else unaffected. | DA Monitor reports unreachable. | Reconnect, backfill missed attestations. |
-| **SurrealDB down** | All APIs return errors. No data served. | Health checks detect. | Container restart. If corrupted: restore from backup or full re-index from NATS + bootstrap. |
+| **SurrealDB down** | All APIs return errors. No data served. | Health checks detect. | Container restart. If corrupted: restore from backup or full re-index from NATS. |
 | **NATS down** | All ingestion halted. Existing data still served. | All connectors report publishing failures. | NATS restart. JetStream persistence recovers stream state. Durable consumers resume. |
-| **Explorer Indexer down** | No new explorer data. Stale warning shown. | Heartbeat stops. | Restart. Durable consumer resumes from last ack. |
-| **Bridge Indexer down** | Bridge data stale. Explorer unaffected. | Heartbeat stops. | Restart. Durable consumer resumes. |
+| **Indexer down** | No new data (explorer or bridge). Stale warning shown. | Heartbeat stops. | Restart. Durable consumer resumes from last ack. |
 
 ### 7.4 Idempotent Writes
 
@@ -443,6 +393,8 @@ All database operations use upserts keyed on natural identifiers (transaction ha
 ### 7.5 Rollback Handling (Zeko-M Specific)
 
 Zeko-M has two categories of rollback scenarios. Zeko-E will define its own rollback model based on Ethereum finality when that deployment is built.
+
+**Rollback events are published to NATS.** When a rollback is detected, a dedicated rollback event is published to the relevant NATS subject (`zeko.l2.rollbacks` or `zeko.l1.rollbacks`). The indexer subscribes to both and handles all revert cascades — explorer data, bridge data, and account state — in a unified pass.
 
 #### Scenario 1: L1 Fork Invalidates a Commit or Deposit
 
@@ -459,7 +411,7 @@ Mina L1 has probabilistic finality (~290 blocks). If a fork occurs and the new c
 - If deposits were reverted: the credited L2 transactions are marked "reverted" with `rollback_reason`. Account balances updated. Bridge operation status updated.
 - The explorer shows the full history: the original settlement, the rollback, and any re-settlement.
 
-**Settlement finality indicator (Zeko-M):** Batches settled in L1 blocks <290 confirmations deep display "settling." Batches ≥290 deep display "finalized." Rolled-back batches display "rolled back." **The explorer never reports "finalized" until the L1 block is ≥290 deep.**
+**Settlement finality indicator (Zeko-M):** The L1 Watcher emits events at multiple finality levels. Batches settled in L1 blocks <290 confirmations deep display "settling." Batches ≥290 deep display "finalized." Rolled-back batches display "rolled back." **The explorer never reports "finalized" until the L1 block is ≥290 deep.**
 
 #### Scenario 2: Time Precondition Expiry
 
@@ -472,16 +424,16 @@ A transaction with a `valid_until` time precondition is accepted by the sequence
 - Account balances updated to reverse the transaction's effects.
 - `account_activity` records the reversal.
 
-#### Rollback Signaling — Prerequisite Investigation
+#### Rollback Detection Mechanism
 
-**The exact mechanism by which the sequencer signals rollbacks on its internal protocol is not documented publicly.** The mainnet audit scope includes "Recovery" under the sequencer, but the protocol details must be determined by studying the sequencer source code before building the connector.
+**There is no explicit rollback event from the sequencer.** Rollback detection is inferred from ledger hash chain continuity — the same approach the archive relay uses today:
 
-This investigation must answer:
-1. What protocol messages indicate an L2 rollback?
-2. Does the connector see rollbacks as explicit events, chain reorganizations, or state contradictions?
-3. How should the connector communicate rollbacks to NATS consumers?
+1. The connector tracks the **last processed ledger hash**.
+2. On each poll, it fetches the sequencer's current state and checks for a contiguous chain of transactions linking the last known ledger hash to the current one.
+3. **If the chain is contiguous:** Normal operation — new transactions are published to `zeko.l2.transactions`.
+4. **If the chain is broken (fork detected):** The connector walks back to the common ancestor ledger hash, determines which previously-published transactions are no longer in the canonical chain, and publishes rollback events to `zeko.l2.rollbacks`. It then fetches transactions between the common ancestor and the current sequencer state to publish the new canonical chain.
 
-**This is a blocking prerequisite for Milestone 1.**
+**Known issues with the archive relay's implementation of this pattern** must be studied and improved upon. See `spikes/001-sequencer-connector.md` for the full investigation scope.
 
 ---
 
@@ -501,32 +453,43 @@ All domain logic test-first. Unit (mocked repos), integration (real SurrealDB/NA
 
 ### 8.4 Test Infrastructure
 
-Fixtures, sequencer mock, ephemeral NATS/SurrealDB per suite, CI gate.
+- **Docker Compose** spins up real NATS + SurrealDB instances for integration tests (not mocks).
+- **Fixtures:** Canned NATS messages captured from a real devnet. Tests the full pipeline from NATS onward without needing a running sequencer.
+- **Fixture diversity:** Normal blocks, empty blocks, zkApp transactions, bridge operations, rollback events. Grow the fixture set as edge cases are encountered.
+- Ephemeral instances per test suite. CI gate.
 
 ---
 
 ## 9. Milestones
 
+### Pre-Milestone: Research Spikes
+
+Before Milestone 1 implementation begins, the following spikes must be completed. Each has a dedicated document in `spikes/`.
+
+1. **Sequencer Connector** (`spikes/001-sequencer-connector.md`) — crash recovery, resume strategy, rollback signaling, module-vs-microservice.
+2. **Bridge Operation Correlation** (`spikes/002-bridge-correlation.md`) — verify `aux` as correlation key, design per-user indexed bridge history.
+3. **zkApp State Display** (`spikes/003-zkapp-state-display.md`) — investigate how to display zkApp state, events, and actions.
+4. **Deployment Topology** (`spikes/004-deployment-topology.md`) — single vs. multi host, Nix vs. Docker Compose for production.
+5. **Pagination Schema** (`spikes/005-relay-pagination.md`) — cursor-based pagination schema, Relay spec tradeoffs.
+
 ### Milestone 1: MCP Server + GraphQL API + Indexing Substrate (Foundation)
 
-**Goal:** The indexing substrate (connectors, NATS, indexers, SurrealDB) and GraphQL APIs are operational. The code-mode MCP server provides agent access to all indexed data. No frontend yet — agents and API consumers are the first users.
-
-**Prerequisite:** Sequencer rollback signaling investigation (Section 7.5).
+**Goal:** The indexing substrate (connectors, NATS, indexer, SurrealDB) and GraphQL APIs are operational. The code-mode MCP server provides agent access to all indexed data. No frontend yet — agents and API consumers are the first users.
 
 **Components delivered:**
-- Sequencer Connector (OCaml): internal protocol, raw data → NATS, rollback detection.
-- L1 Watcher (TypeScript, Mina adapter): L1 live node + archive connections, settlements, outer actions, rollbacks, bridge events.
+- Sequencer Connector (OCaml, in sequencer repo): internal protocol, raw data → NATS, rollback detection.
+- L1 Watcher (TypeScript, Mina adapter with abstract L1 interface): L1 live node + archive connections, settlements, outer actions, rollbacks, bridge events.
 - DA Monitor (TypeScript): attestation monitoring.
-- NATS JetStream: all streams configured.
-- Explorer Indexer (language per spike): transaction normalization, account state, batch lifecycle, rollback handling, zkApp events/actions.
-- Bridge Indexer (language per spike): outer action indexing, inner action extraction, bridge operation correlation.
-- SurrealDB: full schema (all tables), backup cron.
+- NATS JetStream: all streams configured, unbounded retention.
+- Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Rollback handling for both.
+- SurrealDB: schema + migrations via surrealdb-migrations, backup cron.
 - Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions. SSE subscriptions.
 - Bridge GraphQL API (Pothos): outerActions, innerActions, witnesses by aux, commitAsePastSlot, bridgeOperations.
 - Code-Mode MCP Server: search() + execute() with generated SDK from both API schemas.
-- Nix flake, Docker Compose, CF Worker deployment for APIs + MCP.
+- Per-concern packages: `nats-protocol`, `domain`, `db`.
+- Nix flake, Docker Compose + wrangler for local dev, CF Worker deployment for MCP, Cloudflare reverse proxy for APIs.
 
-**Why MCP first:** The MCP server + APIs provide immediate value to developers and agents. The APIs can be tested, validated, and iterated on before committing to a frontend design. The bridge API immediately replaces `services/actions/api` — the bridge UI can switch to the new endpoint without waiting for the explorer frontend.
+**Why MCP first:** Shipping MCP + APIs is significantly faster than building a frontend — the MCP server is nearly trivial with graphql-codegen. People will use agents to visualize and query explorer data more than the UI. The bridge API immediately replaces `services/actions/api` — the bridge UI can switch to the new endpoint without waiting for the explorer frontend.
 
 **Example Gherkin tests:**
 
@@ -571,12 +534,14 @@ Feature: Bridge Action Indexing
 **Goal:** The web UI for the explorer. Consumes the GraphQL API built in Milestone 1.
 
 **Components delivered:**
-- Frontend (Nuxt 3, CF Workers Static Assets): home, transaction detail, account detail, batch pages, bridge operations page, search, system status, network switcher.
+- Frontend (Nuxt 3 SPA, CF Workers Static Assets): home, transaction detail, account detail, batch pages, bridge operations page, search, system status, network switcher.
 - Design pass deliverables (delegated to designer).
 
 **Features:**
 
-*Home:* Live transaction feed (SSE), stats, search. *Transaction detail:* All fields, decoded zkApp commands, rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links. *Search:* Hash, sequence number, public key, memo full-text. *System health:* Freshness indicator on every page, banner, `/status` page.
+*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (see spike results), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
+
+**Future milestone:** Natural language queries in the search bar.
 
 **Example Gherkin tests:**
 
@@ -605,7 +570,7 @@ Feature: Data Freshness Display
 **Goal:** Full batch lifecycle tracking with finality and rollback handling for Zeko-M networks.
 
 **Components delivered:**
-- L1 Watcher refinements: finality tracking (confirmation depth), robust rollback detection with reconciliation after outages.
+- L1 Watcher refinements: finality tracking (multi-level confirmation depth), robust rollback detection with reconciliation after outages.
 - Indexer refinements: settlement confidence computation, L1 rollback → batch reversion → L2 transaction reversion cascade.
 - Frontend: settlement confidence indicator, rollback history display, L1 transaction links.
 
@@ -642,7 +607,7 @@ Feature: Settlement Finality
 **Components delivered:**
 - Ethereum L1 adapter for L1 Watcher: settlement tracking, bridge events, Ethereum-specific finality model.
 - DA Monitor update if DA implementation has changed.
-- API hardening: rate limiting (CF Worker), API key auth, documentation portal.
+- API hardening: rate limiting (CF reverse proxy), API key auth, documentation portal.
 - MCP server updated with Ethereum-aware SDK.
 
 **Example Gherkin tests:**
@@ -664,22 +629,28 @@ Feature: Public API
 
 ## 10. Deployment and Infrastructure
 
-### 10.1 Current: Nix + Hetzner
+### 10.1 Local Development
 
-- **Nix** for reproducible builds and development environments.
+- **Docker Compose + wrangler** for local development.
+- **Nix** for reproducible development environments.
+- **pnpm workspaces + moonrepo** for TypeScript monorepo management.
+
+### 10.2 Production: Current
+
 - **OCI containers** for all services.
-- **Docker Compose** for local development.
 - Deployed on **Hetzner** infrastructure.
+- **Cloudflare** as reverse proxy in front of GraphQL APIs (rate limiting, DDoS protection, CORS, TLS).
+- Production topology TBD — see `spikes/004-deployment-topology.md` for the investigation of single vs. multi host, Nix vs. Docker Compose for production.
 
-### 10.2 Future: Kubernetes
+### 10.3 Future: Kubernetes
 
-Container design follows 12-factor principles (env-based config, health endpoints, graceful shutdown, stateless services) so migration to Kubernetes is straightforward. No k8s-specific abstractions are introduced until the migration.
+Container design follows 12-factor principles (env-based config, health endpoints, graceful shutdown, stateless services) so migration to Kubernetes is straightforward. K8s migration is a planned org-level decision with no fixed timeline. Current design ensures a clean migration path via containerization.
 
-### 10.3 Cloudflare Workers
+### 10.4 Cloudflare Workers
 
 - **Frontend:** Static assets on Cloudflare Workers.
-- **API Gateway:** CF Worker in front of both GraphQL APIs. Routes by network and API type (explorer vs bridge). Handles TLS, CORS, future rate limiting.
-- **MCP Server:** CF Worker with code-mode sandbox.
+- **Reverse Proxy:** CF in front of both GraphQL APIs on Hetzner. Routes by network and API type (explorer vs bridge). Handles TLS, CORS, rate limiting.
+- **MCP Server:** CF Worker with code-mode sandbox. Calls public API; service bindings bypass HTTP-layer protections.
 
 ---
 
@@ -687,15 +658,16 @@ Container design follows 12-factor principles (env-based config, health endpoint
 
 | Capability | Current | New | Milestone |
 |---|---|---|---|
-| Transaction browsing | Zekoscan | Real-time, decoded, rollback-aware | 1 (API), 2 (UI) |
-| Data freshness | None | Every page | 2 |
+| Transaction browsing | Zekoscan | Real-time, rollback-aware | 1 (API), 2 (UI) |
+| Data freshness | None | Every page (badge + /status) | 2 |
 | Self-healing | None | NATS durable + idempotent | 1 |
 | Custom indexing substrate | None | NATS streams, any consumer | 1 |
 | Agent access | None | Code-mode MCP | 1 |
 | Batch visibility | None | Full lifecycle | 1 (data), 2 (UI) |
 | L1 rollback handling | None | Auto-reversion + display | 3 |
 | L2 rollback handling | None | Time precondition + L1 fork | 1 (data), 3 (finality) |
-| Bridge operations | Separate services | Unified substrate, shared DB | 1 |
+| Bridge operations | Separate services | Unified indexer, shared DB | 1 |
+| Per-user bridge history | Full archive scan per wallet | Indexed by public key | 1 |
 | Outer/inner actions | services/actions/* | NATS consumer, same queries | 1 |
 | zkApp events/actions | None | Per-account browsing | 1 (data), 2 (UI) |
 | Public API | Archive-Node-API | GraphQL, documented | 4 |
@@ -708,18 +680,20 @@ Container design follows 12-factor principles (env-based config, health endpoint
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Sequencer Connector | OCaml | Internal binary protocol. |
-| L1 Watcher | TypeScript | I/O bound, GraphQL client ecosystem. |
+| Sequencer Connector | OCaml (sequencer module) | Internal binary protocol. Lives in sequencer repo. |
+| L1 Watcher | TypeScript | I/O bound, GraphQL client ecosystem. Abstract L1 interface. |
 | DA Monitor | TypeScript | Small, isolated, I/O bound. |
-| NATS | JetStream | Durable, replay, extensible substrate. |
-| Explorer Indexer | TBD (Rust or TS) | Milestone 1 spike. |
-| Bridge Indexer | TBD (same as explorer) | Same spike, same rationale. |
-| Database | SurrealDB (single node, shared) | Graph, record links, FTS, live queries. |
-| Explorer API | TypeScript, Pothos | Code-first, SSE, relay pagination. |
+| NATS | JetStream (unbounded retention) | Durable, replay, extensible substrate. Source of truth. |
+| Zeko Indexer | TypeScript | I/O bound. Shared types with APIs. Rust only if perf bottleneck. |
+| Database | SurrealDB (single node) | Graph, record links, FTS, live queries. Rebuildable from NATS. |
+| DB Migrations | surrealdb-migrations | Mature migration tooling for SurrealDB. |
+| Explorer API | TypeScript, Pothos | Code-first, SSE, cursor-based pagination. |
 | Bridge API | TypeScript, Pothos | Separate endpoint, same tech. |
-| MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. |
-| Frontend | Nuxt 3, CF Workers Static Assets | SPA, edge. Design delegated. |
-| Testing | Gherkin, Vitest | Living docs + unit/integration. |
-| Build | Nix | Reproducible. |
+| MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. Service bindings. |
+| Frontend | Nuxt 3 SPA, CF Workers Static Assets | No SSR needed. HTML skeleton + hydration. |
+| Search | Unified bar, auto-detect | NL queries in future milestone. |
+| Testing | Gherkin, Vitest | Living docs + unit/integration. Real NATS/SurrealDB in Docker. |
+| Monorepo | pnpm workspaces + moonrepo | TS-only monorepo. Per-concern shared packages. |
+| Build | Nix | Reproducible dev environments. |
 | Containers | OCI/Docker | Hetzner now, k8s-ready. |
-| Edge | Cloudflare Workers | Static assets, API gateway, MCP. |
+| Edge | Cloudflare Workers + reverse proxy | Static assets, API gateway, MCP. |
