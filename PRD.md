@@ -1,8 +1,8 @@
 # PRD: Zeko Block Explorer & Indexing Substrate
 
 **Author:** Zeko Labs
-**Status:** Draft v6 (post design review)
-**Last Updated:** April 1, 2026
+**Status:** Draft v7 (post spike 001)
+**Last Updated:** April 7, 2026
 
 ---
 
@@ -10,7 +10,7 @@
 
 Zeko currently relies on Zekoscan (third-party, Blockberry/Staketab), which suffers from reliability issues, stale data, and a complete lack of L2 concepts. Zeko has no control over its roadmap.
 
-This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, connector services publish raw blockchain events to NATS JetStream streams. A unified indexer consumes these streams, normalizes data, and writes to SurrealDB. The explorer is exposed via a code-first GraphQL API (Pothos) with SSE subscriptions, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
+This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, the sequencer publishes raw L2 events directly to NATS JetStream (with a standalone backfill service for gap filling from the DA layer), while TypeScript services monitor L1 and DA data sources. A unified indexer consumes all streams, normalizes data, and writes to SurrealDB. The explorer is exposed via a code-first GraphQL API (Pothos) with SSE subscriptions, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
 
 The system replaces:
 - The archive relay adapter + Mina archive node + Archive-Node-API + Zekoscan pipeline.
@@ -42,7 +42,7 @@ The Mina archive schema is designed around L1 consensus:
 - Data staleness with no signal.
 - No L2 concepts in the explorer.
 - Fragmented indexing infrastructure (separate pipelines for explorer and bridge).
-- No rollback modeling for either L1 settlement reversals or L2 sequencer rollbacks.
+- No rollback modeling for L1 settlement reversals or L2 state reverts.
 - No control over explorer roadmap.
 - No indexed per-user bridge operation history (current system does full archive scans per wallet).
 
@@ -74,7 +74,7 @@ The Mina archive schema is designed around L1 consensus:
 | Zeko-E | `zeko-e-testnet-1` | Ethereum Testnet | Ethereum testing |
 | Zeko-E | `zeko-e-mainnet` | Ethereum Mainnet | Ethereum production |
 
-Each network runs its own sequencer, DA layer, and **full explorer backend stack** (connectors, NATS, indexer, SurrealDB, APIs). Full stack isolation per network — separate NATS and SurrealDB instances. No cross-network namespacing needed; the instance itself identifies the network.
+Each network runs its own sequencer, DA layer, and **full explorer backend stack** (NATS, backfill service, indexer, SurrealDB, APIs). Full stack isolation per network — separate NATS and SurrealDB instances. No cross-network namespacing needed; the instance itself identifies the network.
 
 ---
 
@@ -89,33 +89,38 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
 │  │ Zeko         │  │ L1 Live Node │  │ DA Layer              │  │
 │  │ Sequencer    │  │ + L1 Archive │  │ (Ethermint/Celestia)  │  │
-│  │ (internal    │  │ (Mina or     │  │                       │  │
-│  │  protocol)   │  │  Ethereum)   │  │                       │  │
-│  └──────┬───────┘  └──────┬───────┘  └───────────┬───────────┘  │
-└─────────┼─────────────────┼──────────────────────┼──────────────┘
-          │                 │                      │
-          ▼                 ▼                      ▼
-┌──────────────────┐ ┌──────────────┐ ┌────────────────────────────┐
-│ Sequencer        │ │ L1 Watcher   │ │ DA Monitor                 │
-│ Connector        │ │ (TypeScript) │ │ (TypeScript)               │
-│ (OCaml module)   │ │              │ │                            │
-│                  │ │ Live: tip,   │ │                            │
-│ Raw data → NATS  │ │  rollbacks   │ │                            │
-│                  │ │ Archive:     │ │                            │
-│                  │ │  actions,    │ │                            │
-│                  │ │  history     │ │                            │
-└────────┬─────────┘ └──────┬───────┘ └──────────┬─────────────────┘
-         │                  │                    │
-         ▼                  ▼                    ▼
+│  │ (publishes   │  │ (Mina or     │  │                       │  │
+│  │  to NATS     │  │  Ethereum)   │  │                       │  │
+│  │  directly)   │  │              │  │                       │  │
+│  └──────┬───────┘  └──────┬───────┘  └───┬───────────┬───────┘  │
+└─────────┼─────────────────┼──────────────┼───────────┼──────────┘
+          │                 │              │           │
+          │                 │              │           ▼
+          │                 │              │  ┌─────────────────┐
+          │                 │              │  │ Backfill Service │
+          │                 │              │  │ (OCaml, standalone)
+          │                 │              │  │ GraphQL API      │
+          │                 │              │  │ DA → NATS        │
+          │                 │              │  └────────┬────────┘
+          │                 │              │           │
+          │                 ▼              ▼           │
+          │          ┌──────────────┐ ┌────────────┐  │
+          │          │ L1 Watcher   │ │ DA Monitor │  │
+          │          │ (TypeScript) │ │ (TS)       │  │
+          │          └──────┬───────┘ └─────┬──────┘  │
+          │                 │               │         │
+          ▼                 ▼               ▼         ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     NATS JetStream                              │
 │                 (indexing substrate)                             │
 │                                                                 │
 │  Streams (raw, unprocessed):                                    │
 │  • zeko.l2.transactions    • zeko.l1.settlements                │
-│  • zeko.l2.rollbacks       • zeko.l1.rollbacks                  │
+│  • zeko.l2.finality        • zeko.l1.rollbacks                  │
 │  • zeko.l1.outer-actions   • zeko.l1.bridge-events              │
 │  • zeko.da.attestations    • zeko.health                        │
+│                                                                 │
+│  Rolling retention (default 90d) + R2 archival                  │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
@@ -127,6 +132,8 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 │  • Explorer data: transactions, accounts, batches, stats, ...   │
 │  • Bridge data: outer_action, inner_action, bridge_operation    │
 │  • zkApp data: events, actions                                  │
+│  • Consumer-side rollback detection (hash chain continuity)     │
+│  • Backfill integration (calls Backfill Service on gap detect)  │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
@@ -161,20 +168,53 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 
 ### 5.2 Component Details
 
-#### 5.2.1 Sequencer Connector (OCaml)
+#### 5.2.1 Sequencer → NATS Publishing (OCaml, in sequencer repo)
 
-OCaml module speaking the sequencer's internal binary protocol. Publishes **raw, unprocessed** data to NATS. No normalization. May be implemented as a module within the sequencer itself rather than a standalone microservice — this simplifies the crash recovery / resume story since the sequencer owns the NATS publishing lifecycle.
+The sequencer itself publishes diffs directly to NATS JetStream as a configurable option via `--nats-url`. No separate connector process. No DA layer in the read path. Publishing is fire-and-forget — if NATS is down, publishes are silently dropped and the sequencer continues normally. See `spikes/001-sequencer-connector/results.md` for the full spike investigation.
 
-**Why OCaml:** The binary protocol is defined in the Mina/Zeko OCaml codebase. The Zeko team already uses OCaml. Both the connector and a hypothetical API approach would require OCaml code — the connector avoids an extra hop (sequencer → GraphQL API → TS adapter → NATS) by publishing directly to NATS.
+**Why direct publishing (not a standalone connector):** The DA layer communicates via OCaml binary RPC (`Daemon_rpcs`), not HTTP/JSON. A standalone connector would need the same OCaml deps, add 15-30s polling latency, and require its own checkpoint/recovery logic. Direct publishing is zero-latency, simpler, and provides better context (the sequencer already has the diff, target hash, and full transaction at the publish point).
 
-**Responsibilities:**
-- Connect to sequencer via internal protocol, subscribe to blocks/transactions.
-- Bootstrap for historical replay.
-- Publish raw data to `zeko.l2.transactions`.
-- **Detect and publish L2 rollback events** to `zeko.l2.rollbacks` (see Section 7.5).
-- Publish heartbeats to `zeko.health`.
+**Three integration points** in `zeko_sequencer.ml`, each immediately after a `Da_layer.Client.enqueue_diff` call:
 
-**L2 rollback detection (known mechanism):** The connector does not receive explicit rollback events from the sequencer. Instead, rollback detection is based on **ledger hash chain continuity** — the same mechanism used by the archive relay today. The connector fetches the latest state and checks whether there is a contiguous chain of transactions between the last processed ledger hash and the current sequencer state. If the chain is broken (i.e., no path from the last known ledger hash to the current one), a fork has occurred. In that case, the connector fetches transactions between the older (common ancestor) ledger hash and the current sequencer state, determines which transactions were rolled back and which are new, and publishes rollback events to `zeko.l2.rollbacks`. See `spikes/001-sequencer-connector.md` for the full spike on improving this mechanism over the archive relay's implementation.
+1. **User command processing** (`apply_user_command`, line 497) — primary transaction path. Publishes the diff + target hash + full command to `zeko.l2.transactions`.
+2. **Fee transfer** (`apply_fee_transfer`, line 573) — sequencer fee collection. `command` is `null` in the diff.
+3. **Genesis/sync diffs** (`sync`, line 804) — created during startup bootstrap from DA layer. Publishes historical diffs as they are replayed.
+
+**Finality event publishing** at two additional points:
+
+- **Proved:** After `run_committer` gets `Some (stmt, _)` (line 755) — publishes `stmt.target_ledger` as the proved hash to `zeko.l2.finality`.
+- **Committed:** After `State.Last_committed_ledger.set` in `Merger.Commit.process` (line 184) — publishes `Sparse_ledger.merkle_root new_inner_ledger` as the committed hash to `zeko.l2.finality`.
+
+**Health heartbeats** published periodically to `zeko.health`.
+
+**Sequencer `t` record modification:** A `nats_client : Nats_client.t option` field is added. When `None` (no `--nats-url` flag), all publish calls are no-ops — fully backwards-compatible.
+
+**Bootstrap:** On first startup with `--nats-url`, the sequencer's existing `sync` function replays all DA layer diffs. Each diff is published to NATS during this replay, populating the full history. No separate bootstrap step needed.
+
+**Deduplication:** Each message includes a `Nats-Msg-Id: <target_ledger_hash>` header. JetStream deduplicates within a 2-minute window, handling sequencer restarts gracefully.
+
+#### 5.2.1b Backfill Service (OCaml, standalone, in sequencer repo)
+
+A lightweight standalone OCaml service that fills gaps in the NATS stream by fetching diffs from the DA layer on demand. Exposes a GraphQL API. Fits in a single file (~200 lines). See `spikes/001-sequencer-connector/results.md` Section 7 for full design.
+
+**When it's needed:** If the sequencer restarts and there's a gap between pre-restart and post-restart messages in NATS, or if NATS was down while the sequencer was processing transactions, the indexer detects the gap via hash chain continuity and calls the backfill service.
+
+**GraphQL API:**
+
+- `mutation backfill(fromHash, toHash) → BackfillJob` — starts fetching diffs from DA layer for the hash range, publishes each to NATS.
+- `subscription backfillProgress(id) → BackfillProgress` — SSE stream of progress events (`{status, diffsPublished, error}`).
+- `query backfillJob(id) → BackfillJob` — check job status (for SSE reconnection).
+- `query health → {ok, instanceId, startedAt}` — the `instanceId` (random UUID generated at startup) lets the indexer detect service restarts and re-submit lost jobs.
+
+**Dependencies (all already in the zeko repo):** `da_layer`, `graphql-async`, `graphql_cohttp_async`, `cohttp-async`, `nats_client`, `async`, `core_kernel`, `yojson`.
+
+**Job storage is in-memory** (`Hashtbl`). Jobs are short-lived. The `instanceId` mechanism handles restart recovery — no persistence needed.
+
+**SSE transport:** Subscriptions use `Content-Type: text/event-stream` via `cohttp-async`. No WebSocket dependency.
+
+**CLI flags:** `--nats-url`, `--da-node` (list), `-p` (HTTP port, default 8090).
+
+**Deployment:** One instance per network. Same isolation as sequencer + NATS.
 
 #### 5.2.2 L1 Watcher (TypeScript)
 
@@ -207,15 +247,28 @@ Small, isolated service monitoring the DA layer for attestation status. Isolated
 
 #### 5.2.4 NATS JetStream
 
-Shared indexing substrate and **authoritative source of truth**. Streams carry raw, unprocessed data. Each consumer normalizes independently. Retention is unbounded — the full event history is preserved from the moment JetStream starts ingesting.
+Shared indexing substrate and **authoritative source of truth**. Streams carry raw, unprocessed data. Each consumer normalizes independently.
 
-SurrealDB is a rebuildable read model. If the database ever needs to be rebuilt, replaying the full NATS history is sufficient. L1/L2 archives are only used for pre-NATS historical data or catastrophic scenarios.
+SurrealDB is a rebuildable read model. If the database ever needs to be rebuilt, replaying the NATS history is sufficient. The DA layer and R2 archive serve as backfill sources for data older than the JetStream retention window.
 
 **Durable consumers** with at-least-once delivery. Combined with idempotent writes = exactly-once processing semantics.
 
 **Extensibility:** Any future service creates a durable consumer on existing streams and builds its own materialization.
 
 **NATS is dedicated to the indexing pipeline.** It is not used for UI real-time delivery (SSE fan-out uses SurrealDB live queries at the GraphQL layer).
+
+**JetStream configuration:**
+
+| Stream | Subjects | Retention | Max Age | Notes |
+|---|---|---|---|---|
+| `zeko-l2` | `zeko.l2.>` | Limits | 90d (configurable 1-6 months) | Transactions + finality events. Dedup window: 2m. |
+| `zeko-health` | `zeko.health` | Limits | — | Max 1000 messages. |
+| `zeko-l1` | `zeko.l1.>` | Limits | 90d | Settlements, rollbacks, outer actions, bridge events. |
+| `zeko-da` | `zeko.da.>` | Limits | 90d | DA attestations. |
+
+**R2 archival:** A cron job exports messages older than `(max_age - 1 week)` to Cloudflare R2 as daily NDJSON files compressed with zstd. Each line includes original NATS headers (sequence, timestamp, `Nats-Msg-Id`) for replayability. JetStream `Max Age` auto-prunes expired messages after archival. R2 bucket per network. See `spikes/001-sequencer-connector/results.md` Section 7 for full archival design.
+
+**Pre-seeded NATS streams:** For fast new deployments, a pre-populated JetStream data directory can be distributed as a snapshot, eliminating the need for DA layer bootstrap entirely.
 
 #### 5.2.5 Zeko Indexer (TypeScript)
 
@@ -225,7 +278,7 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 
 **Consumes:**
 - `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`.
-- `zeko.l2.rollbacks` → revert affected transactions and account states (Section 7.5).
+- `zeko.l2.finality` → update batch proved/committed status.
 - `zeko.l1.settlements` → create/update `batch`, link to transactions.
 - `zeko.l1.rollbacks` → revert batch settlement status (Section 7.5).
 - `zeko.da.attestations` → attach status to batch records.
@@ -236,7 +289,15 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 
 **Bridge operation correlation:** L1 and L2 sides of a bridge operation are correlated via the `aux` field (needs verification — see `spikes/002-bridge-correlation.md`). Partial records are created when the first side arrives and completed when the second side shows up. This enables indexed per-user bridge history, replacing the current full archive scan approach.
 
-**Rollback handling:** The indexer subscribes to both `zeko.l2.rollbacks` and `zeko.l1.rollbacks`. On rollback events, it reverts affected explorer data (transactions, accounts, batches) and bridge data (bridge operations, outer/inner actions) in a single cascade.
+**L2 rollback handling — consumer-side detection:** The sequencer has no runtime rollback mechanism (see `spikes/001-sequencer-connector/addendums/addendum-sequencer-rollbacks.md`). There is no `zeko.l2.rollbacks` stream. Instead, the indexer detects rollbacks by checking **hash chain continuity** on the `zeko.l2.transactions` stream:
+
+- Each message has `source_ledger_hash` and `target_ledger_hash`. Normal operation: `M[n].source == M[n-1].target`.
+- **Hash chain break → rollback:** If `M[n].source` matches an earlier `M[k].target`, messages `M[k+1]..M[n-1]` were rolled back. The indexer reverts SurrealDB state for those transactions and continues from `M[n]`.
+- **Hash chain break → gap:** If `M[n].source` is unknown, diffs are missing. The indexer pauses, calls the Backfill Service (`backfill(fromHash, toHash)` mutation), subscribes to progress via SSE, and resumes after completion. See Section 5.2.1b.
+
+The indexer maintains a `ledger_hash → NATS sequence number` mapping (in-memory, rebuilt from SurrealDB on restart) for O(1) ancestor lookup. See `spikes/001-sequencer-connector/results.md` Section 5 for the full detection algorithm and `spikes/001-sequencer-connector/test-scenarios/consumer-rollback-detection.feature` for acceptance tests.
+
+**L1 rollback handling:** The indexer subscribes to `zeko.l1.rollbacks`. On L1 rollback events, it reverts affected batch settlements and cascades to bridge data.
 
 #### 5.2.6 SurrealDB (Single Node)
 
@@ -317,7 +378,7 @@ A **Bridge GraphQL API** (TypeScript, Pothos) is a separate endpoint backed by t
 
 ## 6. Project Structure — Monorepo
 
-The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces + moonrepo**. The OCaml sequencer connector lives in the sequencer repository (as a module of the sequencer), not in this monorepo.
+The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces + moonrepo**. The OCaml NATS publishing code lives in the sequencer repository (as part of the sequencer), and the backfill service is a standalone OCaml binary in the same repo. Neither lives in this monorepo.
 
 ```
 /zeko-explorer
@@ -372,13 +433,13 @@ Indexers write heartbeats to `sync_status`. GraphQL APIs include `_meta` freshne
 
 ### 7.2 Self-Healing Ingestion
 
-NATS durable consumers resume from last ack. Sequencer connector bootstrap for full replay. Idempotent writes.
+NATS durable consumers resume from last ack. On first startup with `--nats-url`, the sequencer's `sync` function replays all DA layer diffs and publishes each to NATS, populating the full history. Subsequent restarts publish during sync with JetStream deduplication handling overlaps. Gaps detected by the indexer are filled on demand via the Backfill Service. Idempotent writes throughout.
 
 ### 7.3 Graceful Degradation and Recovery
 
 | Failure | Impact | Detection | Recovery |
 |---|---|---|---|
-| **Sequencer down** | No new L2 transactions indexed. | Connector heartbeat stops → `sync_status` updated → frontend shows degraded. | Connector reconnects when sequencer returns. If rollbacks occurred during downtime, connector detects new state on reconnect (see Section 7.5). NATS durable consumer resumes. Gap backfilled via bootstrap if needed. |
+| **Sequencer down** | No new L2 transactions indexed. | Health heartbeat stops → `sync_status` updated → frontend shows degraded. | Sequencer restarts, `sync` replays DA diffs to NATS (dedup handles overlaps). Indexer detects any gap via hash chain break, triggers backfill service to fill it. |
 | **L1 live node down** | Cannot track tip or detect L1 rollbacks. Settlement status frozen. | L1 Watcher heartbeat degrades → `sync_status` → "L1 status unknown." | Watcher reconnects, re-scans from last known L1 height. Reconciles settlements and rollbacks that occurred during outage. |
 | **L1 archive down** | Outer action indexing paused. Existing data still queryable. | Watcher reports archive unreachable. | Watcher reconnects, backfills missed actions from last indexed state. |
 | **DA layer down** | Attestation status "unknown." Everything else unaffected. | DA Monitor reports unreachable. | Reconnect, backfill missed attestations. |
@@ -394,7 +455,7 @@ All database operations use upserts keyed on natural identifiers (transaction ha
 
 Zeko-M has two categories of rollback scenarios. Zeko-E will define its own rollback model based on Ethereum finality when that deployment is built.
 
-**Rollback events are published to NATS.** When a rollback is detected, a dedicated rollback event is published to the relevant NATS subject (`zeko.l2.rollbacks` or `zeko.l1.rollbacks`). The indexer subscribes to both and handles all revert cascades — explorer data, bridge data, and account state — in a unified pass.
+**L2 rollback detection is consumer-side.** The sequencer has no runtime rollback mechanism — adding one is not desirable due to complexity (see `spikes/001-sequencer-connector/addendums/addendum-sequencer-rollbacks.md`). There is no `zeko.l2.rollbacks` stream. The indexer detects L2 rollbacks by checking hash chain continuity on the `zeko.l2.transactions` stream. L1 rollbacks are detected by the L1 Watcher and published to `zeko.l1.rollbacks`.
 
 #### Scenario 1: L1 Fork Invalidates a Commit or Deposit
 
@@ -402,9 +463,11 @@ Mina L1 has probabilistic finality (~290 blocks). If a fork occurs and the new c
 - A **batch settlement transaction** that the sequencer had committed, or
 - A **deposit action** that the sequencer had already accepted and credited on L2
 
-...then the sequencer must revert the affected L2 state.
+...then the affected L2 state must be reverted.
 
-**Detection path:** The L1 Watcher monitors the canonical tip via the L1 live node. When a previously-seen L1 block is orphaned, it publishes to `zeko.l1.rollbacks` with the affected batch/deposit details. The sequencer independently detects the same fork and reverts its L2 state, which the Sequencer Connector detects and publishes to `zeko.l2.rollbacks`.
+**Detection path:** The L1 Watcher monitors the canonical tip via the L1 live node. When a previously-seen L1 block is orphaned, it publishes to `zeko.l1.rollbacks` with the affected batch/deposit details. The indexer processes this event and reverts batch settlement status and any cascading L2 effects.
+
+If the sequencer also reverts L2 state in response to the L1 fork, the indexer detects this as a hash chain break on `zeko.l2.transactions` (see detection mechanism below) and reverts the affected transactions.
 
 **Explorer impact:**
 - Batch `settlement_status` reverts from "settling" to "pending" (or "rolled_back" if the batch itself is invalidated).
@@ -415,25 +478,27 @@ Mina L1 has probabilistic finality (~290 blocks). If a fork occurs and the new c
 
 #### Scenario 2: Time Precondition Expiry
 
-A transaction with a `valid_until` time precondition is accepted by the sequencer and applied to the L2 ledger. If the sequencer does not commit the batch to L1 before the precondition's slot deadline (e.g., because L1 is congested and doesn't produce a block in time), the transaction becomes invalid. The sequencer reverts it.
+A transaction with a `valid_until` time precondition is accepted by the sequencer and applied to the L2 ledger. If the sequencer does not commit the batch to L1 before the precondition's slot deadline (e.g., because L1 is congested), the transaction becomes invalid. The sequencer reverts it.
 
-**Detection path:** The sequencer reverts the transaction from its L2 state. The Sequencer Connector detects this and publishes to `zeko.l2.rollbacks`.
+**Detection path:** The sequencer reverts the transaction from its L2 state. When it publishes new transactions after the revert, the indexer detects a hash chain break — the new message's `source_ledger_hash` matches an earlier ancestor, not the most recent `target_ledger_hash`. The indexer identifies the rolled-back transactions and reverts them.
 
 **Explorer impact:**
 - The transaction status changes from "applied" to "reverted" with `rollback_reason: "time_precondition_expired"`.
 - Account balances updated to reverse the transaction's effects.
 - `account_activity` records the reversal.
 
-#### Rollback Detection Mechanism
+#### L2 Rollback Detection Mechanism (Consumer-Side)
 
-**There is no explicit rollback event from the sequencer.** Rollback detection is inferred from ledger hash chain continuity — the same approach the archive relay uses today:
+The indexer checks hash chain continuity on every incoming `zeko.l2.transactions` message:
 
-1. The connector tracks the **last processed ledger hash**.
-2. On each poll, it fetches the sequencer's current state and checks for a contiguous chain of transactions linking the last known ledger hash to the current one.
-3. **If the chain is contiguous:** Normal operation — new transactions are published to `zeko.l2.transactions`.
-4. **If the chain is broken (fork detected):** The connector walks back to the common ancestor ledger hash, determines which previously-published transactions are no longer in the canonical chain, and publishes rollback events to `zeko.l2.rollbacks`. It then fetches transactions between the common ancestor and the current sequencer state to publish the new canonical chain.
+1. For each message `M[n]`: compare `M[n].source_ledger_hash` with `M[n-1].target_ledger_hash`.
+2. **If equal:** Normal operation — process the transaction.
+3. **If `M[n].source` matches an earlier `M[k].target`:** Fork detected — messages `M[k+1]..M[n-1]` were rolled back. Revert SurrealDB state for those transactions, continue from `M[n]`.
+4. **If `M[n].source` is unknown:** Gap — missing diffs. Pause, trigger Backfill Service (Section 5.2.1b), resume after completion.
 
-**Known issues with the archive relay's implementation of this pattern** must be studied and improved upon. See `spikes/001-sequencer-connector.md` for the full investigation scope.
+The indexer maintains a `ledger_hash → NATS sequence number` mapping (in-memory hash map, rebuilt from SurrealDB on restart) for O(1) common ancestor lookup. Each SurrealDB transaction record is tagged with its `target_ledger_hash` for efficient revert by hash.
+
+See `spikes/001-sequencer-connector/results.md` Section 5 for the full algorithm and `spikes/001-sequencer-connector/test-scenarios/consumer-rollback-detection.feature` for acceptance tests.
 
 ---
 
@@ -455,7 +520,7 @@ All domain logic test-first. Unit (mocked repos), integration (real SurrealDB/NA
 
 - **Docker Compose** spins up real NATS + SurrealDB instances for integration tests (not mocks).
 - **Fixtures:** Canned NATS messages captured from a real devnet. Tests the full pipeline from NATS onward without needing a running sequencer.
-- **Fixture diversity:** Normal blocks, empty blocks, zkApp transactions, bridge operations, rollback events. Grow the fixture set as edge cases are encountered.
+- **Fixture diversity:** Normal blocks, empty blocks, zkApp transactions, bridge operations, hash chain breaks (rollback simulation), finality events. Grow the fixture set as edge cases are encountered.
 - Ephemeral instances per test suite. CI gate.
 
 ---
@@ -466,22 +531,25 @@ All domain logic test-first. Unit (mocked repos), integration (real SurrealDB/NA
 
 Before Milestone 1 implementation begins, the following spikes must be completed. Each has a dedicated document in `spikes/`.
 
-1. **Sequencer Connector** (`spikes/001-sequencer-connector.md`) — crash recovery, resume strategy, rollback signaling, module-vs-microservice.
+1. **Sequencer Connector** (`spikes/001-sequencer-connector/`) — **Complete.** Resolved: sequencer publishes directly to NATS (no separate connector), consumer-side rollback detection, backfill service design, bootstrap strategy. See `results.md` for full findings.
 2. **Bridge Operation Correlation** (`spikes/002-bridge-correlation.md`) — verify `aux` as correlation key, design per-user indexed bridge history.
 3. **zkApp State Display** (`spikes/003-zkapp-state-display.md`) — investigate how to display zkApp state, events, and actions.
 4. **Deployment Topology** (`spikes/004-deployment-topology.md`) — single vs. multi host, Nix vs. Docker Compose for production.
 5. **Pagination Schema** (`spikes/005-relay-pagination.md`) — cursor-based pagination schema, Relay spec tradeoffs.
+6. **L1 Watcher** (`spikes/006-l1-watcher/`) — settlement detection, L1 fork/rollback handling, outer actions ingestion, bridge events, abstract L1 interface, NATS event schemas for all `zeko.l1.*` subjects.
+7. **DA Monitor** (`spikes/007-da-monitor/`) — DA attestation model, API analysis (Ethermint/Celestia), NATS event schema for `zeko.da.attestations`, migration considerations.
 
 ### Milestone 1: MCP Server + GraphQL API + Indexing Substrate (Foundation)
 
 **Goal:** The indexing substrate (connectors, NATS, indexer, SurrealDB) and GraphQL APIs are operational. The code-mode MCP server provides agent access to all indexed data. No frontend yet — agents and API consumers are the first users.
 
 **Components delivered:**
-- Sequencer Connector (OCaml, in sequencer repo): internal protocol, raw data → NATS, rollback detection.
+- Sequencer NATS Publishing (OCaml, in sequencer repo): `--nats-url` flag, three `enqueue_diff` publish points, finality events, health heartbeats, bootstrap during sync.
+- Backfill Service (OCaml, standalone, in sequencer repo): GraphQL API, DA layer → NATS gap filling, SSE progress streaming.
 - L1 Watcher (TypeScript, Mina adapter with abstract L1 interface): L1 live node + archive connections, settlements, outer actions, rollbacks, bridge events.
 - DA Monitor (TypeScript): attestation monitoring.
-- NATS JetStream: all streams configured, unbounded retention.
-- Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Rollback handling for both.
+- NATS JetStream: all streams configured, rolling retention (90d default) + R2 archival.
+- Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Consumer-side L2 rollback detection via hash chain continuity. Backfill integration for gap filling. L1 rollback handling.
 - SurrealDB: schema + migrations via surrealdb-migrations, backup cron.
 - Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions. SSE subscriptions.
 - Bridge GraphQL API (Pothos): outerActions, innerActions, witnesses by aux, commitAsePastSlot, bridgeOperations.
@@ -497,7 +565,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 Feature: Transaction Ingestion
   Scenario: A payment transaction is indexed
     Given the sequencer has processed a payment with hash "txn_abc"
-    When the connector publishes to NATS and the indexer processes it
+    When the sequencer publishes to NATS and the indexer processes it
     Then the GraphQL API returns the transaction with correct fields
     And account balances are updated
 
@@ -507,11 +575,11 @@ Feature: Transaction Ingestion
     When the indexer starts
     Then it processes messages 101-150 in order
 
-  Scenario: L2 rollback — time precondition expiry
-    Given transaction "txn_xyz" was applied with valid_until slot 500
-    When the sequencer reverts it due to time precondition expiry
-    And the connector publishes the rollback to NATS
-    Then the transaction status becomes "reverted"
+  Scenario: L2 rollback — hash chain break detection
+    Given transaction "txn_xyz" was applied and indexed
+    When a new NATS message arrives with source_ledger_hash pointing to an ancestor before "txn_xyz"
+    Then the indexer detects a hash chain break (rollback)
+    And the transaction status becomes "reverted"
     And account balances are reversed
 
 Feature: Bridge Action Indexing
@@ -665,7 +733,7 @@ Container design follows 12-factor principles (env-based config, health endpoint
 | Agent access | None | Code-mode MCP | 1 |
 | Batch visibility | None | Full lifecycle | 1 (data), 2 (UI) |
 | L1 rollback handling | None | Auto-reversion + display | 3 |
-| L2 rollback handling | None | Time precondition + L1 fork | 1 (data), 3 (finality) |
+| L2 rollback handling | None | Consumer-side hash chain detection + revert | 1 (data), 3 (finality) |
 | Bridge operations | Separate services | Unified indexer, shared DB | 1 |
 | Per-user bridge history | Full archive scan per wallet | Indexed by public key | 1 |
 | Outer/inner actions | services/actions/* | NATS consumer, same queries | 1 |
@@ -680,10 +748,12 @@ Container design follows 12-factor principles (env-based config, health endpoint
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Sequencer Connector | OCaml (sequencer module) | Internal binary protocol. Lives in sequencer repo. |
+| Sequencer NATS Publishing | OCaml (sequencer module) | Direct publish at `enqueue_diff` sites. `--nats-url` flag. Lives in sequencer repo. |
+| Backfill Service | OCaml (standalone binary) | DA layer → NATS gap filling. GraphQL API + SSE. Lives in sequencer repo. |
+| NATS OCaml Client | OCaml library | HPUB with headers, CONNECT, PING/PONG, reconnection, JetStream dedup via Nats-Msg-Id. New dependency. |
 | L1 Watcher | TypeScript | I/O bound, GraphQL client ecosystem. Abstract L1 interface. |
 | DA Monitor | TypeScript | Small, isolated, I/O bound. |
-| NATS | JetStream (unbounded retention) | Durable, replay, extensible substrate. Source of truth. |
+| NATS | JetStream (rolling retention + R2 archival) | Durable, replay, extensible substrate. Source of truth. |
 | Zeko Indexer | TypeScript | I/O bound. Shared types with APIs. Rust only if perf bottleneck. |
 | Database | SurrealDB (single node) | Graph, record links, FTS, live queries. Rebuildable from NATS. |
 | DB Migrations | surrealdb-migrations | Mature migration tooling for SurrealDB. |
