@@ -1,8 +1,9 @@
 # Spike 003: zkApp State, Events, and Actions Display
 
-**Status:** Not started
+**Status:** Complete
 **Blocking:** Milestone 1 (explorer indexer schema), Milestone 2 (frontend display)
 **Owner:** TBD
+**Results:** [results.md](./results.md)
 
 ---
 
