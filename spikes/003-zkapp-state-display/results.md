@@ -32,7 +32,58 @@
 
 ---
 
-## 2. Display Strategy
+## 2. o1js Data Model
+
+### zkApp State (8 Fields)
+
+Each zkApp account stores exactly **8 Field elements** (each ~32 bytes / 256 bits) as on-chain state. Declared in o1js:
+
+```typescript
+class MyContract extends SmartContract {
+  @state(Field) num = State<Field>();
+  @state(UInt64) balance = State<UInt64>();
+  @state(PublicKey) owner = State<PublicKey>();  // consumes 2 Fields (x, isOdd)
+  // ...up to 8 Fields total
+}
+```
+
+**Display implications:**
+- A single `@state` may consume 1 or 2 Fields depending on the type (`PublicKey` uses 2, `Field`/`UInt64`/`Bool` use 1).
+- Without metadata, there is no way to know which fields belong to which `@state` variable or what type they represent.
+- The raw representation is always an array of 8 field element strings.
+
+### Events
+
+Events are public arbitrary data emitted with transactions:
+
+```typescript
+events = {
+  'add-merkle-leaf': Field,
+  'update': MyCustomStruct,
+};
+this.emitEvent('add-merkle-leaf', newLeaf);
+```
+
+- Each event has a **name** (string) and **data** (array of Field elements).
+- Event types are defined in the contract source but **not stored on-chain** — only the raw field arrays are persisted.
+- Events cannot be accessed provably inside smart contracts (read-only from outside via `fetchEvents()`).
+
+### Actions
+
+Actions are structurally similar to events but have additional power:
+
+```typescript
+this.reducer.dispatch(action);
+this.reducer.reduce(actions, State, callback);
+```
+
+- Actions maintain an **action state** — a rolling hash commitment (`actionState`) that proves which actions were dispatched.
+- Actions can be **processed inside smart contracts** via the reducer pattern, enabling concurrent state updates.
+- Actions have a **sequence number** and **state hash** that tracks the action accumulator progression.
+
+---
+
+## 3. Display Strategy
 
 ### Decision: Known Contract Registry + Raw Fields
 
@@ -65,11 +116,56 @@ Account loaded → extract verification_key_hash
      state/events/actions     field arrays
 ```
 
-See [addendum: known contract registry](./addendums/addendum-known-contract-registry.md) for the full JSON schema, initial contract entries, and population strategy.
+---
+
+## 4. Known Contract Registry
+
+A JSON file in the explorer repository, loaded by the indexer at startup and served by the API.
+
+**Location:** `packages/indexer/src/registry/known-contracts.json`
+
+```json
+{
+  "$schema": "./known-contracts.schema.json",
+  "contracts": [
+    {
+      "name": "Zeko Bridge (Outer/L1)",
+      "description": "L1 bridge contract managing commit/witness actions for the Zeko rollup",
+      "verificationKeyHash": "<vkey_hash_hex>",
+      "address": "<public_key_base58>",
+      "network": "mainnet",
+      "stateFields": [
+        { "index": 0, "label": "inner_ledger_hash", "type": "field", "description": "Current committed inner (L2) ledger hash" },
+        { "index": 1, "label": "inner_action_state", "type": "field", "description": "Rolling hash of inner actions processed" },
+        { "index": 2, "label": "outer_action_state", "type": "field", "description": "Rolling hash of outer actions (commits/witnesses)" },
+        { "index": 3, "label": "committed_slot_lower", "type": "uint32", "description": "Lower bound of committed slot range" },
+        { "index": 4, "label": "committed_slot_upper", "type": "uint32", "description": "Upper bound of committed slot range" },
+        { "index": 5, "label": "sequencer_public_key_x", "type": "field", "description": "Sequencer public key (x coordinate)" },
+        { "index": 6, "label": "sequencer_public_key_is_odd", "type": "bool", "description": "Sequencer public key (parity bit)" },
+        { "index": 7, "label": "reserved", "type": "field", "description": "Reserved / unused" }
+      ],
+      "events": {},
+      "actions": {
+        "commit": [
+          { "index": 0, "label": "inner_action_state", "type": "field" },
+          { "index": 1, "label": "inner_ledger_hash", "type": "field" },
+          { "index": 2, "label": "slot_lower", "type": "uint32" },
+          { "index": 3, "label": "slot_upper", "type": "uint32" }
+        ],
+        "witness": [
+          { "index": 0, "label": "aux", "type": "field" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Field labels are derived from `Zeko_circuits.Rollup_state.Outer_state.typ` and `Inner_state.typ` in the Zeko source. The labels above are indicative — exact layouts must be confirmed from the circuit definitions during implementation. The `verificationKeyHash` must be populated from a deployed instance.
 
 ---
 
-## 3. SurrealDB Schema Impact
+## 5. SurrealDB Schema Impact
 
 ### Key Design Decision
 
@@ -80,22 +176,55 @@ See [addendum: known contract registry](./addendums/addendum-known-contract-regi
 2. Different consumers want different representations (hex, decimal, labeled).
 3. Raw data is the source of truth.
 
-### New/Modified Tables
+### `account` Table Additions
 
-**`account` additions:**
-- `zkapp_state` — `option<array<string, 8>>` (8 field elements, null for non-zkApp accounts)
-- `verification_key_hash` — `option<string>` (indexed, enables registry lookup)
-- `zkapp_uri` — `option<string>` (optional metadata URI, near-zero adoption but stored when present)
+```surql
+DEFINE FIELD zkapp_state ON account TYPE option<array<string, 8>>;
+DEFINE FIELD verification_key_hash ON account TYPE option<string>;
+DEFINE FIELD zkapp_uri ON account TYPE option<string>;
 
-**`zkapp_event`** — emitting account + transaction links, raw field array, event index, sequence number, timestamp
+DEFINE INDEX idx_account_vkey ON account FIELDS verification_key_hash;
+```
 
-**`zkapp_action`** — same as event, plus `action_state` (rolling hash) with dedicated index
+### `zkapp_event` Table
 
-See [addendum: SurrealDB schema](./addendums/addendum-surrealdb-schema.md) for complete table definitions and indexes.
+```surql
+DEFINE TABLE zkapp_event SCHEMAFULL;
+DEFINE FIELD id ON zkapp_event TYPE string;  -- deterministic: {tx_hash}:{account}:{event_index}
+DEFINE FIELD transaction ON zkapp_event TYPE record<transaction>;
+DEFINE FIELD emitting_account ON zkapp_event TYPE record<account>;
+DEFINE FIELD event_index ON zkapp_event TYPE int;
+DEFINE FIELD fields ON zkapp_event TYPE array<string>;  -- raw field elements
+DEFINE FIELD timestamp ON zkapp_event TYPE datetime;
+DEFINE FIELD sequence_number ON zkapp_event TYPE int;
+
+DEFINE INDEX idx_event_account ON zkapp_event FIELDS emitting_account;
+DEFINE INDEX idx_event_tx ON zkapp_event FIELDS transaction;
+DEFINE INDEX idx_event_seq ON zkapp_event FIELDS sequence_number;
+```
+
+### `zkapp_action` Table
+
+```surql
+DEFINE TABLE zkapp_action SCHEMAFULL;
+DEFINE FIELD id ON zkapp_action TYPE string;  -- deterministic: {tx_hash}:{account}:{action_index}
+DEFINE FIELD transaction ON zkapp_action TYPE record<transaction>;
+DEFINE FIELD emitting_account ON zkapp_action TYPE record<account>;
+DEFINE FIELD action_index ON zkapp_action TYPE int;
+DEFINE FIELD fields ON zkapp_action TYPE array<string>;  -- raw field elements
+DEFINE FIELD action_state ON zkapp_action TYPE string;  -- rolling hash after this action
+DEFINE FIELD timestamp ON zkapp_action TYPE datetime;
+DEFINE FIELD sequence_number ON zkapp_action TYPE int;
+
+DEFINE INDEX idx_action_account ON zkapp_action FIELDS emitting_account;
+DEFINE INDEX idx_action_tx ON zkapp_action FIELDS transaction;
+DEFINE INDEX idx_action_state ON zkapp_action FIELDS action_state;
+DEFINE INDEX idx_action_seq ON zkapp_action FIELDS sequence_number;
+```
 
 ---
 
-## 4. Indexer Processing
+## 6. Indexer Processing
 
 When the indexer receives a `zeko.l2.transactions` message with `command.type === "zkapp_command"`:
 
@@ -113,13 +242,32 @@ NATS message received
     └─► Link events/actions to transaction and emitting account
 ```
 
-The indexer extracts events/actions from `account_update.body.events` and `account_update.body.actions` (arrays of field arrays). State comes from `changed_accounts[].account.zkapp_state` (post-state). Verification key hash comes from `account_update.body.update.verification_key.hash` when present.
+Each `account_update` contains:
 
-See [addendum: o1js data model](./addendums/addendum-o1js-data-model.md) for the full technical breakdown of state, events, and actions structures.
+```json
+{
+  "body": {
+    "public_key": "<emitting account>",
+    "update": {
+      "app_state": ["Set <field>" | "Keep", ...8 entries],
+      "verification_key": { "data": "...", "hash": "..." } | null
+    },
+    "actions": [["<field>", "<field>", ...], ...],
+    "events": [["<field>", "<field>", ...], ...],
+    "preconditions": { ... }
+  }
+}
+```
+
+The indexer should:
+1. **Events**: For each field array in `account_update.body.events` → create a `zkapp_event` record linked to the transaction and emitting account.
+2. **Actions**: For each field array in `account_update.body.actions` → create a `zkapp_action` record with computed `action_state`, linked to the transaction and emitting account.
+3. **State**: Use the post-state from `changed_accounts[].account.zkapp_state`.
+4. **Verification key**: Extract `.hash` from `account_update.body.update.verification_key` when present, store on account.
 
 ---
 
-## 5. GraphQL API Shape
+## 7. GraphQL API Shape
 
 ```graphql
 type Account {
@@ -166,7 +314,7 @@ type ZkappAction {
 
 ---
 
-## 6. Open Questions — Resolved
+## 8. Open Questions — Resolved
 
 | Original Question | Resolution |
 |---|---|
@@ -180,7 +328,7 @@ type ZkappAction {
 
 ---
 
-## 7. Implementation Checklist
+## 9. Implementation Checklist
 
 - [ ] Confirm exact bridge contract state field layout from `Zeko_circuits.Rollup_state.Outer_state.typ` and `Inner_state.typ`
 - [ ] Create `known-contracts.json` with bridge contract entries (populate `verificationKeyHash` from deployed instance)
