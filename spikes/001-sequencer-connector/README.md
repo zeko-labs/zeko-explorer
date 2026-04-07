@@ -1,8 +1,9 @@
 # Spike 001: Sequencer Connector — Crash Recovery, Resume, and Rollback Signaling
 
-**Status:** Not started
+**Status:** Complete
 **Blocking:** Milestone 1
 **Owner:** TBD
+**Results:** [results.md](./results.md)
 
 ---
 
