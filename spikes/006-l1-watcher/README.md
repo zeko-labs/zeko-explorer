@@ -32,27 +32,71 @@ The PRD defines the L1 Watcher at a high level (Section 5.2.2), but the followin
 - What data should the `zeko.l1.rollbacks` event contain? Affected batch IDs, orphaned block heights, affected deposit actions?
 - How does the watcher distinguish between a minor tip reorg (1-2 blocks) and a deep fork that invalidates settlements?
 
-### 3. Outer Actions and Bridge Events
+### 3. Outer Actions Ingestion
 
 - How does the watcher query outer actions (Commits, Witnesses) from the L1 archive?
 - What is the query mechanism — `actions` GraphQL query with state range? Action state hash pagination?
 - How does the existing `zeko-ui/services/actions/indexer` fetch outer actions today? What can be reused?
-- What data is available in bridge deposit/withdrawal events on L1?
-- How does the watcher detect new deposits that the sequencer should credit on L2?
 
-### 4. Abstract L1 Interface
+### 4. Bridge Event Detection (`zeko.l1.bridge-events`)
+
+Spike 002 established that the indexer requires `zeko.l1.bridge-events` messages to populate `bridge_operation` records with user PKs, amounts, and correlation keys. The L1 Watcher must detect three event types — each with distinct on-chain signatures. See `spikes/002-bridge-correlation/results.md` §3–4 for the full analysis.
+
+#### 4a. Deposit Submission Detection
+
+- The user's `submitDeposit` creates a signed `AccountUpdate` on the **user's own public key** (NOT `OUTER_PK`). This AccountUpdate emits actions containing: `[recipient (2 fields), amount, timeout, holderAccountL1 (2 fields), outerPk (2 fields)]` (`zeko-bridge-sdk/src/index.ts:301-311`).
+- The L1 Watcher must observe these user-level transactions, extract the user PK (the signer) and deposit params, and compute `depositAux()` — a Poseidon hash of `(holderAccountL1, amount, recipient, timeout)` (`zeko-bridge-sdk/src/utils.ts:78-86`).
+- **This is the canonical deposit submission fact** that eliminates archive scanning (WEB-415). Without this, the indexer cannot populate `bridge_operation.sender` for deposits.
+- **Question:** How does the L1 Watcher discover deposit submission transactions? Does it need to scan all L1 blocks for AccountUpdates that interact with the Zeko zkApp contract? Or can it filter by the contract's PK in the transaction's account_updates tree?
+
+#### 4b. Withdrawal Finalization Detection
+
+- The user calls `finalizeWithdrawal` on L1, which triggers `rule_action_witness` (emits a witness action on `OUTER_PK` with `action[1] = aux`) and `rule_bridge_finalize_withdrawal` (emits events containing `(withdrawal_index, withdrawal_params)` at line 256).
+- The outer witness is already captured by `zeko.l1.outer-actions`. The bridge event adds the user PK and withdrawal details.
+- `withdrawalAux()` computes: `Poseidon.hashWithPrefix("Withdrawal_params - qFB3jXP*)", [Field(0), ...amount.toFields(), ...recipient.toFields()])` (`zeko-bridge-sdk/src/utils.ts:88-94`).
+
+#### 4c. Cancel Deposit Detection
+
+- **Critical finding from spike 002:** Cancel deposit does NOT emit an outer witness action on `OUTER_PK`. The cancel contract rule (`rule_bridge_finalize_cancelled_deposit.ml`) includes `witness_outer` as a precondition witness with **no `actions` field** — only preconditions. See `spikes/002-bridge-correlation/results.md` §4 for the full OCaml contract analysis.
+- Cancellation advances the `prevNextCancelledDeposit` counter on `helperAccountL1.zkappState[0]`.
+- The L1 Watcher must detect cancel transactions by observing L1 transactions that interact with the Zeko zkApp contract and advance `prevNextCancelledDeposit`.
+- **Fallback verification:** The watcher (or indexer) can periodically read `helperAccountL1.zkappState[0]` to verify counter advancement as a consistency check.
+- **Question:** What is the most reliable way to detect cancel deposit transactions? Monitoring balance changes on the contract? Observing the `prevNextCancelledDeposit` counter delta? Filtering L1 transactions by involved accounts?
+
+#### 4d. Bridge Event Message Schema
+
+Spike 002 established the minimum required fields. The exact schema must be defined in this spike:
+
+```
+{
+  userPk: string,           // user's public key (signer)
+  type: "deposit" | "withdrawal" | "cancel",
+  aux: string,              // Poseidon hash correlation key
+  amount: string,           // bridge amount
+  recipient: string,        // destination public key
+  blockHeight: number,      // L1 block height
+  txHash: string,           // L1 transaction hash
+  // Deposit-specific:
+  timeout?: number,         // timeout slot
+  holderAccountL1?: string  // holder account on L1
+}
+```
+
+**Key design question:** `aux` is NOT unique — identical deposits/withdrawals produce the same `aux` (see `spikes/002-bridge-correlation/results.md` §2). The indexer disambiguates via `(aux, aux_sequence)` using FIFO ordering. Should the L1 Watcher compute `aux_sequence`, or should it publish raw events and let the indexer assign sequence numbers?
+
+### 5. Abstract L1 Interface
 
 - The PRD specifies an abstract L1 interface supporting both Mina and Ethereum. What is the minimal interface that covers both?
 - Which operations are L1-specific (e.g., Mina actions vs. Ethereum events) and which are generic (tip tracking, confirmation depth)?
 - Should the interface be designed now or deferred until Milestone 4 (Ethereum support)?
 
-### 5. NATS Event Schemas
+### 6. NATS Event Schemas
 
 - Define the exact JSON schemas for `zeko.l1.settlements`, `zeko.l1.rollbacks`, `zeko.l1.outer-actions`, and `zeko.l1.bridge-events`.
 - What deduplication keys (`Nats-Msg-Id`) should each use?
 - How do these schemas interact with the indexer's batch and bridge operation records?
 
-### 6. Failure Modes and Recovery
+### 7. Failure Modes and Recovery
 
 - What happens when the L1 live node is unreachable? How does the watcher resume?
 - What happens when the L1 archive is unreachable? Can the watcher continue with live-only data?
@@ -68,8 +112,9 @@ The PRD defines the L1 Watcher at a high level (Section 5.2.2), but the followin
 3. **Settlement detection design:** Concrete mechanism for detecting batch settlements and tracking confirmation depth.
 4. **L1 rollback detection design:** Fork detection algorithm, reconciliation after outages, rollback event format.
 5. **Outer action ingestion design:** How outer actions are queried, paginated, and published to NATS.
-6. **Abstract L1 interface sketch:** Minimal TypeScript interface that the Mina adapter implements.
-7. **Failure mode table:** All failure scenarios with detection and recovery strategies.
+6. **Bridge event detection design:** Concrete mechanisms for detecting deposit submissions (user-level AccountUpdates), withdrawal finalizations, and cancel deposits (no outer action — counter-based detection). Includes Poseidon hash computation approach for `aux`. See Section 4 for spike-002-derived requirements.
+7. **Abstract L1 interface sketch:** Minimal TypeScript interface that the Mina adapter implements.
+8. **Failure mode table:** All failure scenarios with detection and recovery strategies.
 
 ---
 
@@ -81,4 +126,8 @@ The PRD defines the L1 Watcher at a high level (Section 5.2.2), but the followin
 - `zeko-ui/services/actions/api` — current bridge API
 - Mina daemon GraphQL schema
 - Mina archive node GraphQL schema
-- Spike 002 (Bridge Operation Correlation) — related, focuses on L2 side correlation
+- Spike 002 results (`spikes/002-bridge-correlation/results.md`) — §2 aux collision handling, §3 user PK extraction, §4 cancel deposit observability, §5 bridge operation lifecycle
+- `zeko-bridge-sdk/src/utils.ts` — `depositAux()` / `withdrawalAux()` Poseidon hash computation
+- `zeko-bridge-sdk/src/index.ts` — `submitDeposit` / `submitWithdrawal` / `finalizeWithdrawal` user-level transactions
+- `zeko/src/app/zeko/circuits/rule_bridge_finalize_cancelled_deposit.ml` — cancel deposit contract (no outer action emitted)
+- `zeko/src/app/zeko/circuits/rule_action_witness.ml` — witness action emission
