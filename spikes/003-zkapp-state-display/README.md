@@ -1,9 +1,12 @@
 # Spike 003: zkApp State, Events, and Actions Display
 
 **Status:** Complete
-**Blocking:** Milestone 1 (explorer indexer schema), Milestone 2 (frontend display)
+**Blocking:** Milestone 1 (explorer indexer schema + contract registry backend), Milestone 2 (frontend display + verification wizard)
 **Owner:** TBD
 **Results:** [results.md](./results.md)
+**Addendums:**
+- [addendum-contract-verification.md](./addendums/addendum-contract-verification.md) — KV-backed contract registry, sandboxed verification service, owner-claim flow
+**Test scenarios:** [test-scenarios/](./test-scenarios/) — Gherkin coverage for ingestion, rollback, registry lookup, verification pipeline, owner claims
 
 ---
 
@@ -48,9 +51,9 @@ Options to evaluate:
 ## Deliverables
 
 1. **Survey:** How Zekoscan, Minascan, and any other Mina explorers display zkApp data today.
-2. **Recommendation:** Display strategy for Milestone 1 (API) and Milestone 2 (UI), with justification.
+2. **Recommendation:** Display strategy for Milestone 1 (API + contract registry backend) and Milestone 2 (UI + verification wizard), with justification.
 3. **Schema impact:** Any changes needed to the `zkapp_event` / `zkapp_action` / `account` SurrealDB tables based on findings.
-4. **Known contracts list:** For Zeko's own contracts, document the field labels we can hardcode.
+4. **Contract registry design:** A cryptographically-grounded registry keyed by verification key hash, populated by a sandboxed verification service, with an owner-claim flow — see `addendums/addendum-contract-verification.md`.
 
 ---
 
