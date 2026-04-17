@@ -48,3 +48,8 @@ Feature: zkApp Event Ingestion
     When querying events for account "B62qContract" ordered by sequence_number
     Then the events are returned in ascending sequence order
     And each event includes its emitting_account and transaction links
+
+  Scenario: Each event is tagged with target_ledger_hash for rollback
+    When a NATS message with target_ledger_hash "hash-X" arrives
+    And it contains an event for "B62qContract"
+    Then the zkapp_event record has target_ledger_hash "hash-X"
