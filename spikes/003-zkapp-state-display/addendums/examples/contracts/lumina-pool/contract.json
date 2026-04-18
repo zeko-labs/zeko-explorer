@@ -1,0 +1,43 @@
+{
+  "$schema": "https://zeko.io/schema/v1/contract.json",
+  "version": 1,
+  "meta": {
+    "address": "B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV",
+    "networks": ["zeko-m-devnet"],
+    "name": "LuminaPool",
+    "description": "Lumina constant-product pool. Holds reserves for two assets and tracks liquidity supply."
+  },
+  "state": {
+    "slots": [
+      { "at": 0, "name": "reserve0",       "type": "UInt64" },
+      { "at": 1, "name": "reserve1",       "type": "UInt64" },
+      { "at": 2, "name": "totalLiquidity", "type": "UInt64" }
+    ]
+  },
+  "events": {
+    "discriminator": { "at": 0 },
+    "variants": [
+      { "when": "0", "kind": "AddLiquidity",
+        "fields": [
+          { "at": 1, "name": "sender",   "type": "PublicKey" },
+          { "at": 3, "name": "a0In",     "type": "UInt64" },
+          { "at": 4, "name": "a1In",     "type": "UInt64" },
+          { "at": 5, "name": "lpOut",    "type": "UInt64" }
+        ]
+      },
+      { "when": "3", "kind": "ReceiveMina",
+        "fields": [
+          { "at": 1, "name": "sender",   "type": "PublicKey" },
+          { "at": 3, "name": "amountIn", "type": "UInt64" }
+        ]
+      },
+      { "when": "4", "kind": "Swap",
+        "fields": [
+          { "at": 1, "name": "sender",    "type": "PublicKey" },
+          { "at": 3, "name": "amountIn",  "type": "UInt64" },
+          { "at": 4, "name": "amountOut", "type": "UInt64" }
+        ]
+      }
+    ]
+  }
+}

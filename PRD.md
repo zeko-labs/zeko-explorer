@@ -286,7 +286,7 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 **Language: TypeScript.** The indexer is I/O-bound (read from NATS, transform, write to SurrealDB). TypeScript enables shared domain types across the indexer, APIs, and the MCP server, reducing surface area for bugs. Rust remains an option only if profiling reveals a concrete performance bottleneck.
 
 **Consumes:**
-- `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`.
+- `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`. zkApp records store raw field arrays only — no `decoded_fields` column; schemas are served separately (§5.2.10). Each zkApp record is tagged with `target_ledger_hash` so L2 rollback can drop the affected rows without reindexing.
 - `zeko.l2.finality` → update batch proved/committed status.
 - `zeko.l1.settlements` → create/update `batch`, link to transactions.
 - `zeko.l1.rollbacks` → revert batch settlement status (Section 7.5).
@@ -320,10 +320,10 @@ Schema migrations managed via [surrealdb-migrations](https://github.com/Odonno/s
 
 *Explorer tables:*
 - `transaction` — hash, sequence_number, type, status, sender/receiver account links, amount, fee, nonce, memo, timestamp, state_hash, decoded account_updates, batch link, rollback_reason.
-- `account` — public_key (indexed, full-text searchable), balance, nonce, delegate link, token_id, zkapp_state.
-- `account_activity` — per-account per-transaction changes, including rollback entries.
+- `account` — public_key (indexed, full-text searchable), balance, nonce, delegate link, token_id, `zkapp_state` (raw 8-field array), `action_state` (raw 5-field vector), `verification_key_hash`, `zkapp_uri`.
+- `account_activity` — per-account per-transaction changes, including rollback entries. zkApp state snapshots live here so revert-by-`target_ledger_hash` can restore the prior state without replaying NATS.
 - `batch` — transaction range, proof/settlement status, L1 settlement details, DA attestation status, timestamps.
-- `zkapp_event` / `zkapp_action` — emitting account and transaction links, decoded fields, sequence/state hash.
+- `zkapp_event` / `zkapp_action` — emitting account and transaction links, **raw field arrays only** (no `decoded_fields`), sequence number, `target_ledger_hash` tag. Actions additionally store `before_action_state` / `action_state` (rolling Poseidon hash chain) with a unique index on `action_state`.
 - `sync_status` — per-source health: last processed item, timestamp, lag, error state.
 - `network_stats` — aggregates.
 
@@ -346,7 +346,9 @@ Code-first GraphQL. SSE subscriptions (fan-out from SurrealDB live queries). Hos
 
 Cursor-based pagination (not necessarily full Relay spec — see `spikes/005-relay-pagination.md`).
 
-Queries: transactions, accounts, batches, search, system status, zkApp events/actions. Can read bridge tables for display on transaction/account detail pages.
+Queries: transactions, accounts, batches, search, system status, zkApp events/actions, `contractSchema(network, address)` (thin read over the Cloudflare KV registry entry — see §5.2.10). Can read bridge tables for display on transaction/account detail pages.
+
+`Account`, `ZkappEvent`, and `ZkappAction` return raw field arrays only — no `labeledState` / `labeledFields`. Decoding is a view concern handled either in the browser (default) or inside resolvers for hot feeds, both using the shared `@zeko/contract-schema` interpreter.
 
 Every response includes `_meta` with `dataFreshness`, `syncLag`, `status`.
 
@@ -368,6 +370,27 @@ Nuxt 3 SPA, no SSR. Deployed as static assets on Cloudflare Workers. Ships an HT
 **Why SPA:** No SEO requirements (account/transaction pages should not be indexed). Social sharing works with SPAs. SSR adds complexity with no concrete benefit for this use case.
 
 **Design work is delegated.** Deliverables needed from a designer: component library, page layouts, responsive breakpoints, status indicator treatment, loading states.
+
+#### 5.2.10 Contract Schema Registry & Decoder (`zeko-contract-registry`, `@zeko/contract-schema`)
+
+A separate public repository and a shared TypeScript package, together providing the only mechanism for attaching human-readable labels to on-chain zkApp state, events, and actions. The indexer is never involved — it continues to store raw fields only. See `spikes/003-zkapp-state-display/results.md` for the full specification.
+
+**`zeko-contract-registry` (separate public repo):**
+- Submissions live at `contracts/<name>/contract.json` (schema-validated payload) + `contracts/<name>/fixtures.json` (golden tests). Flat layout — a single submission can declare `meta.networks: ["zeko-m-devnet", "zeko-mainnet", ...]` and is fanned out to one KV entry per network at publish time.
+- Versioned JSON Schema: `contract.v1.schema.json` with `$schema` pointing at the draft 2020-12 meta-schema. Submissions declare `"version": 1` and optionally `$schema` for editor autocomplete. Future breaking shape changes ship as `contract.v2.schema.json`.
+- Two GitHub Actions workflows, deliberately split:
+  - **`.github/workflows/verify.yml`** — runs on every PR. Self-checks the schema file with `ajv.validateSchema`, then runs the Bun verify CLI on each changed contract directory: Ajv-compiled validator (never `JSON.parse` + cast) → semantic checks → fixture deep-equal → optional o1js owner signature. Required for merge via branch protection. No Cloudflare secrets in scope.
+  - **`.github/workflows/publish.yml`** — triggers only on maintainer-initiated `workflow_dispatch`. Scoped to a protected `contract-registry-publish` environment that holds `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `KV_NAMESPACE_ID`. Re-verifies, then runs a TypeScript upload script that re-validates with Ajv and issues one Cloudflare KV `PUT` / `DELETE` per network in `meta.networks`. Never runs on push to main.
+- Verification grades (surfaced in the API so the UI can badge): `owner-signed` (valid o1js signature over the canonical payload by `meta.address`'s key), `source-linked` (matching `meta.source` + `meta.vkeyHash` from a reproducible build), `community-submitted` (fixtures pass but no signature).
+
+**`@zeko/contract-schema` (shared TypeScript package):**
+- Exports the JSON Schema, TS types, `validateSubmission`, `decodeState`, `decodeEventOrAction`, and the owner-signature helpers.
+- Browser build target. The same module runs in the UI (default decoding path) and can run inside explorer-api resolvers for hot feeds (e.g. a global recent-events stream where sending raw fields the client will discard is wasteful, or SSR contract pages).
+- Decoder errors (unknown discriminator, slot read past the raw array) return `null` so callers can fall back to raw fields without crashing.
+
+**Runtime read path:** The explorer-api GraphQL `contractSchema(network, address)` resolver reads `${network}:${address}` from Cloudflare KV and returns a `ContractSchema` (or `null` on miss) with a 5-minute edge cache and `stale-while-revalidate=86400`. This is the only surface that serves schema data; `Account` / `ZkappEvent` / `ZkappAction` continue to return raw fields only.
+
+**Seed submissions:** The Zeko bridge outer + inner contracts are seeded via PR on M1 launch. The bridge's `action[0] ∈ {"0","1"}` convention (spike 002) is expressed as a `discriminator: { at: 0 }` shape with two variants.
 
 ### 5.3 Bridge Indexing
 
@@ -585,7 +608,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 
 1. **Sequencer Connector** (`spikes/001-sequencer-connector/`) — **Complete.** Resolved: sequencer publishes directly to NATS (no separate connector), consumer-side rollback detection, backfill service design, bootstrap strategy. See `results.md` for full findings.
 2. **Bridge Operation Correlation** (`spikes/002-bridge-correlation/`) — **Complete.** Resolved: `aux` confirmed as correlation key (Poseidon hash, NOT unique — disambiguated via FIFO `aux_sequence`), user PK extraction via `zeko.l1.bridge-events`, cancel deposit produces no outer action (detected via L1 Watcher), full deposit/withdrawal lifecycle state machines, SurrealDB schema with graph edges, Bridge GraphQL API design. See `results.md` for full findings.
-3. **zkApp State Display** (`spikes/003-zkapp-state-display.md`) — investigate how to display zkApp state, events, and actions.
+3. **zkApp State Display** (`spikes/003-zkapp-state-display/`) — **Complete.** Resolved: indexer persists raw 8-field state + raw event/action field arrays (no `decoded_fields` column); labels come from a versioned static schema per contract submitted to a separate public repo (`zeko-contract-registry`) as `contracts/<name>/contract.json` + `contracts/<name>/fixtures.json`; PR → Bun verify CLI (Ajv-compiled schema v1 validator + golden fixtures + optional o1js owner signature); manual `workflow_dispatch` publish via a TypeScript upload script that writes one Cloudflare KV entry per network in `meta.networks`; explorer exposes the GraphQL `contractSchema(network, address)` query; decoding runs UI-side by default and API-side for hot feeds via the shared `@zeko/contract-schema` package. See `results.md`, `addendums/addendum-contract-verification.md`, and the runnable `addendums/examples/` proof.
 4. **Deployment Topology** (`spikes/004-deployment-topology.md`) — single vs. multi host, Nix vs. Docker Compose for production.
 5. **Pagination Schema** (`spikes/005-relay-pagination.md`) — cursor-based pagination schema, Relay spec tradeoffs.
 6. **L1 Watcher** (`spikes/006-l1-watcher/`) — settlement detection, L1 fork/rollback handling, outer actions ingestion, bridge events, abstract L1 interface, NATS event schemas for all `zeko.l1.*` subjects.
@@ -603,7 +626,8 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - NATS JetStream: all streams configured, rolling retention (90d default) + R2 archival.
 - Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Consumer-side L2 rollback detection via hash chain continuity. Backfill integration for gap filling. L1 rollback handling.
 - SurrealDB: schema + migrations via surrealdb-migrations, backup cron.
-- Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions. SSE subscriptions.
+- Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only), `contractSchema(network, address)` (thin KV read, 5-minute edge cache). SSE subscriptions.
+- Contract Schema Registry (`zeko-contract-registry`, separate public repo) + `@zeko/contract-schema` shared package: versioned JSON Schema (v1), Bun verify CLI, split `verify.yml` / `publish.yml` workflows, TypeScript upload script, browser + server decoder. Seed submissions for Zeko bridge outer + inner. See §5.2.10.
 - Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(aux, auxSequence)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
 - Code-Mode MCP Server: search() + execute() with generated SDK from both API schemas.
 - Per-concern packages: `nats-protocol`, `domain`, `db`.
@@ -664,12 +688,12 @@ Feature: Bridge Operation Indexing
 **Goal:** The web UI for the explorer. Consumes the GraphQL API built in Milestone 1.
 
 **Components delivered:**
-- Frontend (Nuxt 3 SPA, CF Workers Static Assets): home, transaction detail, account detail, batch pages, bridge operations page, search, system status, network switcher.
+- Frontend (Nuxt 3 SPA, CF Workers Static Assets): home, transaction detail, account detail, contract detail, batch pages, bridge operations page, search, system status, network switcher.
 - Design pass deliverables (delegated to designer).
 
 **Features:**
 
-*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (see spike results), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
+*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (raw + labeled via the shared interpreter when a schema is available), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Contract detail:* Dedicated page for zkApp accounts — State / Events / Actions / Deployments tabs, each rendering raw fields alongside labels produced by `@zeko/contract-schema` when the `contractSchema` query returns a submission. Verification grade badge (`owner-signed` / `source-linked` / `community-submitted`). Raw-only fallback with a "Submit this contract" CTA pointing at the registry's PR template when no schema is published. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
 
 **Future milestone:** Natural language queries in the search bar.
 
@@ -799,7 +823,8 @@ Container design follows 12-factor principles (env-based config, health endpoint
 | Bridge operations | Separate services | Unified indexer, shared DB | 1 |
 | Per-user bridge history | Full archive scan per wallet | Indexed by public key | 1 |
 | Outer/inner actions | services/actions/* | NATS consumer, same queries | 1 |
-| zkApp events/actions | None | Per-account browsing | 1 (data), 2 (UI) |
+| zkApp events/actions | None | Per-account browsing; raw + labeled display via opt-in contract-schema registry | 1 (data + registry + API), 2 (UI) |
+| zkApp label registry | None | `zeko-contract-registry` public repo + Cloudflare KV + `contractSchema` GraphQL query | 1 |
 | Public API | Archive-Node-API | GraphQL, documented | 4 |
 | Ethereum | N/A | L1 adapter | 4 |
 | GraphQL federation | N/A | Explorer + Bridge APIs, federatable | Future |
@@ -824,6 +849,8 @@ Container design follows 12-factor principles (env-based config, health endpoint
 | MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. Service bindings. |
 | Frontend | Nuxt 3 SPA, CF Workers Static Assets | No SSR needed. HTML skeleton + hydration. |
 | Search | Unified bar, auto-detect | NL queries in future milestone. |
+| Contract Schema Registry | Separate GitHub repo + Cloudflare KV + Bun verify CLI + split `verify.yml` / `publish.yml` workflows | Versioned JSON Schema v1, Ajv validation, golden fixtures, optional o1js owner signatures. Publish is manual via `workflow_dispatch`. See §5.2.10. |
+| Contract Schema Package | `@zeko/contract-schema` (TypeScript) | Shared types + interpreter used by verify CLI, upload script, explorer API resolver, and UI. Browser build target. |
 | Testing | Gherkin, Vitest | Living docs + unit/integration. Real NATS/SurrealDB in Docker. |
 | Monorepo | pnpm workspaces + moonrepo | TS-only monorepo. Per-concern shared packages. |
 | Build | Nix | Reproducible dev environments. |

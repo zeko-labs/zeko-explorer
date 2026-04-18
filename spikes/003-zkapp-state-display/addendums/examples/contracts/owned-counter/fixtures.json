@@ -1,0 +1,12 @@
+{
+  "fixtures": [
+    { "target": "state",
+      "raw": ["7", "0", "0", "0", "0", "0", "0", "0"],
+      "expected": { "count": "7" }
+    },
+    { "target": "event",
+      "raw": ["6", "7"],
+      "expected": { "previous": "6", "next": "7" }
+    }
+  ]
+}

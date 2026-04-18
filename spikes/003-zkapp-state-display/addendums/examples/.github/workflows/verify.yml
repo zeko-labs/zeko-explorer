@@ -1,0 +1,45 @@
+name: verify
+
+# Runs on every pull request that touches the registry. Required for merge via
+# branch protection. Never writes to KV — publishing is a separate manual
+# workflow (see publish.yml).
+
+on:
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "src/**"
+      - "contract.v1.schema.json"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/verify.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: discover changed contract directories
+        id: changed
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          head=${{ github.event.pull_request.head.sha }}
+          git diff --name-only "$base" "$head" -- 'contracts/**' \
+            | awk -F/ '$1=="contracts" && NF>=3 { print $1"/"$2 }' \
+            | sort -u > changed.txt
+          echo "count=$(wc -l < changed.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: verify each changed contract directory
+        if: steps.changed.outputs.count != '0'
+        run: |
+          set -e
+          while read -r dir; do
+            [ -z "$dir" ] && continue
+            echo "::group::verify $dir"
+            bun run verify "$dir"
+            echo "::endgroup::"
+          done < changed.txt

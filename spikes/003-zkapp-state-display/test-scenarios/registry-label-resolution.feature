@@ -1,122 +1,141 @@
-Feature: Contract Registry Label Resolution
+Feature: GraphQL contractSchema query and decoder placement
 
-  The explorer resolves labels by reading the contract verification registry
-  from Cloudflare KV. Labels live under `contract:vkey:<hash>` and are
-  written by the verification service after a sandboxed compile matches the
-  computed verification key against the one on-chain (addendum-contract-
-  verification §4). Address → vkey hash reverse lookup is written by the
-  indexer when a zkApp command is ingested.
-
-  Unknown contracts return raw field arrays. Known contracts return labeled
-  fields, dispatching through a discriminator when the contract emits
-  multiple event/action types (Mina does not persist event/action names
-  on-chain).
+  The explorer exposes contract schemas through a single GraphQL query,
+  `contractSchema(network, address)`, which resolves from Cloudflare KV with a
+  5-minute edge cache. On-chain data (account, events, actions) continues to
+  return raw field strings only. Decoding — running the shared interpreter in
+  @zeko/contract-schema — happens in the UI by default, and in the API resolver
+  for specific hot feeds where per-request decoding latency beats the
+  round-trip of a second query. The indexer never reads schemas.
 
   Background:
-    Given Cloudflare KV contains the registry entry at "contract:vkey:vkey-hash-bridge":
-      | field      | value                                    |
-      | name       | Zeko Bridge (Outer)                      |
-      | o1jsVersion| 2.4.0                                    |
-    And KV contains the address reverse lookup at "contract:addr:zeko-m-devnet:B62qBridge" → "vkey-hash-bridge"
+    Given a Cloudflare KV namespace is configured on explorer-api
+    And the registry has published the LuminaPool submission
+    And the corresponding KV key is "zeko-m-devnet:B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV"
 
-  # State field labeling — single schema per contract
+  # Query — contractSchema resolver
 
-  Scenario: Known contract returns labeled state fields
-    Given "contract:vkey:vkey-hash-bridge" stateFields include index 0 with label "inner_ledger_hash" and type "Field"
-    And account "B62qBridge" has zkapp_state[0] equal to "999"
-    When querying labeledState for "B62qBridge" on network "zeko-m-devnet"
-    Then the response contains a labeled field at index 0:
-      | label       | inner_ledger_hash                             |
-      | type        | Field                                         |
-      | rawValue    | 999                                           |
+  Scenario: Known contract returns its submission edge-cached
+    When a client executes contractSchema(network: "zeko-m-devnet", address: "B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV")
+    Then the resolver returns a ContractSchema object
+    And the "submission" field equals the LuminaPool contract.json bytes
+    And the "grade" field is "community-submitted"
+    And the "version" field is 1
+    And the HTTP response carries "Cache-Control: public, max-age=300, stale-while-revalidate=86400"
 
-  Scenario: Unknown contract returns null labeledState
-    Given KV has no entry at "contract:addr:zeko-m-devnet:B62qUnknown"
-    And account "B62qUnknown" has zkapp_state[0] equal to "42"
-    When querying labeledState for "B62qUnknown" on network "zeko-m-devnet"
-    Then the labeledState is null
-    And the response includes a "verify this contract" CTA marker
+  Scenario: Unknown contract returns null with a short cache
+    When a client executes contractSchema for an address not in the registry
+    Then the resolver returns null
+    And the HTTP response carries "Cache-Control: public, max-age=60"
 
-  Scenario: Account with no verification key returns null labeledState
-    Given account "B62qNoKey" has no verification_key_hash
-    When querying labeledState for "B62qNoKey"
-    Then the labeledState is null
+  Scenario: Newly published submission becomes readable after KV propagation
+    Given a registry PR for a new contract merges to main
+    And a maintainer triggers workflow_dispatch to publish it
+    When a client executes contractSchema for the new contract
+    Then the resolver returns a ContractSchema once KV propagation completes
 
-  # Action discrimination — multi-type actions via field index 0 tag
+  Scenario: Deleted submission returns null after KV delete
+    Given a maintainer triggers workflow_dispatch with mode "delete"
+    When a client executes contractSchema for the removed contract
+    Then the resolver returns null
 
-  Scenario: Discriminated action picks the "commit" schema (string_tag from manifest)
-    Given the bridge KV entry has actions.discriminator.type "string_tag" at fieldIndex 0 with values {"0": "commit", "1": "witness"}
-    And a zkapp_action from "B62qBridge" has fields ["0", "action-state-hash", "ledger-hash", "100", "200"]
-    When querying the action's labeledFields
-    Then field index 0 has label "kind" with rawValue "0"
-    And field index 1 has label "inner_action_state"
-    And field index 2 has label "inner_ledger_hash"
-    And field index 3 has label "slot_lower" and type "UInt32"
-    And field index 4 has label "slot_upper" and type "UInt32"
+  Scenario: Multi-network contract resolves independently per network
+    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-mainnet"]
+    When a client executes contractSchema(network: "zeko-m-devnet", address: ADDR)
+    And a client executes contractSchema(network: "zeko-mainnet", address: ADDR)
+    Then both resolvers return ContractSchema objects whose "submission" fields are byte-equal
 
-  Scenario: Discriminated action picks the "witness" schema
-    Given the bridge KV entry has actions.discriminator.type "string_tag" at fieldIndex 0 with values {"0": "commit", "1": "witness"}
-    And a zkapp_action from "B62qBridge" has fields ["1", "aux-hash-xyz"]
-    When querying the action's labeledFields
-    Then field index 0 has label "kind" with rawValue "1"
-    And field index 1 has label "aux"
+  # GraphQL — on-chain data stays raw
 
-  Scenario: Action with unknown discriminator falls back to raw fields
-    Given the bridge KV entry has actions.discriminator.type "string_tag" at fieldIndex 0 with values {"0": "commit", "1": "witness"}
-    And a zkapp_action from "B62qBridge" has fields ["9", "unexpected"]
-    When querying the action's labeledFields
-    Then labeledFields is null
-    And the raw fields ["9", "unexpected"] remain accessible
+  Scenario: Account query returns raw zkappState and raw event fields
+    When the UI queries account(address: ADDR) selecting zkappState and events.nodes.fields
+    Then zkappState is an array of 8 raw field element strings
+    And each event exposes a "fields" array of raw field element strings
+    And neither "labeledState" nor "labeledFields" appears on Account or ZkappEvent
 
-  Scenario: Contract with null discriminator applies its single schema to every record
-    Given KV contains a vkey entry "vkey-hash-simple" with actions.discriminator null and a single schema [{index:0,label:"x",type:"Field"}]
-    And KV contains "contract:addr:zeko-m-devnet:B62qSimple" → "vkey-hash-simple"
-    And a zkapp_action from "B62qSimple" has fields ["7"]
-    When querying the action's labeledFields
-    Then field index 0 has label "x" with rawValue "7"
+  # UI-side decoding (default path for contract pages)
 
-  # Event discrimination — o1js multi-type events use field_hash
+  Scenario: UI decodes state when a schema is available
+    Given the UI resolved the LuminaPool schema from contractSchema
+    And the GraphQL account query returned zkappState as ["1000000000", "4056640838", "9023684", "0", "0", "0", "0", "0"]
+    When the UI calls decodeState(schema.submission, zkappState)
+    Then the result has reserve0 = "1000000000"
+    And the result has reserve1 = "4056640838"
+    And the result has totalLiquidity = "9023684"
+    And both raw and labeled views are rendered side-by-side
 
-  Scenario: Multi-type events use field_hash discriminator populated by reflection
-    Given the vkey entry for "vkey-hash-vault" has events.discriminator.type "field_hash" at fieldIndex 0 with values {"<h(deposit)>": "deposit", "<h(withdrawal)>": "withdrawal"}
-    And KV contains "contract:addr:zeko-m-devnet:B62qVault" → "vkey-hash-vault"
-    And a zkapp_event from "B62qVault" has fields ["<h(deposit)>", "B62qUser-x", "B62qUser-y", "1000"]
-    When querying the event's labeledFields
-    Then field index 0 has label "_type" and type "Field"
-    And field index 1 has label "user" and type "PublicKey"
-    And field index 3 has label "amount" and type "UInt64"
+  Scenario: UI dispatches an AddLiquidity event through the discriminator
+    Given the UI resolved the LuminaPool schema from contractSchema
+    And an event's fields begin with discriminator "0"
+    When the UI calls decodeEventOrAction on that event
+    Then the result's "kind" is "AddLiquidity"
+    And the result names the sender, a0In, a1In, and lpOut keys
 
-  Scenario: Unknown contract event returns null labeledFields
-    Given KV has no "contract:addr:zeko-m-devnet:B62qUnknown" entry
-    And a zkapp_event from "B62qUnknown" has fields ["7", "8"]
-    When querying the event's labeledFields
-    Then labeledFields is null
+  Scenario: UI dispatches a ReceiveMina event through the discriminator
+    Given the UI resolved the LuminaPool schema from contractSchema
+    And an event's fields begin with discriminator "3"
+    When the UI calls decodeEventOrAction on that event
+    Then the result's "kind" is "ReceiveMina"
+    And the result names the sender and amountIn keys
 
-  # Indexer-driven reverse-lookup population
+  Scenario: UI dispatches a Swap event through the discriminator
+    Given the UI resolved the LuminaPool schema from contractSchema
+    And an event's fields begin with discriminator "4"
+    When the UI calls decodeEventOrAction on that event
+    Then the result's "kind" is "Swap"
+    And the result names the sender, amountIn, and amountOut keys
 
-  Scenario: Indexer writes contract:addr reverse lookup on first zkApp command for an account
-    Given the indexer has not previously seen account "B62qNew" on network "zeko-m-devnet"
-    And a NATS message arrives with a zkApp command from "B62qNew" with verification_key_hash "vkey-hash-new"
-    When the indexer processes the message
-    Then KV key "contract:addr:zeko-m-devnet:B62qNew" is set to "vkey-hash-new"
-    And subsequent queries for "B62qNew" can resolve to the vkey entry
+  Scenario: PublicKey-typed slot consumes two raw fields and decodes to Base58
+    Given a variant declares a slot at index 1 named "sender" of type "PublicKey"
+    And the raw fields at indices 1 and 2 form a valid PublicKey field pair
+    When the UI calls decodeEventOrAction
+    Then the result's "sender" is a Base58 address starting with "B62q"
 
-  Scenario: Indexer updates reverse lookup when a contract's verification key changes
-    Given KV has "contract:addr:zeko-m-devnet:B62qUpgraded" → "vkey-hash-v1"
-    When a NATS message arrives setting verification_key_hash to "vkey-hash-v2" for "B62qUpgraded"
-    Then KV key "contract:addr:zeko-m-devnet:B62qUpgraded" is overwritten to "vkey-hash-v2"
-    And the prior vkey KV entry remains (it may be referenced by other addresses)
+  Scenario: Single-shape contract applies its schema to every event
+    Given the schema's events block is a single-shape { fields: [{ at: 0, name: "x", type: "Field" }] }
+    And an event has fields = ["7"]
+    When the UI calls decodeEventOrAction
+    Then the result is { x: "7" }
 
-  # No re-indexing invariant
+  Scenario: Custom Struct type expands into nested labels
+    Given the schema declares types.UserXY with fields x:Field and isOdd:Bool
+    And a variant declares a slot at index 1 named "user" of type "UserXY"
+    And the raw fields are ["0", "12345", "1"]
+    When the UI calls decodeEventOrAction
+    Then the result's "user" is { x: "12345", isOdd: true }
 
-  Scenario: Adding a vkey entry does not require re-indexing stored events or actions
-    Given 1000 zkapp_event records are stored with raw field arrays for accounts whose vkey is currently unverified
-    When a new verification completes and "contract:vkey:<hash>" is written to KV
-    Then the existing event records are not modified in SurrealDB
-    And labeledFields for those events start resolving from the API immediately on the next query
+  # API-side decoding (hot feeds)
 
-  Scenario: Revoking or updating a vkey entry takes effect at the next read
-    Given the KV entry at "contract:vkey:vkey-hash-x" is replaced with a corrected schema
-    When the next query for an account with vkey "vkey-hash-x" arrives
-    Then the new schema is applied without restarting the API
-    And no data migration or re-indexing is required
+  Scenario: Multi-contract recent-events feed decodes server-side
+    Given the "recent events" page queries events across 50 distinct contracts
+    When the resolver assembles the page
+    Then it fetches each contract's schema once via the KV edge cache
+    And it calls decodeEventOrAction in the resolver for each event
+    And the GraphQL response carries a "labeled" field per event
+
+  Scenario: API-side decoder returns null on unknown discriminator
+    Given the API resolver runs decodeEventOrAction on an event with an unrecognized discriminator
+    Then the "labeled" field is null
+    And the "fields" field still contains the raw array
+
+  # UI fallback behavior
+
+  Scenario: Unknown discriminator falls back to raw fields
+    Given the LuminaPool schema is loaded in the UI
+    And an event's discriminator value has no matching variant
+    When the UI calls decodeEventOrAction
+    Then the result is null
+    And the UI renders the raw field array unchanged
+
+  Scenario: Decoder error on a malformed event does not crash the page
+    Given a variant reads slot 5 but the event has only 3 fields
+    When the UI calls decodeEventOrAction
+    Then the result is null
+    And the page logs the error with contract address and event index
+    And the raw field array is rendered unchanged
+
+  Scenario: contractSchema null result shows the "Submit this contract" CTA
+    Given contractSchema returns null for the requested contract
+    When the contract page renders
+    Then raw fields are shown for state, events, and actions
+    And a "Submit this contract" CTA links to the registry's PR template

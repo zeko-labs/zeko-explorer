@@ -83,80 +83,95 @@ this.reducer.reduce(actions, State, callback);
 
 ---
 
-## 3. Display Strategy
+## 3. Display Strategy — Specification
 
-### Decision: Verification-Key-Grounded Registry + Raw Fields
+The explorer renders raw fields by default and overlays labels when a contract has a registered schema. The system has four cooperating pieces and the boundary between them is fixed:
 
-Labels for state, events, and actions come from a **contract verification registry** keyed by verification-key hash. Submissions are reproduced in a sandbox from a public git commit; labels are extracted by runtime reflection from the exact class that produced the on-chain verification key. The registry lives in Cloudflare KV — O(1) edge lookups, open submission, no in-memory load by the indexer. Full design in [`addendums/addendum-contract-verification.md`](addendums/addendum-contract-verification.md).
+| Piece | Responsibility | Stores |
+| --- | --- | --- |
+| **Indexer** | Persist the raw 8-field state, raw event field arrays, and raw action field arrays exactly as the sequencer publishes them. Never reads schemas. | SurrealDB |
+| **Registry repo** (`zeko-contract-registry`, separate public repo) | Hold one versioned submission per contract — `contracts/<name>/contract.json` + `contracts/<name>/fixtures.json`. PR + CI is the only write path. | Git |
+| **Cloudflare KV** | Runtime schema store. One entry per `(network, address)` pair — a single submission with `meta.networks: ["zeko-m-devnet", ...]` produces one KV entry per listed network. Written by a maintainer-triggered `workflow_dispatch` publish job, read by the explorer API. | Cloudflare KV |
+| **Explorer** | Fetch the schema from KV via the GraphQL `contractSchema(network, address)` query, call the shared interpreter (`@zeko/contract-schema`) either at the API (for hot feeds) or in the browser, and render labeled fields beside raw fields. | — |
 
-| Milestone | Scope | Effort |
-|---|---|---|
-| **M1 (backend)** | KV namespace + verification service (sandbox container + pipeline). API: `submitContractForVerification`, `verificationProgress`, `contract(...)`, `submitOwnerClaim`. Indexer writes `contract:addr:*` reverse-lookup entries. Label-resolution resolvers on `labeledState` / `labeledFields`. | Medium |
-| **M2 (frontend)** | Submission wizard with live SSE progress. Verified contract page (state / events / actions / deployments tabs). Owner claim flow via wallet signature. Owner dashboard for display metadata. Raw fallback page for unverified contracts. | Medium |
-
-### Why This Option
-
-| Option | Verdict | Reason |
-|---|---|---|
-| 1. Raw fields only | Too minimal | No differentiation over Zekoscan. Developers want labels for bridge/rollup contracts. |
-| 2. `known-contracts.json` in repo | Rejected | Doesn't scale to user submissions. Requires a PR per contract. No cryptographic binding — submitter-supplied labels could drift from the on-chain code. |
-| 3. **Verification-key-grounded KV registry** | **Selected** | Cryptographically bound (labels are reflected from the class that produced the verification key). Open submission without PR review. O(1) edge lookup. Fits in M1/M2 — nothing deferred. See addendum. |
-| 4. On-chain registry contract | Rejected | Adds gas/fee cost, governance complexity, and rollback concerns for no improvement over the off-chain cryptographic guarantee. |
-
-### Registry Lookup Flow
+### Data flow
 
 ```
-Account loaded → extract verification_key_hash
-                       │
-                 KV.get("contract:vkey:<hash>")
-                       │
-              ┌────────┴────────┐
-          Found?              Not found
-              │                   │
-     Apply labels to          Display raw
-     state/events/actions     field arrays
-                              + "Verify this contract" CTA
+Author opens PR → CI runs `bun run verify <dir>` → maintainer merges to main
+                                                               │
+                                                      maintainer triggers
+                                                     `workflow_dispatch`
+                                                               │
+                                      `bun run upload put <dir>` (one PUT per network)
+                                                               │
+                                                       Cloudflare KV
+                                                               │
+                                            GraphQL `contractSchema(net, addr)`
+                                                               │
+                                  UI calls interpreter — OR — API pre-decodes hot feeds
+                                                               │
+                             raw fields (from indexer) + labels (from interpreter)
 ```
+
+Publish is never automatic. The merge is the review signal; `workflow_dispatch` is the deploy signal. Decoding is a pure function of `(raw_fields, schema)` — see §7 for the trade-off between running it at the API or in the UI.
+
+### Milestone scope
+
+| Milestone | Scope |
+| --- | --- |
+| **M1 (backend)** | Stand up `zeko-contract-registry` with the Bun verify CLI, the `verify` GitHub Actions job (runs on PRs), and the `publish` job (runs on `workflow_dispatch` only). Publish `@zeko/contract-schema` (JSON Schema v1 + TS types + interpreter + signature helper + TypeScript upload script). Add the GraphQL `ContractSchema` type and `contractSchema(network, address)` resolver in explorer-api as an edge-cached KV pass-through. Seed PRs for Zeko bridge outer + inner. |
+| **M2 (frontend)** | Contract page with State / Events / Actions / Deployments tabs. UI queries `contractSchema`, calls the interpreter, renders labeled values next to raw fields. Grade badge per contract. Raw-only fallback for unknown contracts with a "Submit this contract" CTA pointing at the registry's PR template. |
+
+The full pipeline specification — versioned JSON Schema, DSL, verify stages, signature scheme, CI workflow, TypeScript upload script, and KV layout — is in [`addendums/addendum-contract-verification.md`](addendums/addendum-contract-verification.md). A runnable example with verbatim CI output for every flow is in [`addendums/examples/`](addendums/examples/).
 
 ---
 
-## 4. Contract Registry
+## 4. Contract Registry — Specification
 
-The registry is a **Cloudflare KV** store populated by a sandboxed **verification service**. Submitters supply a public git commit; the service reproduces the compile, extracts labels by runtime reflection, and writes the entry only if the computed verification key matches the one on-chain. The labels that end up in KV are therefore cryptographically bound to the code the protocol executes.
+The registry is a separate public repository (`zeko-contract-registry`). Each submission is a directory with two files: `contracts/<name>/contract.json` (the schema-validated payload that lands in KV) and `contracts/<name>/fixtures.json` (golden tests, verified in CI, never uploaded). Submissions conform to [`addendums/examples/contract.v1.schema.json`](addendums/examples/contract.v1.schema.json). The full DSL, verify pipeline, signature scheme, CI workflow, and TypeScript upload script are documented in [`addendums/addendum-contract-verification.md`](addendums/addendum-contract-verification.md).
 
-See [`addendums/addendum-contract-verification.md`](addendums/addendum-contract-verification.md) for the full design: verification pipeline, sandbox constraints, signed-result protocol, owner-claim flow (wallet signature over a nonce'd payload), full GraphQL schema, and security model.
+### 4.1 Schema versioning
 
-**Summary of what lives where:**
+Every `contract.json` declares `"version": 1`. The schema file is named `contract.v1.schema.json` and its JSON Schema `$id` is `https://zeko.io/schema/v1/contract.json`. Future breaking shape changes ship as `contract.v2.schema.json` with `"version": 2`; old entries continue to validate against v1 until migrated. The explorer dispatches to the matching interpreter by reading `version` at decode time. Not versioning the payload would bake an implicit "always v1" assumption into every reader.
 
-| Keyspace | Value | Written by |
-|---|---|---|
-| `contract:vkey:<hash>` | Metadata blob: `stateFields`, `events`, `actions`, `o1jsVersion`, `sourceRef`, `verifiedAt` | Verification service (on `VERIFIED`) |
-| `contract:addr:<network>:<address>` | `vkey_hash` string | Indexer (on each zkApp command for an account it hasn't seen before) |
-| `contract:claim:<vkey_hash>:<address>` | Signed owner claim payload | API (on `submitOwnerClaim`) |
-| `contract:owner:<vkey_hash>` | Owner-editable display metadata (display name, homepage, logo URL, etc.) | API (on `updateOwnerMetadata`) |
+### 4.2 KV layout
 
-**Zeko's own contracts** (bridge outer/inner, etc.) are submitted through the same flow against the `zeko-labs/zeko` repository. No hard-coded entries. The manifest (`zeko.manifest.json`) declares the bridge's action discriminator convention (`action[0] ∈ {"0", "1"}` for `commit` / `witness`), which the verifier checks against the reflected single-field action layout (spike 002 §1). Field labels for `Outer_state` / `Inner_state` come from manifest entries validated against the reflected `@state` layout.
+One KV entry per `(network, address)` pair. A single submission with `meta.networks: ["zeko-m-devnet", "zeko-mainnet"]` produces two entries with the same value.
 
-### 4.1 Event/Action Type Discrimination
+| Key | Value | Writer | Reader |
+| --- | --- | --- | --- |
+| `${network}:${address}` (e.g. `zeko-m-devnet:B62qrSyBR…`) | The `contract.json` bytes, exactly as merged | `bun run upload put <dir>` (TypeScript script calling the Cloudflare KV REST API), invoked by the registry's `publish` job on maintainer-triggered `workflow_dispatch` | GraphQL `contractSchema(network, address)` resolver in explorer-api |
 
-Mina does not persist event or action **names** on-chain. An o1js declaration like `events = { 'add-merkle-leaf': Field, 'update': MyStruct }` defines compile-time labels, but the on-chain representation is raw `field[]`. The explorer therefore cannot recover the type name from chain data alone.
+Flat layout. Multi-network deployments are a property of the submission, not of the file path — there is no `contracts/<network>/` subtree to keep in sync. There is no compaction, no indexing layer, no derived values.
 
-Three discriminator modes are recorded in the KV metadata:
+### 4.3 Submission shape
 
-| `discriminator` value | Meaning | Source |
-|---|---|---|
-| `null` | Contract emits a single event/action type. `schemas` is one field list, applied to every record. | Reflection (when the contract declares one type) |
-| `{ fieldIndex: N, type: "field_hash", values: { ... } }` | o1js multi-type events — o1js prepends a Poseidon hash of the event name as field 0. | Reflection (when the `events = {...}` has multiple keys) |
-| `{ fieldIndex: N, type: "string_tag", values: { ... } }` | User-chosen tag (like the Zeko bridge's `"0"`/`"1"`) carried inside the action fields. | Manifest (the verifier checks `fieldIndex` is within the reflected field count) |
+The canonical example is the LuminaPool contract — see §2 of the addendum for the full `contract.json` with three event variants (AddLiquidity, ReceiveMina, Swap) plus `fixtures.json` with four golden fixtures, all matching real on-chain values from `B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV` on `zeko-m-devnet`.
 
-**At query time**, the API resolver:
-1. Reads `contract:addr:<network>:<account>` → `vkey_hash`. Cache miss → account is unverified, return raw fields.
-2. Reads `contract:vkey:<vkey_hash>` → metadata.
-3. If `discriminator` is `null` → apply the single schema.
-4. Otherwise → read `fields[discriminator.fieldIndex]`, look up the matching schema key, apply that schema.
-5. If no matching key → return raw fields (as for unknown contracts).
+Every `contract.json` has at minimum: `version: 1`, `meta` (`address`, `networks: [...]`, `name`), `state` (`{ slots }`), and optionally `events`, `actions`, `types`, `owner`. Events and actions take exactly one of three shapes: `null`, `{ fields }` (single shape), or `{ discriminator: { at }, variants }` (multi-shape, tag at slot `at` selects the variant).
 
-This preserves raw-first semantics: even when a contract is known, unexpected records still render as field arrays rather than crashing or showing misleading labels.
+`fixtures.json` is a test artefact validated by the `FixtureFile` TypeScript type; it is never uploaded to KV and not part of the JSON Schema. Authors submit it alongside `contract.json` so CI has deterministic inputs to exercise the interpreter against.
+
+### 4.4 Decoder runtime
+
+The decoder is a pure TypeScript module exported from `@zeko/contract-schema`:
+
+```ts
+decodeState(submission, raw: readonly string[]) → Record<string, unknown>
+decodeEventOrAction(variants, raw: readonly string[], types) → Record<string, unknown> | null
+```
+
+The same two functions run either in the UI (default) or on the API server (for hot feeds where per-request decoding latency matters more than KV cache hit rate). An unknown discriminator value, a slot that reads past the raw array, or any other decoder error returns `null` so the caller can fall back to raw fields without a hard failure. See §7.2 for when to run decoding where.
+
+### 4.5 Verification grade
+
+The verify CLI assigns one of three grades, surfaced in the response the UI receives:
+
+| Grade | Earned when | UI badge |
+| --- | --- | --- |
+| `owner-signed` | The submission's `owner.signature` verifies against `meta.address` | "Owner-signed by `B62q…`" |
+| `source-linked` | `meta.source` + `meta.vkeyHash` are present and the build matches | "Source-linked to `<repo>@<commit>`" |
+| `community-submitted` | Schema, semantic checks, and fixtures pass without owner or source | "Community-submitted, fixtures verified" |
 
 ---
 
@@ -327,25 +342,22 @@ The Mina prefix string and algorithm are documented in `mina/src/lib/mina_base/z
 
 ---
 
-## 7. GraphQL API Shape
+## 7. API Shape — Specification
+
+The explorer has one API surface: **GraphQL**. Indexed on-chain data (accounts, events, actions) is exposed as raw fields; contract schemas are exposed by a dedicated `contractSchema` query that reads from Cloudflare KV. Decoding — running `@zeko/contract-schema`'s interpreter against `(raw_fields, schema)` — can happen either in the UI or inside the API resolver; §7.2 sets out which to pick where.
+
+### 7.1 GraphQL types and queries
 
 ```graphql
+scalar JSON
+
 type Account {
   # ...existing fields...
-  zkappState: [String!]           # 8 field elements, null for non-zkApp
+  zkappState: [String!]            # 8 raw field elements, null for non-zkApp
   verificationKeyHash: String
   zkappUri: String
-  labeledState: [LabeledField!]   # from registry, null if not in registry
   events(first: Int, after: String): ZkappEventConnection!
   actions(first: Int, after: String): ZkappActionConnection!
-}
-
-type LabeledField {
-  index: Int!
-  label: String!
-  type: String!                   # "field", "uint64", "uint32", "bool", "public_key"
-  description: String
-  rawValue: String!
 }
 
 type ZkappEvent {
@@ -353,8 +365,7 @@ type ZkappEvent {
   transaction: Transaction!
   emittingAccount: Account!
   eventIndex: Int!
-  fields: [String!]!
-  labeledFields: [LabeledField!]  # from registry, null if unknown
+  fields: [String!]!               # raw field elements
   timestamp: DateTime!
   sequenceNumber: Int!
 }
@@ -364,13 +375,64 @@ type ZkappAction {
   transaction: Transaction!
   emittingAccount: Account!
   actionIndex: Int!
-  fields: [String!]!
-  labeledFields: [LabeledField!]  # from registry, null if unknown
+  fields: [String!]!               # raw field elements
   actionState: String!
   timestamp: DateTime!
   sequenceNumber: Int!
 }
+
+type ContractSchema {
+  network: String!                 # "zeko-m-devnet" | "zeko-mainnet"
+  address: String!
+  version: Int!                    # currently always 1
+  grade: String!                   # "owner-signed" | "source-linked" | "community-submitted"
+  submission: JSON!                # the contract.json bytes as merged in the registry
+}
+
+type Query {
+  # ...existing queries...
+  contractSchema(network: String!, address: String!): ContractSchema
+}
 ```
+
+The `Account`/`ZkappEvent`/`ZkappAction` types return raw fields only — no `labeledState`, no `labeledFields`, no `decoded` on those types. Decoding belongs on a separate axis from indexed data: the indexer is unaware of contract schemas, and mixing them in would force reindexing whenever a registry entry changes.
+
+The `contractSchema(network, address)` resolver is a thin reader over KV: one `GET` on key `${network}:${address}`, return `null` on miss, 5-minute edge cache on hit. No database, no joins, no per-request decoding cost by default.
+
+### 7.2 Where decoding runs — UI or API
+
+The interpreter is a pure function from `(raw_fields, schema)` to labeled values. Because it's pure and deterministic, it can run on either side of the wire. Pick based on what the specific call path looks like:
+
+| Path | Run decoding | Why |
+| --- | --- | --- |
+| **Contract page** (render state + first N events + first N actions for a single address) | **UI** | One `contractSchema` query covers the whole page. Schema is small (< 4 KB typical), edge-cached. Decoding N events client-side is microseconds. Keeps the API stateless and the GraphQL type cleanly split from schema data. |
+| **Multi-contract list pages** (feed of recent events across many contracts) | **API** | Fetching N distinct schemas from the UI is N extra round-trips. The resolver can look up each schema once, decode server-side, and return a `labeledEvent` field on the event. KV reads are edge-cached by address so repeat lookups across a page are free. |
+| **Server-rendered or static snapshots** (shareable contract-page URLs, social previews) | **API** | The HTML has to include decoded values. Running the interpreter during render is the shortest path; no second request. |
+| **Cases where the UI already needs the raw schema** (explorer debug tooling, schema authoring UIs) | **UI** | The schema is the product. Decoding in the same view as the raw JSON keeps them in sync. |
+
+The same `@zeko/contract-schema` package runs in both places. Picking the wrong side is not a correctness bug, only a latency/payload choice — it can be moved later per feature.
+
+### 7.3 UI join (default contract page)
+
+```ts
+const [account, schema] = await Promise.all([
+  graphql.query(ACCOUNT_QUERY, { address }),                          // raw fields
+  graphql.query(CONTRACT_SCHEMA_QUERY, { network, address }),         // schema or null
+]);
+
+const submission = schema?.submission ?? null;
+
+const labeledState = submission
+  ? decodeState(submission, account.zkappState)
+  : null;
+
+const labeledEvents = account.events.nodes.map(e => ({
+  ...e,
+  labeled: submission ? decodeEventOrAction(submission.events, e.fields, submission.types) : null,
+}));
+```
+
+Both views (raw + labeled) are rendered side-by-side. When `schema` is null the page shows raw fields only and a "Submit this contract" CTA pointing at the registry's PR template.
 
 ---
 
@@ -409,44 +471,12 @@ This approach piggybacks on the transaction-level rollback machinery — no zkAp
 | How does Minascan display zkApp state? | Developer-opt-in via contract verification + custom metadata. Raw fields without verification. |
 | Community conventions for annotating state fields? | None standardized. No ABI equivalent in the Mina ecosystem. |
 | How are events and actions structured? | Events: named, typed field arrays via `emitEvent()`. Actions: similar but with `actionState` rolling hash and reducer processing. Both stored as raw field arrays. Event/action names are **not** persisted on-chain — multi-type contracts need a discriminator field (§4.1). |
-| Can field labels be associated with a deployed contract? | Yes — a sandboxed verification service reproduces the compile from a public git commit and extracts labels by runtime reflection from the class that produced the on-chain verification key. Entries live in Cloudflare KV keyed by vkey hash. Fully specified in `addendums/addendum-contract-verification.md`. |
-| For Zeko's own contracts, can we hardcode labels? | No — they go through the same verification flow as any other contract, submitted against the `zeko-labs/zeko` repository, so the labels are cryptographically bound to the code. A `zeko.manifest.json` in that repo declares the bridge's action discriminator (validated against reflected field count). |
+| Can field labels be associated with a deployed contract? | Yes — by PR into `zeko-contract-registry` (separate repo). Each contract is a directory with `contract.json` (versioned: `version: 1`) describing state/events/actions via a small declarative DSL, plus `fixtures.json` with golden test cases. CI runs the Bun verify CLI against the fixtures (deep-equal; mismatch exits 1), optionally verifies an o1js owner signature, and optionally builds the source repo for a vkey hash compare. Publish is gated behind a maintainer-triggered `workflow_dispatch` that calls a TypeScript upload script — one Cloudflare KV `PUT` per network listed in `meta.networks`. The GraphQL `contractSchema(network, address)` query serves it edge-cached; decoding runs in the UI by default, or in the API resolver for hot multi-contract feeds. Full design in `addendums/addendum-contract-verification.md`; runnable end-to-end proof at `addendums/examples/`. |
+| For Zeko's own contracts, can we hardcode labels? | No — they submit through the same PR flow. Seed PRs add the bridge outer / inner on M1 launch. The bridge's `action[0] ∈ {"0","1"}` convention (spike 002 §1) is expressed as `discriminator: { at: 0 }` with two variants; the interpreter dispatches each action record to the matching variant at decode time. |
+| Why a static DSL instead of per-contract code? | A static schema is reviewable by diff, runnable through the same interpreter in CI and the UI, and never executes user-supplied JavaScript. Golden fixtures prove the author's mental model matches the interpreter's output. |
+| How do we verify that a submitter owns the contract? | Three acceptance grades. (a) **Owner-signed:** optional `owner` block carrying an o1js signature over the canonical payload; verified by `Signature.verify` against `meta.address` — only the deploying key can forge this. (b) **Source-linked:** optional `meta.source` points at a public repo and commit; CI builds it and compares the resulting vkey hash to `meta.vkeyHash`. (c) **Community-submitted:** neither present; accepted on PR reviewer judgment, UI displays a "Community-submitted" badge. Grade is surfaced in the API so the frontend can render appropriately. |
 | What queries do developers run against events/actions? | By emitting account, by sequence number, by `action_state` / `before_action_state` chain walks. Reflected in SurrealDB indexes. |
 | How is `action_state` computed? | Poseidon hash of (`before_action_state`, `actions_commitment`). Derivable from NATS payload — see §6.2. Post-state is cross-checked against `changed_accounts[].account.zkapp.action_state[0]`. |
 | How are `Set` / `Keep` app_state markers handled? | Indexer ignores them — the sequencer has already applied them. The indexer persists the post-state array from `changed_accounts[].account.zkapp.app_state` verbatim (§6.1). |
 | How is L2 rollback handled for zkApp records? | Delegated to the generic transaction-consumer rollback machinery. Every zkApp record is tagged with `target_ledger_hash`; on rollback, matching events/actions are deleted and account state is restored from `account_activity` snapshots (§8). |
 
----
-
-## 10. Implementation Checklist
-
-**Indexer + data model (M1):**
-- [ ] Implement SurrealDB migrations for `zkapp_event`, `zkapp_action` tables and `account` table additions (including `action_state` vector and `target_ledger_hash`)
-- [ ] Implement indexer extraction of events/actions from `account_updates` in NATS messages
-- [ ] Implement `action_state` computation (Poseidon hash) with cross-check against post-state `action_state[0]`
-- [ ] Write `account_activity` snapshot rows for every zkApp state change (enables rollback revert)
-- [ ] Wire zkApp revert into the transaction consumer's rollback path: delete events/actions by `target_ledger_hash`, restore account state from `account_activity`
-- [ ] Indexer writes `contract:addr:<network>:<address>` → `vkey_hash` to KV on each zkApp command
-
-**Contract registry (M1 backend, see addendum):**
-- [ ] Provision Cloudflare KV namespace (`zeko-explorer-contracts`) with keyspaces per §4
-- [ ] Stand up Verification Service (Cloudflare Container or equivalent sandboxed worker) with pipeline stages `CLONING → INSTALLING → COMPILING → REFLECTING → MATCHING → VERIFIED`
-- [ ] Implement Ed25519-signed verification result protocol (worker signs, API verifies and writes to KV)
-- [ ] Implement runtime reflection of `@state`, `events`, `reducer.actionType` from compiled o1js class
-- [ ] Implement `zeko.manifest.json` parser with manifest-vs-reflection validation (reject on mismatch)
-- [ ] Submit the `zeko-labs/zeko` repository through the flow to bootstrap the bridge contract entries (outer + inner)
-
-**API (M1):**
-- [ ] Implement `submitContractForVerification`, `verificationProgress` (SSE), `contract(...)`, `verifiedContracts`, `submitOwnerClaim`, `updateOwnerMetadata` GraphQL operations
-- [ ] Implement wallet-signature verification for owner claims (nonce + 10-minute validity + replay-protection KV set)
-- [ ] Implement API-layer label resolution (KV lookup by `verification_key_hash`, discriminator dispatch for events/actions)
-- [ ] Add `events` and `actions` resolvers to GraphQL `Account` type
-- [ ] Add `labeledState` / `labeledFields` resolvers that apply registry labels
-- [ ] Rate-limiting on `submitContractForVerification` (10 submissions/IP/hour, 3 concurrent jobs global)
-
-**Frontend (M2, see addendum §8):**
-- [ ] Submission wizard (4-step) with live SSE progress stream
-- [ ] Verified contract page (State / Events / Actions / Deployments / Source tabs)
-- [ ] Owner claim flow via Auro/Pallad wallet signature
-- [ ] Owner dashboard for editing display metadata
-- [ ] Unverified contract page (raw fields + "Verify this contract" CTA)

@@ -1,9 +1,9 @@
 Feature: zkApp GraphQL API
 
   The GraphQL API exposes zkApp state, events, and actions on the Account
-  type. State is always available as raw field arrays. LabeledState is
-  available for known contracts. Events and actions support cursor-based
-  pagination ordered by sequence number.
+  type as raw field arrays only. Contract schemas are served by a separate
+  query (contractSchema) — see registry-label-resolution.feature. Events
+  and actions support cursor-based pagination ordered by sequence number.
 
   Background:
     Given the zkApp GraphQL API is running
@@ -19,12 +19,10 @@ Feature: zkApp GraphQL API
     When querying zkappState for "B62qUser"
     Then the response contains zkappState null
 
-  Scenario: Query labeled state for a known contract
-    Given account "B62qBridge" has verification_key_hash matching the registry
-    When querying labeledState for "B62qBridge"
-    Then the response contains an array of LabeledField objects
-    And each LabeledField has index, label, type, rawValue
-    And LabeledField at index 6 has label "sequencer_public_key_is_odd" and type "bool"
+  Scenario: Account type does not expose decoded state
+    When introspecting the Account GraphQL type
+    Then there is no "labeledState" field
+    And there is no "decoded" field on Account
 
   Scenario: Paginate events for an account — first page
     Given account "B62qContract" has 30 events stored
@@ -53,17 +51,15 @@ Feature: zkApp GraphQL API
     And hasNextPage is true
     And each action has id, fields, actionState, timestamp, sequenceNumber
 
-  Scenario: Query event includes labeledFields for known contract
-    Given account "B62qBridge" emitted an event with fields ["123", "456"]
-    And "B62qBridge" has a known contract registry entry
-    When querying the event via the events connection for "B62qBridge"
-    Then each event includes a labeledFields array with labels from the registry
+  Scenario: ZkappEvent type exposes raw fields only
+    When introspecting the ZkappEvent GraphQL type
+    Then the "fields" field is of type [String!]!
+    And there is no "labeledFields" field
 
-  Scenario: Query action includes labeledFields for known contract
-    Given account "B62qBridge" dispatched an action with fields ["789"]
-    And the registry maps "witness" action field 0 to label "aux" type "field"
-    When querying the action via the actions connection for "B62qBridge"
-    Then the action includes labeledFields with label "aux" at index 0
+  Scenario: ZkappAction type exposes raw fields only
+    When introspecting the ZkappAction GraphQL type
+    Then the "fields" field is of type [String!]!
+    And there is no "labeledFields" field
 
   Scenario: Events filtered by transaction
     Given transaction "tx-xyz" emitted 3 events from "B62qContract"
