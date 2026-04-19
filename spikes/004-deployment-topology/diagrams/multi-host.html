@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zeko Explorer Multi-Host Topology</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #020617; color: #f8fafc; font-family: "JetBrains Mono", monospace; }
+    main { width: min(1260px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0; }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: 0; }
+    p { margin: 0 0 18px; color: #94a3b8; font-size: 12px; line-height: 1.5; }
+    .frame { border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #020617; }
+    svg { display: block; width: 100%; height: auto; }
+    footer { color: #64748b; font-size: 10px; text-align: right; margin-top: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Multi-Host zeko-m-devnet / zeko-m-mainnet Topology</h1>
+  <p>Terraform provisions Talos control-plane, stateful, and app pools. Hive Gateway runs on Cloudflare Workers and reaches private subgraph services through Cloudflare Tunnel.</p>
+  <section class="frame">
+    <svg viewBox="0 0 1240 780" role="img" aria-labelledby="title desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="title">Multi-host zeko-m-devnet / zeko-m-mainnet topology</title>
+      <desc id="desc">Multi-host Talos Kubernetes cluster with control-plane nodes, stateful nodes for NATS and SurrealDB, app nodes, private Explorer and Bridge APIs, Cloudflare Tunnel, Hive Gateway on Cloudflare Workers, and existing Zeko service integrations.</desc>
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+        <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/></marker>
+        <style>
+          .t{font:700 20px JetBrains Mono,monospace;fill:#f8fafc}.g{font:700 11px JetBrains Mono,monospace;fill:#fbbf24}.l{font:700 12px JetBrains Mono,monospace;fill:#f8fafc}.s{font:500 9px JetBrains Mono,monospace;fill:#cbd5e1}.x{font:500 8px JetBrains Mono,monospace;fill:#94a3b8}
+          .group{fill:rgba(120,53,15,0.08);stroke:#fbbf24;stroke-width:1.5;stroke-dasharray:8 4}.svc{fill:rgba(6,78,59,0.4);stroke:#34d399;stroke-width:1.5}.bus{fill:rgba(251,146,60,0.3);stroke:#fb923c;stroke-width:1.5}.db{fill:rgba(76,29,149,0.4);stroke:#a78bfa;stroke-width:1.5}.edge{fill:rgba(8,51,68,0.4);stroke:#22d3ee;stroke-width:1.5}.ext{fill:rgba(30,41,59,0.5);stroke:#94a3b8;stroke-width:1.5}.node{fill:rgba(15,23,42,0.78);stroke:#475569;stroke-width:1.2}
+          .line{stroke:#64748b;stroke-width:1.5;fill:none;marker-end:url(#arrow)}.dash{stroke:#fb7185;stroke-width:1.4;stroke-dasharray:5 4;fill:none;marker-end:url(#arrow)}
+        </style>
+      </defs>
+      <rect width="1240" height="780" fill="#020617"/><rect width="1240" height="780" fill="url(#grid)"/>
+      <text x="36" y="42" class="t">Multi-Host Talos Cluster</text>
+      <text x="36" y="62" class="x">Use for zeko-m-devnet and zeko-m-mainnet. zeko-m-devnet mirrors the zeko-m-mainnet role split with smaller nodes.</text>
+
+      <path class="line" d="M 190 170 L 305 324"/><path class="line" d="M 190 260 L 305 356"/><path class="line" d="M 190 350 L 305 388"/>
+      <path class="line" d="M 430 356 L 555 356"/><path class="line" d="M 700 356 L 820 356"/><path class="line" d="M 930 356 L 1034 356"/>
+      <path class="line" d="M 884 448 L 700 508"/><path class="line" d="M 626 448 L 626 508"/><path class="line" d="M 700 600 L 826 616"/><path class="line" d="M 898 646 L 898 686"/><path class="line" d="M 974 710 L 1034 512"/>
+      <path class="dash" d="M 190 520 C 290 500, 326 430, 360 404"/>
+
+      <rect x="36" y="110" width="204" height="460" rx="12" class="group"/><text x="138" y="137" class="g" text-anchor="middle">Existing Zeko</text>
+      <rect x="68" y="150" width="136" height="52" rx="6" class="ext"/><text x="136" y="181" class="l" text-anchor="middle">Sequencer</text>
+      <rect x="68" y="240" width="136" height="52" rx="6" class="ext"/><text x="136" y="271" class="l" text-anchor="middle">L1 nodes</text>
+      <rect x="68" y="330" width="136" height="52" rx="6" class="ext"/><text x="136" y="361" class="l" text-anchor="middle">DA layer</text>
+      <rect x="68" y="500" width="136" height="52" rx="6" class="ext"/><text x="136" y="531" class="l" text-anchor="middle">Bridge legacy</text>
+
+      <rect x="285" y="110" width="690" height="590" rx="12" class="group"/><text x="630" y="137" class="g" text-anchor="middle">Talos Kubernetes Cluster</text>
+
+      <rect x="320" y="158" width="180" height="90" rx="8" class="node"/><text x="410" y="184" class="l" text-anchor="middle">control-plane x3</text><text x="410" y="204" class="s" text-anchor="middle">Kubernetes API</text><text x="410" y="221" class="x" text-anchor="middle">no app workloads</text>
+      <rect x="532" y="158" width="180" height="90" rx="8" class="node"/><text x="622" y="184" class="l" text-anchor="middle">stateful x3</text><text x="622" y="204" class="s" text-anchor="middle">NATS + SurrealDB</text><text x="622" y="221" class="x" text-anchor="middle">Longhorn + affinity</text>
+      <rect x="744" y="158" width="180" height="90" rx="8" class="node"/><text x="834" y="184" class="l" text-anchor="middle">app pool</text><text x="834" y="204" class="s" text-anchor="middle">1-2 initial nodes</text><text x="834" y="221" class="x" text-anchor="middle">split after load tests</text>
+
+      <rect x="305" y="310" width="126" height="100" rx="6" class="svc"/><text x="368" y="340" class="l" text-anchor="middle">Ingest</text><text x="368" y="358" class="s" text-anchor="middle">watcher</text><text x="368" y="374" class="s" text-anchor="middle">monitor</text><text x="368" y="390" class="s" text-anchor="middle">backfill</text>
+      <rect x="555" y="306" width="145" height="108" rx="6" class="bus"/><text x="628" y="338" class="l" text-anchor="middle">NATS</text><text x="628" y="356" class="s" text-anchor="middle">3 pods</text><text x="628" y="374" class="x" text-anchor="middle">stream replicas: 3</text>
+      <rect x="820" y="310" width="126" height="100" rx="6" class="svc"/><text x="883" y="344" class="l" text-anchor="middle">Indexer</text><text x="883" y="362" class="s" text-anchor="middle">1 active</text><text x="883" y="380" class="x" text-anchor="middle">leader later</text>
+
+      <rect x="542" y="508" width="170" height="92" rx="6" class="db"/><text x="627" y="537" class="l" text-anchor="middle">SurrealDB</text><text x="627" y="555" class="s" text-anchor="middle">single active</text><text x="627" y="573" class="x" text-anchor="middle">Longhorn PVC</text>
+      <rect x="826" y="588" width="146" height="58" rx="6" class="svc"/><text x="899" y="612" class="l" text-anchor="middle">Private APIs</text><text x="899" y="629" class="s" text-anchor="middle">explorer + bridge</text>
+      <rect x="826" y="684" width="146" height="52" rx="6" class="edge"/><text x="899" y="715" class="l" text-anchor="middle">cloudflared</text>
+
+      <rect x="1034" y="282" width="170" height="360" rx="12" class="group"/><text x="1119" y="309" class="g" text-anchor="middle">Public Edge</text>
+      <rect x="1060" y="338" width="118" height="50" rx="6" class="edge"/><text x="1119" y="368" class="l" text-anchor="middle">Hive Gateway</text>
+      <rect x="1060" y="486" width="118" height="50" rx="6" class="edge"/><text x="1119" y="516" class="l" text-anchor="middle">Cloudflare</text>
+      <rect x="1060" y="574" width="118" height="50" rx="6" class="edge"/><text x="1119" y="604" class="l" text-anchor="middle">R2 / Workers</text>
+    </svg>
+  </section>
+  <footer>Spike 004 multi-host diagram.</footer>
+</main>
+</body>
+</html>

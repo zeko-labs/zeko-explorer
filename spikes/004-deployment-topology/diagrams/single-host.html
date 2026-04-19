@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zeko Explorer Single-Host zeko-m-alphanet Topology</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #020617; color: #f8fafc; font-family: "JetBrains Mono", monospace; }
+    main { width: min(1220px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0; }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: 0; }
+    p { margin: 0 0 18px; color: #94a3b8; font-size: 12px; line-height: 1.5; }
+    .frame { border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #020617; }
+    svg { display: block; width: 100%; height: auto; }
+    footer { color: #64748b; font-size: 10px; text-align: right; margin-top: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Single-Host zeko-m-alphanet Topology</h1>
+  <p>One Talos node runs the full zeko-m-alphanet explorer stack. Hive Gateway runs on Cloudflare Workers and reaches private Explorer/Bridge services through Cloudflare Tunnel.</p>
+  <section class="frame">
+    <svg viewBox="0 0 1180 720" role="img" aria-labelledby="title desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="title">Single-host zeko-m-alphanet topology</title>
+      <desc id="desc">Single Talos node on Hetzner running explorer services for zeko-m-alphanet, with Hive Gateway on Cloudflare Workers, Cloudflare Tunnel, private APIs, persistent volumes, and R2 backups.</desc>
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+        <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/></marker>
+        <style>
+          .t{font:700 20px JetBrains Mono,monospace;fill:#f8fafc}.g{font:700 11px JetBrains Mono,monospace;fill:#fbbf24}.l{font:700 12px JetBrains Mono,monospace;fill:#f8fafc}.s{font:500 9px JetBrains Mono,monospace;fill:#cbd5e1}.x{font:500 8px JetBrains Mono,monospace;fill:#94a3b8}
+          .group{fill:rgba(120,53,15,0.08);stroke:#fbbf24;stroke-width:1.5;stroke-dasharray:8 4}.svc{fill:rgba(6,78,59,0.4);stroke:#34d399;stroke-width:1.5}.bus{fill:rgba(251,146,60,0.3);stroke:#fb923c;stroke-width:1.5}.db{fill:rgba(76,29,149,0.4);stroke:#a78bfa;stroke-width:1.5}.edge{fill:rgba(8,51,68,0.4);stroke:#22d3ee;stroke-width:1.5}.ext{fill:rgba(30,41,59,0.5);stroke:#94a3b8;stroke-width:1.5}
+          .line{stroke:#64748b;stroke-width:1.5;fill:none;marker-end:url(#arrow)}.dash{stroke:#fb7185;stroke-width:1.4;stroke-dasharray:5 4;fill:none;marker-end:url(#arrow)}
+        </style>
+      </defs>
+      <rect width="1180" height="720" fill="#020617"/><rect width="1180" height="720" fill="url(#grid)"/>
+      <text x="36" y="42" class="t">zeko-m-alphanet: Single Talos Node</text>
+      <text x="36" y="62" class="x">Terraform provisions one schedulable Talos control-plane node, volumes, firewall, Cloudflare tunnel inputs, and Kubernetes add-ons.</text>
+
+      <path class="line" d="M 186 170 L 304 250"/><path class="line" d="M 186 258 L 304 286"/><path class="line" d="M 186 344 L 304 324"/>
+      <path class="line" d="M 438 286 L 548 286"/><path class="line" d="M 672 286 L 778 286"/><path class="line" d="M 848 338 L 690 438"/><path class="line" d="M 620 338 L 620 438"/><path class="line" d="M 620 530 L 620 570"/>
+      <path class="line" d="M 620 628 L 620 650"/><path class="line" d="M 740 674 L 906 318"/><path class="line" d="M 1002 318 L 1080 260"/><path class="line" d="M 722 498 C 850 520, 946 588, 1080 620"/>
+      <path class="dash" d="M 186 500 C 270 488, 310 410, 374 340"/>
+
+      <rect x="40" y="108" width="190" height="430" rx="12" class="group"/><text x="135" y="135" class="g" text-anchor="middle">Existing Zeko</text>
+      <rect x="68" y="150" width="136" height="52" rx="6" class="ext"/><text x="136" y="181" class="l" text-anchor="middle">Sequencer</text>
+      <rect x="68" y="238" width="136" height="52" rx="6" class="ext"/><text x="136" y="269" class="l" text-anchor="middle">L1 nodes</text>
+      <rect x="68" y="324" width="136" height="52" rx="6" class="ext"/><text x="136" y="355" class="l" text-anchor="middle">DA layer</text>
+      <rect x="68" y="480" width="136" height="52" rx="6" class="ext"/><text x="136" y="511" class="l" text-anchor="middle">Bridge legacy</text>
+
+      <rect x="280" y="108" width="580" height="558" rx="12" class="group"/><text x="570" y="135" class="g" text-anchor="middle">Talos node alpha-k8s-1, CX32-class</text>
+      <rect x="316" y="236" width="122" height="96" rx="6" class="svc"/><text x="377" y="264" class="l" text-anchor="middle">Ingest</text><text x="377" y="282" class="s" text-anchor="middle">watcher</text><text x="377" y="298" class="s" text-anchor="middle">monitor</text><text x="377" y="314" class="s" text-anchor="middle">backfill</text>
+      <rect x="548" y="232" width="124" height="108" rx="6" class="bus"/><text x="610" y="262" class="l" text-anchor="middle">NATS</text><text x="610" y="280" class="s" text-anchor="middle">1 replica</text><text x="610" y="298" class="x" text-anchor="middle">Hetzner volume</text>
+      <rect x="778" y="236" width="122" height="96" rx="6" class="svc"/><text x="839" y="270" class="l" text-anchor="middle">Indexer</text><text x="839" y="288" class="s" text-anchor="middle">1 active</text>
+      <rect x="536" y="438" width="168" height="92" rx="6" class="db"/><text x="620" y="467" class="l" text-anchor="middle">SurrealDB</text><text x="620" y="485" class="s" text-anchor="middle">single active</text><text x="620" y="503" class="x" text-anchor="middle">Hetzner volume</text>
+      <rect x="536" y="570" width="168" height="58" rx="6" class="svc"/><text x="620" y="594" class="l" text-anchor="middle">Private APIs</text><text x="620" y="611" class="s" text-anchor="middle">explorer + bridge</text>
+      <rect x="536" y="650" width="168" height="48" rx="6" class="edge"/><text x="620" y="679" class="l" text-anchor="middle">cloudflared</text>
+
+      <rect x="906" y="168" width="136" height="300" rx="12" class="group"/><text x="974" y="195" class="g" text-anchor="middle">Hetzner Edge</text>
+      <rect x="932" y="246" width="84" height="52" rx="6" class="edge"/><text x="974" y="276" class="l" text-anchor="middle">LB</text>
+      <rect x="932" y="338" width="84" height="52" rx="6" class="edge"/><text x="974" y="368" class="l" text-anchor="middle">cloudflared</text>
+
+      <rect x="1080" y="206" width="72" height="412" rx="12" class="group"/><text x="1116" y="234" class="g" text-anchor="middle">CF</text>
+      <rect x="1094" y="250" width="44" height="44" rx="6" class="edge"/><text x="1116" y="276" class="x" text-anchor="middle">Hive</text>
+      <rect x="1094" y="424" width="44" height="44" rx="6" class="edge"/><text x="1116" y="450" class="x" text-anchor="middle">MCP</text>
+      <rect x="1094" y="596" width="44" height="44" rx="6" class="edge"/><text x="1116" y="622" class="x" text-anchor="middle">R2</text>
+    </svg>
+  </section>
+  <footer>Spike 004 single-host zeko-m-alphanet diagram.</footer>
+</main>
+</body>
+</html>
