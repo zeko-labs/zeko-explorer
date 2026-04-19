@@ -45,7 +45,7 @@ The PRD defines separate Zeko network instances. Each network gets its own full 
 | Zeko-M | `zeko-m-devnet` | Mina devnet | multi-host `zeko-m-mainnet` rehearsal cluster |
 | Zeko-M | `zeko-m-alphanet` | Mina devnet | single-host `zeko-m-alphanet` cluster |
 | Zeko-M | `zeko-m-mainnet` | Mina mainnet | multi-host `zeko-m-mainnet` cluster |
-| Zeko-E | future scoped name | Ethereum testnet | out of scope for this spike until Zeko-E work starts |
+| Zeko-E | `zeko-e-testnet` | Ethereum testnet | out of scope for this spike until Zeko-E work starts |
 | Zeko-E | `zeko-e-mainnet` | Ethereum mainnet | future separate multi-host `zeko-e-mainnet` cluster |
 
 Default isolation model: **one Kubernetes cluster per network**.
@@ -315,6 +315,7 @@ infra/
       zeko-m-alphanet/
       zeko-m-devnet/
       zeko-m-mainnet/
+      zeko-e-testnet/
       zeko-e-mainnet/
   gitops/
     flux/
@@ -448,7 +449,7 @@ This mirrors the `zeko-m-mainnet` role split while keeping capacity low. Do not 
 | stateful | 3 | CX42-class, 8 vCPU / 16 GB RAM | worker, tainted | NATS replicated stream, SurrealDB, Longhorn replicas |
 | app | 2 | CX32-class, 4 vCPU / 8 GB RAM | worker | indexer, watchers, backfill, APIs, cloudflared |
 
-`zeko-e-mainnet` should be a separate cluster with the same pattern when Ethereum support is ready.
+`zeko-e-testnet` and `zeko-e-mainnet` should be separate clusters with the same pattern when Ethereum support is ready.
 
 ---
 
@@ -683,7 +684,7 @@ Environment plan:
 - **`zeko-m-local`:** Docker Desktop Kubernetes with the lean local namespace stack. No Flux required locally.
 - **`zeko-m-alphanet`:** one Talos node, Hetzner volumes, Cloudflare Tunnel private API routes, Flux Operator Web UI/MCP in read-only mode, Hive Gateway Worker, and R2 backups.
 - **`zeko-m-devnet`:** multi-host Talos cluster that mirrors the `zeko-m-mainnet` role split with smaller nodes. Deploy through Flux from promotion PRs.
-- **`zeko-m-mainnet`:** multi-host Talos cluster. Deploy through Flux from reviewed promotion PRs and manual environment approvals. Create a separate cluster for `zeko-e-mainnet` later.
+- **`zeko-m-mainnet`:** multi-host Talos cluster. Deploy through Flux from reviewed promotion PRs and manual environment approvals. Create separate clusters for `zeko-e-testnet` and `zeko-e-mainnet` later.
 
 This gives the explorer a real Kubernetes and GitOps operating model from day one while keeping Terraform focused on infrastructure and Cloudflare focused on the public edge.
 

@@ -10,7 +10,7 @@
 
 Zeko currently relies on Zekoscan (third-party, Blockberry/Staketab), which suffers from reliability issues, stale data, and a complete lack of L2 concepts. Zeko has no control over its roadmap.
 
-This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, the sequencer publishes raw L2 events directly to NATS JetStream (with a standalone backfill service for gap filling from the DA layer), while TypeScript services monitor L1 and DA data sources. A unified indexer consumes all streams, normalizes data, and writes to SurrealDB. The explorer is exposed via private code-first GraphQL APIs (Pothos) with SSE subscriptions, a Cloudflare-hosted unified GraphQL gateway, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
+This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, the sequencer publishes raw L2 events directly to NATS JetStream (with a standalone backfill service for gap filling from the DA layer), while TypeScript services monitor L1 and DA data sources. A unified indexer consumes all streams, normalizes data, and writes to SurrealDB. The explorer is exposed through a Cloudflare-hosted unified GraphQL gateway over private Explorer and Bridge GraphQL APIs (Pothos), with SSE subscriptions, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
 
 The system replaces:
 - The archive relay adapter + Mina archive node + Archive-Node-API + Zekoscan pipeline.
@@ -71,7 +71,7 @@ The Mina archive schema is designed around L1 consensus:
 | Zeko-M | `zeko-m-devnet` | Mina Devnet | Development |
 | Zeko-M | `zeko-m-alphanet` | Mina Devnet | Pre-mainnet staging |
 | Zeko-M | `zeko-m-mainnet` | Mina Mainnet | Production |
-| Zeko-E | future scoped name | Ethereum Testnet | Future Ethereum testing |
+| Zeko-E | `zeko-e-testnet` | Ethereum Testnet | Future Ethereum testing |
 | Zeko-E | `zeko-e-mainnet` | Ethereum Mainnet | Ethereum production |
 
 Each network runs its own sequencer, DA layer, and **full explorer backend stack** (NATS, backfill service, indexer, SurrealDB, APIs). Full stack isolation per network — separate NATS and SurrealDB instances. No cross-network namespacing needed; the instance itself identifies the network.
@@ -369,6 +369,17 @@ Nuxt 3 SPA, no SSR. Deployed as static assets on Cloudflare Workers. Ships an HT
 
 **Design work is delegated.** Deliverables needed from a designer: component library, page layouts, responsive breakpoints, status indicator treatment, loading states.
 
+#### 5.2.10 Unified GraphQL Gateway (Cloudflare Worker)
+
+The public API is exposed through a unified GraphQL gateway, not by exposing Explorer API or Bridge API directly.
+
+- Explorer API and Bridge API run as private Kubernetes Services.
+- GraphQL Mesh builds the composed graph from the Explorer and Bridge schemas.
+- GraphQL Hive Gateway runs as a Cloudflare Worker and serves the public API route.
+- Cloudflare Tunnel routes gateway-to-service traffic to private Kubernetes services.
+- Cloudflare owns public TLS, WAF/rate limits, CORS, bot protection, request size limits, and auth policy once at the gateway layer.
+- API containers still enforce internal service auth and validation.
+
 ### 5.3 Bridge Indexing
 
 The existing `zeko-ui` bridge actions services (`services/actions/indexer`, `services/actions/api`) provide indexed bridge data to the bridge UI. They read outer actions (Commits, Witnesses) from the L1 archive and inner actions from the L2 archive, insert into PostgreSQL, and expose via GraphQL. Both are replaced: the Zeko Indexer (Section 5.2.5) replaces the existing indexer by consuming NATS streams instead of polling archives directly, and writing to SurrealDB instead of PostgreSQL. The Bridge GraphQL API (Section 5.3.5) replaces `services/actions/api` with new queries backed by SurrealDB.
@@ -422,7 +433,7 @@ A **Bridge GraphQL API** (TypeScript, Pothos) is a separate private Kubernetes S
 | Multiple archive calls per wallet on page load | Single paginated API call |
 | 20s polling (`POLL_INTERVAL` in `bridgeOperation.ts`) | SSE subscription via `bridgeOperationUpdated` |
 
-**Unified gateway:** The explorer and bridge APIs are separate private services. A Cloudflare Worker runs GraphQL Hive Gateway, with the composed graph built by GraphQL Mesh, and provides the public API endpoint. Cloudflare owns public rate limiting, WAF, CORS, bot protection, request size limits, and auth policy once at the gateway layer.
+The Bridge API is exposed through the unified gateway described in Section 5.2.10.
 
 **Key improvement:** Per-user bridge operation history is indexed by public key, replacing the current full archive scan per wallet.
 
@@ -434,7 +445,6 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
 
 ```
 /zeko-explorer
-├── flake.nix                          # Nix for reproducible builds + dev shells
 ├── wrangler.toml                      # Cloudflare Worker configs
 │
 ├── packages/
@@ -470,8 +480,7 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
     ├── k8s/
     │   ├── chart/zeko-explorer/       # Reusable app chart/templates
     │   └── values/local/              # Docker Desktop Kubernetes values
-    ├── local/docker-desktop/          # Local Kubernetes assembly
-    └── nix/                           # Nix derivations per service
+    └── local/docker-desktop/          # Local Kubernetes assembly
 ```
 
 Each package: DDD internally (domain core, infrastructure boundary, repository interfaces).
@@ -565,7 +574,7 @@ Bounded contexts: Transactions, Accounts, Batches, Bridge (outer/inner actions +
 
 ### 8.2 TDD
 
-All domain logic test-first. Unit (mocked repos), integration (real SurrealDB/NATS), E2E (full pipeline).
+All domain logic test-first. Unit tests use mocked repositories. Integration tests use real dependencies where useful, such as NATS and SurrealDB. End-to-end smoke tests can run against deployed or local environments, but CI should not require a full Docker Desktop Kubernetes cluster.
 
 ### 8.3 Gherkin Acceptance Tests
 
@@ -574,7 +583,7 @@ All domain logic test-first. Unit (mocked repos), integration (real SurrealDB/NA
 ### 8.4 Test Infrastructure
 
 - Package-level integration tests may start only the dependencies they need, such as real NATS and SurrealDB.
-- Full pipeline integration tests use the lean Docker Desktop Kubernetes profile.
+- CI should avoid requiring Docker Desktop Kubernetes for full-pipeline tests. Use scoped integration tests in CI; reserve the lean local Kubernetes profile for local development and manual smoke runs.
 - **Fixtures:** Canned NATS messages captured from a real devnet. Tests the full pipeline from NATS onward without needing a running sequencer.
 - **Fixture diversity:** Normal blocks, empty blocks, zkApp transactions, bridge operations, hash chain breaks (rollback simulation), finality events. Grow the fixture set as edge cases are encountered.
 - Ephemeral instances per test suite. CI gate.
@@ -590,7 +599,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 1. **Sequencer Connector** (`spikes/001-sequencer-connector/`) — **Complete.** Resolved: sequencer publishes directly to NATS (no separate connector), consumer-side rollback detection, backfill service design, bootstrap strategy. See `results.md` for full findings.
 2. **Bridge Operation Correlation** (`spikes/002-bridge-correlation/`) — **Complete.** Resolved: `aux` confirmed as correlation key (Poseidon hash, NOT unique — disambiguated via FIFO `aux_sequence`), user PK extraction via `zeko.l1.bridge-events`, cancel deposit produces no outer action (detected via L1 Watcher), full deposit/withdrawal lifecycle state machines, SurrealDB schema with graph edges, Bridge GraphQL API design. See `results.md` for full findings.
 3. **zkApp State Display** (`spikes/003-zkapp-state-display.md`) — investigate how to display zkApp state, events, and actions.
-4. **Deployment Topology** (`spikes/004-deployment-topology/`) — **Complete.** Resolved: Docker Desktop Kubernetes locally, Hetzner/Talos Kubernetes remotely, FluxCD + Flux Operator reconciliation from `zeko-k8s`, Cloudflare-hosted gateway, private API routing through Cloudflare Tunnel, and per-network persistence/host topology. See `results.md` for full findings.
+4. **Deployment Topology** (`spikes/004-deployment-topology/`) — **Complete.** Resolved: Docker Desktop Kubernetes locally, Hetzner/Talos Kubernetes remotely, FluxCD + Flux Operator reconciliation from `zeko-k8s`, Cloudflare-hosted gateway, private API routing through Cloudflare Tunnel, and per-network persistence/host topology. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for full findings.
 5. **Pagination Schema** (`spikes/005-relay-pagination.md`) — cursor-based pagination schema, Relay spec tradeoffs.
 6. **L1 Watcher** (`spikes/006-l1-watcher/`) — settlement detection, L1 fork/rollback handling, outer actions ingestion, bridge events, abstract L1 interface, NATS event schemas for all `zeko.l1.*` subjects.
 7. **DA Monitor** (`spikes/007-da-monitor/`) — DA attestation model, API analysis (Ethermint/Celestia), NATS event schema for `zeko.da.attestations`, migration considerations.
@@ -611,7 +620,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(aux, auxSequence)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
 - Code-Mode MCP Server: search() + execute() with generated SDK from both API schemas.
 - Per-concern packages: `nats-protocol`, `domain`, `db`.
-- Nix flake, Docker Desktop Kubernetes + wrangler for local dev, OCI image builds for Kubernetes workloads, CF Worker deployment for frontend/gateway/MCP, and private API routing through Cloudflare Tunnel.
+- Docker Desktop Kubernetes + wrangler for local dev, OCI image builds for Kubernetes workloads, CF Worker deployment for frontend/gateway/MCP, and private API routing through Cloudflare Tunnel.
 
 **Why MCP first:** Shipping MCP + APIs is significantly faster than building a frontend — the MCP server is nearly trivial with graphql-codegen. People will use agents to visualize and query explorer data more than the UI. The bridge API immediately replaces `services/actions/api` — the bridge UI can switch to the new endpoint without waiting for the explorer frontend.
 
@@ -763,12 +772,14 @@ Feature: Public API
 
 ## 10. Deployment and Infrastructure
 
+This section summarizes the accepted deployment model. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for the full topology, host mapping, persistence plan, Cloudflare routing, Terraform/Flux flow, and operational tradeoffs. See the [FluxCD addendum](./spikes/004-deployment-topology/addendums/gitops/flux.md) for the chosen GitOps model and the [ArgoCD addendum](./spikes/004-deployment-topology/addendums/gitops/argocd.md) for the evaluated alternative.
+
 ### 10.1 Local Development
 
 - **Docker Desktop Kubernetes** is the default local runtime.
 - Local development uses the same Kubernetes shape as remote where practical: NATS, SurrealDB, indexer, APIs, setup Jobs, and opt-in watcher/backfill workloads.
 - **Wrangler** runs Cloudflare Workers locally for the Hive Gateway, MCP Worker, and frontend/static asset workflows.
-- **Nix/proto** provide reproducible development toolchains.
+- **proto** provides reproducible development toolchains.
 - **moonrepo** orchestrates local tasks such as building local images, bringing up the local cluster, port-forwarding services, and running dev processes.
 - The local profile must stay lean: target 4 CPU / 6 GB RAM allocated to Docker Desktop, with L1 Watcher, DA Monitor, and Backfill disabled unless explicitly enabled.
 
@@ -787,7 +798,7 @@ Feature: Public API
 - `zeko-m-alphanet`: single Talos node, Hetzner volumes, Cloudflare Tunnel private API routes, R2 backups.
 - `zeko-m-devnet`: multi-host Talos cluster that mirrors `zeko-m-mainnet` role split with smaller nodes.
 - `zeko-m-mainnet`: multi-host Talos cluster with separate control-plane, stateful, and app pools.
-- `zeko-e-mainnet`: separate future cluster when Ethereum support is ready.
+- `zeko-e-testnet` and `zeko-e-mainnet`: separate future clusters when Ethereum support is ready.
 
 ### 10.4 Persistence
 
@@ -846,9 +857,8 @@ Feature: Public API
 | MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. Calls gateway or explicit internal service credentials. |
 | Frontend | Nuxt 3 SPA, CF Workers Static Assets | No SSR needed. HTML skeleton + hydration. |
 | Search | Unified bar, auto-detect | NL queries in future milestone. |
-| Testing | Gherkin, Vitest | Living docs + unit/integration. Real NATS/SurrealDB for package tests; lean Kubernetes profile for full pipeline tests. |
+| Testing | Gherkin, Vitest | Living docs + unit/integration. Real NATS/SurrealDB for package tests; Docker Desktop Kubernetes only for local/manual smoke runs. |
 | Monorepo | pnpm workspaces + moonrepo | TS-only monorepo. Per-concern shared packages. |
-| Build | Nix | Reproducible dev environments. |
 | Local runtime | Docker Desktop Kubernetes | Local shape mirrors remote Kubernetes while staying lean. |
 | Containers | OCI/Docker | Kubernetes workloads are built in CI and published with immutable SHA tags. |
 | Remote Kubernetes | Hetzner + Talos + Terraform | Provisioned from `zeko-k8s` with `hcloud-k8s/terraform-hcloud-kubernetes`. |
