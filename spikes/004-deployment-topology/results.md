@@ -7,7 +7,7 @@
 
 ## Decision
 
-Use **Kubernetes from the beginning** for server-side explorer workloads. Provision Hetzner clusters with **Terraform + Talos** and deploy Kubernetes workloads from CI-built container images.
+Use **Kubernetes from the beginning** for server-side explorer workloads. Provision Hetzner clusters with **Terraform + Talos**, bootstrap **FluxCD + Flux Operator**, and let Flux reconcile remote Kubernetes workloads from Git-pinned image tags.
 
 Primary infrastructure module: [`hcloud-k8s/terraform-hcloud-kubernetes`](https://github.com/hcloud-k8s/terraform-hcloud-kubernetes).
 
@@ -15,18 +15,23 @@ Reason: it is the more complete module for this use case. It provisions a produc
 
 Alternative module: [`hcloud-talos/terraform-hcloud-talos`](https://github.com/hcloud-talos/terraform-hcloud-talos). Use it only if we decide to manage more Kubernetes add-ons ourselves.
 
-The explorer is a greenfield monorepo. It should own:
+Use a **service repo plus org-level Kubernetes repo boundary**:
 
-- Kubernetes manifests / Helm chart for the explorer workloads;
-- Terraform environment definitions for Hetzner clusters;
-- GitHub Actions workflows for tests, service images, Terraform, Kubernetes deploys, and Cloudflare deploys;
-- deployment values for each Zeko network.
+- `zeko-explorer` service repo for application code, local Kubernetes, reusable deployment contracts, CI image builds, and Cloudflare Worker/static asset code;
+- private `zeko-k8s` repo for Terraform environments, Flux cluster roots, platform add-ons, app environment values, Cloudflare private routing resources, and production promotion state across Zeko services.
+
+Reason: the explorer should be the first tenant of the org-level Kubernetes operating model, not an isolated deployment island. `zeko-k8s` gives the rest of the org a clear landing zone for future Kubernetes workloads without pre-allocating directories or ownership for services that are not part of this spike. Production infrastructure config is not a secret, but it is operationally sensitive; host topology, internal route names, tunnel routing, bucket names, NATS publish endpoints, DA/sequencer handoff config, and promotion state belong in the dedicated Kubernetes repo.
 
 Diagrams:
 
 - [development](./diagrams/development.html)
 - [single-host zeko-m-alphanet](./diagrams/single-host.html)
 - [multi-host zeko-m-devnet / zeko-m-mainnet](./diagrams/multi-host.html)
+
+Addendums:
+
+- [FluxCD deployment model](./addendums/gitops/flux.md)
+- [ArgoCD deployment model](./addendums/gitops/argocd.md), retained as an evaluated alternative
 
 ---
 
@@ -61,8 +66,8 @@ Local requirements:
 - Kubernetes enabled in Docker Desktop;
 - `kubectl`;
 - `helm`;
-- `pnpm`;
-- `wrangler`;
+- `moon`;
+- `proto`;
 - local image builds through Docker BuildKit;
 - optional `nats` and `surreal` CLIs for debugging.
 
@@ -92,14 +97,13 @@ Local workloads for `zeko-m-local`:
 Local commands should converge on:
 
 ```text
-pnpm install
-pnpm build:images:local
-pnpm k8s:local:up
-pnpm k8s:local:forward
-pnpm dev
+moon run infra:build-local-images
+moon run infra:k8s-local-up
+moon run infra:k8s-local-forward
+moon run infra:dev
 ```
 
-`pnpm k8s:local:forward` should establish explicit local bindings, for example:
+`moon run infra:k8s-local-forward` should establish explicit local bindings, for example:
 
 - `localhost:4101 -> service/explorer-api`;
 - `localhost:4102 -> service/bridge-api`;
@@ -135,8 +139,8 @@ Kubernetes workload images:
 
 Kubernetes Jobs and CronJobs:
 
-- schema migration Job: runs the monorepo DB migration entrypoint;
-- NATS stream setup Job: runs the monorepo deploy script that creates the PRD-defined streams and subjects idempotently;
+- schema migration Job: runs the service repo DB migration entrypoint;
+- NATS stream setup Job: runs the service repo deploy script that creates the PRD-defined streams and subjects idempotently;
 - R2 archival CronJob: runs the archival script for expired NATS history;
 - SurrealDB export CronJob: wraps `surreal export` and uploads the result to the network-specific R2 path.
 
@@ -163,14 +167,16 @@ GitHub Actions workflows:
 
 | Workflow | Trigger | Responsibility |
 |---|---|---|
-| `ci.yml` | PR | lint, typecheck, unit tests, build images without pushing |
-| `images.yml` | merge to main / tag | build Kubernetes workload images and push to Docker Hub or GCR |
-| `terraform-plan.yml` | PR touching `infra/terraform/**` | Terraform plan for affected environment |
-| `terraform-apply.yml` | manual approval / protected branch | Terraform apply through GitHub Actions |
-| `deploy.yml` | image release / manual | Helm/Kustomize deploy using pinned image tags |
-| `cloudflare.yml` | frontend/MCP changes | Wrangler deploy for frontend and MCP Worker |
+| `ci.yml` | service repo PR | lint, typecheck, unit tests, build images without pushing |
+| `images.yml` | service repo merge to main / tag | build Kubernetes workload images and push to Docker Hub or GCR |
+| `terraform-plan.yml` | `zeko-k8s` PR touching `infra/terraform/**` | Terraform plan for affected environment |
+| `terraform-apply.yml` | `zeko-k8s` manual approval / protected branch | Terraform apply through GitHub Actions |
+| `promote.yml` | image release / manual | open or update `zeko-k8s` promotion PRs with pinned image tags |
+| `cloudflare.yml` | service repo frontend/gateway/MCP changes | Wrangler deploy for frontend, Hive Gateway Worker, and MCP Worker |
 
-GitHub Actions secrets are sufficient for bootstrap. For Kubernetes runtime secrets use Infisical + External Secrets Operator when available.
+GitHub Actions secrets are sufficient for bootstrap. Keep infrastructure provider credentials in `zeko-k8s` environments. Service repos should only have registry and Cloudflare Worker deploy credentials needed for image and Worker/static asset publishing. For Kubernetes runtime secrets use Infisical + External Secrets Operator when available.
+
+Remote Kubernetes deployment is Flux-driven. GitHub Actions builds images in service repos. Promotion is a `zeko-k8s` workflow that opens or updates PRs with Git-pinned image tags; Flux reconciles those changes into the cluster after merge. GitHub Actions should not run `helm upgrade` for remote environments.
 
 ---
 
@@ -198,8 +204,8 @@ Private Cloudflare Tunnel routing:
 
 | Component | Runs where | Deployment path | Public route |
 |---|---|---|---|
-| Explorer API | Kubernetes private Service | Helm/Kustomize from GitHub Actions | none |
-| Bridge API | Kubernetes private Service | Helm/Kustomize from GitHub Actions | none |
+| Explorer API | Kubernetes private Service | FluxCD from Git-pinned image tags | none |
+| Bridge API | Kubernetes private Service | FluxCD from Git-pinned image tags | none |
 | Hive Gateway | Cloudflare Worker | Wrangler from GitHub Actions | `api.<network>.explorer.zeko.io` |
 | Frontend | Cloudflare Workers Static Assets | Wrangler from GitHub Actions | `<network>.explorer.zeko.io` |
 | MCP Server | Cloudflare Worker | Wrangler from GitHub Actions | `mcp.<network>.explorer.zeko.io` |
@@ -267,32 +273,128 @@ Keep `hcloud-talos/terraform-hcloud-talos` as a fallback if the team wants a sma
 
 ### Repository Layout
 
-This is a monorepo, so keep app, deployment, and infra definitions together:
+Use service repos for reusable application deployment contracts and `zeko-k8s` for environment instantiation.
+
+`zeko-explorer` service repo:
 
 ```text
+apps/
+  explorer-api/
+  bridge-api/
+  frontend/
+  hive-gateway/
+  mcp-worker/
 infra/
-  terraform/
-    modules/
-      hcloud-explorer-cluster/
-    envs/
-      zeko-m-alphanet/
-      zeko-m-local/
-      zeko-m-devnet/
-      zeko-m-mainnet/
-      zeko-e-mainnet/
   k8s/
     chart/
       zeko-explorer/
     values/
       local/
+  local/
+    docker-desktop/
+      kustomization.yaml
+      values.yaml
+  scripts/
+    nats-stream-setup/
+    surrealdb-migrate/
+.github/
+  workflows/
+    ci.yml
+    images.yml
+    cloudflare.yml
+```
+
+Private `zeko-k8s` repo:
+
+```text
+infra/
+  terraform/
+    modules/
+      hcloud-zeko-cluster/
+    envs/
       zeko-m-alphanet/
-      zeko-m-local/
       zeko-m-devnet/
       zeko-m-mainnet/
       zeko-e-mainnet/
+  gitops/
+    flux/
+      clusters/
+        zeko-m-alphanet/
+          flux-system/
+          flux-instance.yaml
+          sources.yaml
+          kustomizations.yaml
+          values.yaml
+        zeko-m-devnet/
+          flux-system/
+          flux-instance.yaml
+          sources.yaml
+          kustomizations.yaml
+          values.yaml
+        zeko-m-mainnet/
+          flux-system/
+          flux-instance.yaml
+          sources.yaml
+          kustomizations.yaml
+          values.yaml
+      apps/
+        platform/
+          external-secrets/
+          cloudflare-tunnel/
+        explorer/
+          nats/
+          surrealdb/
+          workloads/
+          values/
+            zeko-m-alphanet.yaml
+            zeko-m-devnet.yaml
+            zeko-m-mainnet.yaml
+.github/
+  workflows/
+    terraform-plan.yml
+    terraform-apply.yml
+    promote.yml
 ```
 
-Terraform runs from GitHub Actions. State should live in an S3-compatible backend, preferably Cloudflare R2 for now, with GitHub Actions environment concurrency preventing simultaneous applies per environment.
+`zeko-k8s` references service artifacts by immutable image SHA and chart version/path. It owns environment-specific values, Cloudflare Tunnel routes, NATS publish endpoints, DA endpoint configuration, ExternalSecret references, Terraform backend config, and promotion state.
+
+Terraform runs from `zeko-k8s` GitHub Actions. State should live in an S3-compatible backend, preferably Cloudflare R2 for now, with GitHub Actions environment concurrency preventing simultaneous applies per environment.
+
+Flux owns remote Kubernetes reconciliation from `zeko-k8s`. Local development can still use the service repo chart directly through local `moon` tasks; remote environments should not be deployed by ad hoc Helm commands.
+
+### Org Adoption Boundary
+
+`zeko-k8s` should be structured so other Kubernetes workloads can be added later, but this spike should only create concrete app directories for explorer. Shared platform resources are limited to cluster-level pieces such as External Secrets and Cloudflare Tunnel controllers. Explorer-owned dependencies, including NATS and SurrealDB, live under `infra/gitops/flux/apps/explorer`.
+
+### FluxCD Ownership
+
+Use FluxCD + Flux Operator for `zeko-m-alphanet`, `zeko-m-devnet`, and `zeko-m-mainnet`.
+
+Terraform owns:
+
+- Hetzner servers, networks, firewalls, placement groups, and volumes;
+- Talos machine configuration and Kubernetes bootstrap;
+- CNI/CCM/CSI and Longhorn when installed by the Talos module;
+- Flux Operator bootstrap and the initial Flux sync target.
+
+Flux owns:
+
+- explorer-owned NATS;
+- explorer-owned SurrealDB;
+- ExternalSecret resources;
+- Cloudflare Tunnel controller and private service routes;
+- Zeko Indexer, L1 Watcher, DA Monitor, Backfill Service;
+- Explorer API and Bridge API;
+- setup Jobs, CronJobs, and smoke-test Jobs.
+
+Flux Operator should run with:
+
+- Flux Web UI enabled for remote environments;
+- Flux MCP Server installed in read-only mode first;
+- read-only Git deploy key initially;
+- Git write access enabled only if image automation is explicitly adopted later.
+
+The initial promotion model should be GitHub Actions promotion PRs, not automatic image writes from the cluster. Flux image automation can be revisited for `zeko-m-alphanet` after the basic GitOps path works.
 
 ---
 
@@ -544,9 +646,9 @@ Kubernetes secrets managed through ESO:
 
 ---
 
-## Terraform And Deployment Flow
+## Terraform, Flux, And Deployment Flow
 
-All Terraform runs through GitHub Actions.
+All Terraform runs through `zeko-k8s` GitHub Actions.
 
 State:
 
@@ -556,29 +658,34 @@ State:
 
 Flow:
 
-1. PR changes Terraform or values.
-2. `terraform-plan.yml` posts plan output.
+1. `zeko-k8s` PR changes Terraform, Flux definitions, or environment values.
+2. `terraform-plan.yml` posts plan output for infrastructure changes.
 3. Merge to protected branch.
-4. Manual `terraform-apply.yml` approval per environment.
-5. `images.yml` publishes immutable images.
-6. `deploy.yml` deploys Helm chart with pinned image tags.
-7. `cloudflare.yml` deploys frontend and MCP Worker.
-8. smoke-test Job verifies API, bridge, NATS, SurrealDB, Hive Gateway, and Cloudflare Tunnel routes.
+4. Manual `terraform-apply.yml` approval per environment creates or updates the Hetzner/Talos cluster and bootstraps Flux Operator plus the initial Flux sync target when needed.
+5. Service repo `images.yml` publishes immutable Kubernetes workload images.
+6. `zeko-k8s` `promote.yml` opens or updates a promotion PR that pins image SHAs under `infra/gitops/flux/clusters/<env>` or app values.
+7. Merge the promotion PR.
+8. Flux reconciles Kustomizations and HelmReleases in dependency order.
+9. Flux applies setup Jobs and CronJobs, rolls workloads, and updates private Cloudflare Tunnel resources.
+10. A Flux-managed smoke-test Job verifies API, bridge, NATS, SurrealDB, Hive Gateway, and Cloudflare Tunnel routes.
+11. `cloudflare.yml` deploys the frontend, Hive Gateway Worker, and MCP Worker with Wrangler when those artifacts change.
+
+Flux is the remote Kubernetes deployer and reads desired state from `zeko-k8s`. GitHub Actions must not deploy remote Kubernetes workloads directly or run `helm upgrade` against remote clusters. Direct Helm remains useful only for local development and debugging through `moon` tasks.
 
 ---
 
 ## Final Recommendation
 
-Use Terraform + Talos on Hetzner through `hcloud-k8s/terraform-hcloud-kubernetes`.
+Use `hcloud-k8s/terraform-hcloud-kubernetes` for Hetzner/Talos cluster provisioning, **FluxCD + Flux Operator** for remote Kubernetes reconciliation, and a private org-level `zeko-k8s` repo for Kubernetes environment state.
 
 Environment plan:
 
-- **`zeko-m-local`:** Docker Desktop Kubernetes with the lean local namespace stack.
-- **`zeko-m-alphanet`:** one Talos node, Hetzner volumes, Cloudflare Tunnel private API routes, Hive Gateway Worker, and R2 backups.
-- **`zeko-m-devnet`:** multi-host Talos cluster that mirrors the `zeko-m-mainnet` role split with smaller nodes.
-- **`zeko-m-mainnet`:** multi-host Talos cluster; separate cluster for `zeko-e-mainnet` later.
+- **`zeko-m-local`:** Docker Desktop Kubernetes with the lean local namespace stack. No Flux required locally.
+- **`zeko-m-alphanet`:** one Talos node, Hetzner volumes, Cloudflare Tunnel private API routes, Flux Operator Web UI/MCP in read-only mode, Hive Gateway Worker, and R2 backups.
+- **`zeko-m-devnet`:** multi-host Talos cluster that mirrors the `zeko-m-mainnet` role split with smaller nodes. Deploy through Flux from promotion PRs.
+- **`zeko-m-mainnet`:** multi-host Talos cluster. Deploy through Flux from reviewed promotion PRs and manual environment approvals. Create a separate cluster for `zeko-e-mainnet` later.
 
-This gives the explorer a real Kubernetes operating model from day one and creates a reusable path for the rest of the org.
+This gives the explorer a real Kubernetes and GitOps operating model from day one while keeping Terraform focused on infrastructure and Cloudflare focused on the public edge.
 
 ---
 
@@ -605,3 +712,13 @@ This gives the explorer a real Kubernetes operating model from day one and creat
 - [`hcloud-k8s/terraform-hcloud-kubernetes`](https://github.com/hcloud-k8s/terraform-hcloud-kubernetes)
 - [`hcloud-talos/terraform-hcloud-talos`](https://github.com/hcloud-talos/terraform-hcloud-talos)
 - [`pl4nty/cloudflare-kubernetes-gateway`](https://github.com/pl4nty/cloudflare-kubernetes-gateway)
+- [ArgoCD declarative setup](https://argo-cd.readthedocs.io/en/latest/operator-manual/declarative-setup/)
+- [ArgoCD cluster bootstrapping](https://argo-cd.readthedocs.io/en/latest/operator-manual/cluster-bootstrapping/)
+- [ArgoCD sync phases and waves](https://argo-cd.readthedocs.io/en/latest/user-guide/sync-waves/)
+- [Flux bootstrap for GitHub](https://fluxcd.io/flux/installation/bootstrap/github/)
+- [Announcing Flux 2.8 GA](https://fluxcd.io/blog/2026/02/flux-v2.8.0/)
+- [Flux GitOps Toolkit components](https://fluxcd.io/flux/components/)
+- [Flux Kustomization dependencies and health checks](https://fluxcd.io/flux/components/kustomize/kustomizations/)
+- [Flux ImageUpdateAutomation](https://fluxcd.io/flux/components/image/imageupdateautomations/)
+- [Flux Operator Web UI standalone install](https://fluxoperator.dev/docs/web-ui/standalone-install/)
+- [Flux Operator MCP Server](https://fluxoperator.dev/mcp-server/)
