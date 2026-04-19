@@ -1,15 +1,16 @@
 Feature: GraphQL contractSchema query and decoder placement
 
-  The explorer exposes contract schemas through a single GraphQL query,
-  `contractSchema(network, address)`, which resolves from Cloudflare KV with a
-  5-minute edge cache. On-chain data (account, events, actions) continues to
-  return raw field strings only. Decoding — running the shared interpreter in
-  @zeko/contract-schema — happens in the UI by default, and in the API resolver
-  for specific hot feeds where per-request decoding latency beats the
-  round-trip of a second query. The indexer never reads schemas.
+  The standalone Contract Registry API exposes contract schemas through a
+  single GraphQL query, `contractSchema(network, address)`, which resolves
+  from Cloudflare KV with a 5-minute edge cache. The Explorer API continues
+  to return raw field strings only for accounts, events, and actions. The
+  federated Hive gateway (designed in spike 4) joins the two so a UI page
+  can fetch raw fields and labels in one round trip. Decoding — running the
+  shared interpreter in @zeko/contract-schema — happens in the UI by default.
+  The indexer never reads schemas.
 
   Background:
-    Given a Cloudflare KV namespace is configured on explorer-api
+    Given a Cloudflare KV namespace is configured on the contract-registry-api
     And the registry has published the LuminaPool submission
     And the corresponding KV key is "zeko-m-devnet:B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV"
 
@@ -103,20 +104,6 @@ Feature: GraphQL contractSchema query and decoder placement
     And the raw fields are ["0", "12345", "1"]
     When the UI calls decodeEventOrAction
     Then the result's "user" is { x: "12345", isOdd: true }
-
-  # API-side decoding (hot feeds)
-
-  Scenario: Multi-contract recent-events feed decodes server-side
-    Given the "recent events" page queries events across 50 distinct contracts
-    When the resolver assembles the page
-    Then it fetches each contract's schema once via the KV edge cache
-    And it calls decodeEventOrAction in the resolver for each event
-    And the GraphQL response carries a "labeled" field per event
-
-  Scenario: API-side decoder returns null on unknown discriminator
-    Given the API resolver runs decodeEventOrAction on an event with an unrecognized discriminator
-    Then the "labeled" field is null
-    And the "fields" field still contains the raw array
 
   # UI fallback behavior
 

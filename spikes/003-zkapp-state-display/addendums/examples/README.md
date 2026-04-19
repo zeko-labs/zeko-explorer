@@ -6,7 +6,7 @@ End-to-end reference of the contract submission pipeline:
 2. **CI** runs `bun run verify <dir>` on every changed contract directory: JSON Schema → semantic checks → fixtures → optional owner signature.
 3. **Maintainer** reviews and merges.
 4. **Maintainer** manually triggers the `publish` workflow (`workflow_dispatch`) which re-verifies and runs `bun run upload put <dir>`. The upload script writes one KV entry per network declared in `meta.networks`.
-5. **Explorer API** exposes a GraphQL `contractSchema(network, address)` query that reads the entry from Cloudflare KV. Decoding runs either at the API (for hot feeds) or in the UI via the shared interpreter.
+5. **Contract Registry API** (a standalone GraphQL service in `zeko-explorer`, sibling of the Explorer and Bridge APIs) exposes a `contractSchema(network, address)` query that reads the entry from Cloudflare KV. The federated Hive gateway (spike 4) composes it with the Explorer and Bridge APIs. Decoding runs in the UI via the shared interpreter.
 
 The indexer is never involved. It stores raw fields only.
 

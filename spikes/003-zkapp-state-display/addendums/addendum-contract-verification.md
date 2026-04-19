@@ -28,17 +28,19 @@ This document specifies how a zkApp on Mina/Zeko is described, submitted, verifi
                                     └──────────────┬────────────┘
                                                    │ GraphQL resolver
                                                    ▼
-   ┌──────────────┐    GraphQL    ┌───────────────────────────┐
-   │ zkApp data   │──────────────▶│ explorer-api              │
-   │ (raw fields  │               │   account / event / action│
-   │  from indexer)│               │   contractSchema(...)     │
-   └──────┬───────┘               └───────────────┬───────────┘
+   ┌──────────────┐               ┌───────────────────────────┐
+   │ zkApp data   │               │ contract-registry-api     │
+   │ (raw fields  │               │   contractSchema(...)     │
+   │  from indexer)│               └───────────────┬───────────┘
+   └──────┬───────┘                               │
           │                                       │
-          │          ┌─── labeled in UI  ◀────────┘ (schema only)
-          │          │
-          │          │  or labeled in API (hot feeds) via same
-          │          │  @zeko/contract-schema interpreter
-          ▼          ▼
+          ▼                                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ Federated Hive gateway (see spike 4)                       │
+   │   Explorer API + Bridge API + Contract Registry API        │
+   └──────────────────────────┬─────────────────────────────────┘
+                              │ single GraphQL endpoint
+                              ▼
    ┌────────────────────────────────────────────────────────────┐
    │ zeko-explorer UI — raw + labeled side by side              │
    └────────────────────────────────────────────────────────────┘
@@ -175,7 +177,7 @@ The Ajv-compiled validator lives in [`examples/src/validate.ts`](./examples/src/
 | `source-linked` | Stage 5 passes (no owner block) | blue, "Source-linked to `<repo>@<commit>`" |
 | `community-submitted` | Stages 1–3 pass with neither owner nor source | grey, "Community-submitted, fixtures verified" |
 
-Grades are mutually exclusive and ordered. Multiple submissions for the same `(network, address)` are not allowed; resubmission requires a PR that updates the existing file. The grade is recomputed on the fly by the explorer-api resolver so it always matches the current submission.
+Grades are mutually exclusive and ordered. Multiple submissions for the same `(network, address)` are not allowed; resubmission requires a PR that updates the existing file. The grade is recomputed on the fly by the contract-registry-api resolver so it always matches the current submission.
 
 ## 5. Owner signature scheme
 
@@ -201,7 +203,7 @@ The upload script ([`examples/src/upload.ts`](./examples/src/upload.ts)) re-vali
 
 ## 7. Runtime read path (GraphQL)
 
-The explorer-api exposes one new query and one new type. Everything else — accounts, events, actions — is already available through GraphQL and returns raw fields only.
+A standalone **Contract Registry API** (sibling of the Explorer and Bridge APIs in this monorepo) exposes one query and one type. Everything else — accounts, events, actions — stays on the Explorer API and returns raw fields only. The federated Hive gateway (spike 4) joins the two so a UI page can fetch raw fields and labels in a single round trip.
 
 ```graphql
 scalar JSON
@@ -241,14 +243,7 @@ The resolver reads `${network}:${address}` from KV and returns `null` on miss. T
 
 ### 7.1 Where decoding runs
 
-Decoding is a pure function of `(raw_fields, schema)` and the same `@zeko/contract-schema` module works in both Node and the browser. The runtime picks **per query** which side to run it on:
-
-| Where | Use when | How |
-| --- | --- | --- |
-| **UI-side** (default) | Single account view, a handful of events/actions, any surface where the user will sit on the schema for more than one rendering. The schema arrives once, is cached, and decoding costs nothing measurable. | UI runs `contractSchema` and the usual account query in parallel; the shared interpreter decodes in the browser. |
-| **API-side** | Hot feeds (global event stream, a busy DEX's recent swaps) where the schema is the same for every row and sending raw fields the client will discard is wasteful. Labeled responses are also easier to cache at the edge. | Resolver on `ZkappEvent`/`ZkappAction` loads the schema for the emitting account and runs the interpreter server-side, returning a `labeled: JSON` field alongside the raw `fields`. |
-
-Both paths are supported; which one a given screen uses is a performance choice, not an architectural one. The indexer stays dumb either way.
+Decoding is a pure function of `(raw_fields, schema)`. It runs in the UI: the federated Hive gateway (spike 4) joins a single page query into Explorer-API raw fields and Contract-Registry-API schema, and the shared `@zeko/contract-schema` module decodes in the browser. Server-side decoding (e.g. as a gateway custom resolver, useful for hot multi-contract feeds) is a future option scoped to spike 4 — not in scope here. The indexer stays dumb either way.
 
 ## 8. Failure modes (verbatim)
 
@@ -273,7 +268,7 @@ FAIL — 1 error(s)
 1. Ship `contract.v2.schema.json` with new or changed fields.
 2. The verify CLI dispatches on `submission.version`, loads the matching schema, and runs the matching interpreter path.
 3. Existing v1 submissions keep validating against v1; no migration is forced.
-4. The explorer-api and UI understand both versions as long as the interpreter supports them.
+4. The contract-registry-api and UI understand both versions as long as the interpreter supports them.
 
 This is cheap to add later but expensive to retrofit if omitted, so the field is required from day one.
 
