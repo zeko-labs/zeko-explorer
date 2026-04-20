@@ -1,0 +1,42 @@
+{
+  "$schema": "https://zeko.io/schema/v1/contract.json",
+  "version": 1,
+  "meta": {
+    "address": "B62qpEH1n8AKVZv8JecdrZXbL2i3LzYEbXxc8hcnPyTCHBjfqkj38gi",
+    "networks": [
+      "zeko-m-devnet"
+    ],
+    "name": "OwnedCounter",
+    "description": "Single-slot counter held by its deployer."
+  },
+  "state": {
+    "slots": [
+      {
+        "at": 0,
+        "name": "count",
+        "type": "UInt32"
+      }
+    ]
+  },
+  "events": {
+    "fields": [
+      {
+        "at": 0,
+        "name": "previous",
+        "type": "UInt32"
+      },
+      {
+        "at": 1,
+        "name": "next",
+        "type": "UInt32"
+      }
+    ]
+  },
+  "owner": {
+    "address": "B62qpEH1n8AKVZv8JecdrZXbL2i3LzYEbXxc8hcnPyTCHBjfqkj38gi",
+    "signature": {
+      "r": "4311982814234079223829123575906556451550869989531468784605829844251220605330",
+      "s": "7601924753014968342899043194435865490482299402391328875465669231491275050332"
+    }
+  }
+}
