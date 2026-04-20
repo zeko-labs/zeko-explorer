@@ -1,7 +1,7 @@
 # PRD: Zeko Block Explorer & Indexing Substrate
 
 **Author:** Zeko Labs
-**Status:** Draft v9 (post spikes 001, 002, 004)
+**Status:** Draft v9 (post spikes 001, 002, 003, 004)
 **Last Updated:** April 19, 2026
 
 ---
@@ -286,7 +286,7 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 **Language: TypeScript.** The indexer is I/O-bound (read from NATS, transform, write to SurrealDB). TypeScript enables shared domain types across the indexer, APIs, and the MCP server, reducing surface area for bugs. Rust remains an option only if profiling reveals a concrete performance bottleneck.
 
 **Consumes:**
-- `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`.
+- `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`. zkApp records store raw fields only — labels are served by a separate Contract Registry API (§5.2.10). Each zkApp record is tagged with `target_ledger_hash` so L2 rollback can drop the affected rows without reindexing.
 - `zeko.l2.finality` → update batch proved/committed status.
 - `zeko.l1.settlements` → create/update `batch`, link to transactions.
 - `zeko.l1.rollbacks` → revert batch settlement status (Section 7.5).
@@ -320,10 +320,10 @@ Schema migrations managed via [surrealdb-migrations](https://github.com/Odonno/s
 
 *Explorer tables:*
 - `transaction` — hash, sequence_number, type, status, sender/receiver account links, amount, fee, nonce, memo, timestamp, state_hash, decoded account_updates, batch link, rollback_reason.
-- `account` — public_key (indexed, full-text searchable), balance, nonce, delegate link, token_id, zkapp_state.
-- `account_activity` — per-account per-transaction changes, including rollback entries.
+- `account` — public_key (indexed, full-text searchable), balance, nonce, delegate link, token_id, `zkapp_state` (raw 8-field array), `action_state` (raw 5-field vector), `verification_key_hash`, `zkapp_uri`.
+- `account_activity` — per-account per-transaction changes, including rollback entries. zkApp state snapshots live here so revert-by-`target_ledger_hash` can restore the prior state without replaying NATS.
 - `batch` — transaction range, proof/settlement status, L1 settlement details, DA attestation status, timestamps.
-- `zkapp_event` / `zkapp_action` — emitting account and transaction links, decoded fields, sequence/state hash.
+- `zkapp_event` / `zkapp_action` — emitting account and transaction links, **raw field arrays only** (no `decoded_fields`), sequence number, `target_ledger_hash` tag. Actions additionally store `before_action_state` / `action_state` (rolling Poseidon hash chain) with a unique index on `action_state`.
 - `sync_status` — per-source health: last processed item, timestamp, lag, error state.
 - `network_stats` — aggregates.
 
@@ -346,7 +346,7 @@ Code-first GraphQL. SSE subscriptions (fan-out from SurrealDB live queries). Run
 
 Cursor-based pagination (not necessarily full Relay spec — see `spikes/005-relay-pagination.md`).
 
-Queries: transactions, accounts, batches, search, system status, zkApp events/actions. Can read bridge tables for display on transaction/account detail pages.
+Queries: transactions, accounts, batches, search, system status, zkApp events/actions. Can read bridge tables for display on transaction/account detail pages. `Account`, `ZkappEvent`, and `ZkappAction` return raw field arrays only — labels live behind a separate Contract Registry API (§5.2.10) and are joined client-side (or by the federated gateway — see spike 4).
 
 Every response includes `_meta` with `dataFreshness`, `syncLag`, `status`.
 
@@ -369,14 +369,26 @@ Nuxt 3 SPA, no SSR. Deployed as static assets on Cloudflare Workers. Ships an HT
 
 **Design work is delegated.** Deliverables needed from a designer: component library, page layouts, responsive breakpoints, status indicator treatment, loading states.
 
-#### 5.2.10 Unified GraphQL Gateway (Cloudflare Worker)
+#### 5.2.10 zkApp State, Events, and Actions Display
 
-The public API is exposed through a unified GraphQL gateway, not by exposing Explorer API or Bridge API directly.
+On-chain zkApp data is opaque: state is a vector of 8 `Field` values, and each event or action is an unlabeled `Field` array whose layout is known only to the deploying contract. The explorer must show this data usefully without forcing a compiler-in-the-browser or coupling the indexer to contract internals.
+
+**Approach:** the indexer stores raw fields only. Human-readable labels come from an **opt-in, community-maintained contract schema** — a small JSON document per contract that names each state slot and describes each event/action variant. When a schema is available for `(network, address)`, the UI renders labels alongside the raw fields; when it isn't, the UI renders raw fields with a call-to-action linking to the submission flow. No indexer change, no node upgrade, no re-index when a schema is added or edited.
+
+The schema source of truth is a separate public repository (`zeko-contract-registry`) where submissions are reviewed via PR and published manually after merge. The published schemas are served by a small standalone **Contract Registry API** that lives in this monorepo (a sibling of the Explorer and Bridge APIs) and reads from Cloudflare KV. It exposes a single `contractSchema(network, address)` query and is composed with the Explorer and Bridge APIs by the Hive gateway (see Section 5.2.11) so a UI page can fetch raw fields and labels in one round trip. Submissions may be signed by the contract's deploy key; the API exposes that as a verification grade (`owner-signed` / `source-linked` / `community-submitted`) the UI can badge.
+
+See `spikes/003-zkapp-state-display/` for the full design: schema format, submission / verification / publish pipeline, interpreter semantics, and a runnable reference implementation under `addendums/examples/`.
+
+#### 5.2.11 Unified GraphQL Gateway (Cloudflare Worker)
+
+The public API is exposed through a unified GraphQL gateway, not by exposing Explorer API, Bridge API, or Contract Registry API directly.
 
 - Explorer API and Bridge API run as private Kubernetes Services.
-- GraphQL Mesh builds the composed graph from the Explorer and Bridge schemas.
+- Contract Registry API runs as a Cloudflare Worker backed by Cloudflare KV.
+- GraphQL Mesh builds the composed graph from the service schemas.
 - GraphQL Hive Gateway runs as a Cloudflare Worker and serves the public API route.
-- Cloudflare Tunnel routes gateway-to-service traffic to private Kubernetes services.
+- Cloudflare Tunnel routes gateway-to-service traffic to private Kubernetes services for Explorer and Bridge.
+- The gateway reaches Contract Registry through an internal Worker route or service binding.
 - Cloudflare owns public TLS, WAF/rate limits, CORS, bot protection, request size limits, and auth policy once at the gateway layer.
 - API containers still enforce internal service auth and validation.
 
@@ -433,7 +445,7 @@ A **Bridge GraphQL API** (TypeScript, Pothos) is a separate private Kubernetes S
 | Multiple archive calls per wallet on page load | Single paginated API call |
 | 20s polling (`POLL_INTERVAL` in `bridgeOperation.ts`) | SSE subscription via `bridgeOperationUpdated` |
 
-The Bridge API is exposed through the unified gateway described in Section 5.2.10.
+The Bridge API is exposed through the unified gateway described in Section 5.2.11.
 
 **Key improvement:** Per-user bridge operation history is indexed by public key, replacing the current full archive scan per wallet.
 
@@ -466,6 +478,8 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
 │   │       └── repositories/          # SurrealDB adapters
 │   ├── explorer-api/                  # TypeScript, Pothos
 │   ├── bridge-api/                    # TypeScript, Pothos
+│   ├── contract-registry-api/         # TypeScript, Pothos — serves contractSchema from CF KV
+│   ├── contract-schema/               # Shared decoder + JSON Schema types (browser + server)
 │   ├── mcp-server/                    # TypeScript, CF Worker
 │   └── frontend/                      # Nuxt 3
 │
@@ -598,8 +612,8 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 
 1. **Sequencer Connector** (`spikes/001-sequencer-connector/`) — **Complete.** Resolved: sequencer publishes directly to NATS (no separate connector), consumer-side rollback detection, backfill service design, bootstrap strategy. See `results.md` for full findings.
 2. **Bridge Operation Correlation** (`spikes/002-bridge-correlation/`) — **Complete.** Resolved: `aux` confirmed as correlation key (Poseidon hash, NOT unique — disambiguated via FIFO `aux_sequence`), user PK extraction via `zeko.l1.bridge-events`, cancel deposit produces no outer action (detected via L1 Watcher), full deposit/withdrawal lifecycle state machines, SurrealDB schema with graph edges, Bridge GraphQL API design. See `results.md` for full findings.
-3. **zkApp State Display** (`spikes/003-zkapp-state-display.md`) — investigate how to display zkApp state, events, and actions.
-4. **Deployment Topology** (`spikes/004-deployment-topology/`) — **Complete.** Resolved: Docker Desktop Kubernetes locally, Hetzner/Talos Kubernetes remotely, FluxCD + Flux Operator reconciliation from `zeko-k8s`, Cloudflare-hosted gateway, private API routing through Cloudflare Tunnel, and per-network persistence/host topology. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for full findings.
+3. **zkApp State Display** (`spikes/003-zkapp-state-display/`) — **Complete.** Resolved: the indexer stores raw state / event / action fields only; human-readable labels come from an opt-in community schema registry served via a `contractSchema(network, address)` GraphQL query; decoding runs client-side by default. See §5.2.10 for the display approach and the spike directory for the schema format, submission pipeline, and reference implementation.
+4. **Deployment Topology + Unified Gateway** (`spikes/004-deployment-topology/`) — **Complete.** Resolved: Docker Desktop Kubernetes locally, Hetzner/Talos Kubernetes remotely, FluxCD + Flux Operator reconciliation from `zeko-k8s`, Cloudflare-hosted Hive gateway over private Explorer, Bridge, and Contract Registry APIs, private API routing through Cloudflare Tunnel, and per-network persistence/host topology. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for full findings.
 5. **Pagination Schema** (`spikes/005-relay-pagination.md`) — cursor-based pagination schema, Relay spec tradeoffs.
 6. **L1 Watcher** (`spikes/006-l1-watcher/`) — settlement detection, L1 fork/rollback handling, outer actions ingestion, bridge events, abstract L1 interface, NATS event schemas for all `zeko.l1.*` subjects.
 7. **DA Monitor** (`spikes/007-da-monitor/`) — DA attestation model, API analysis (Ethermint/Celestia), NATS event schema for `zeko.da.attestations`, migration considerations.
@@ -616,9 +630,10 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - NATS JetStream: all streams configured, rolling retention (90d default) + R2 archival.
 - Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Consumer-side L2 rollback detection via hash chain continuity. Backfill integration for gap filling. L1 rollback handling.
 - SurrealDB: schema + migrations via surrealdb-migrations, backup cron.
-- Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions. SSE subscriptions.
+- Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only). SSE subscriptions.
+- Contract Registry API (Pothos, standalone): single `contractSchema(network, address)` query, reads from Cloudflare KV. Backed by the `zeko-contract-registry` public submission repo. See §5.2.10.
 - Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(aux, auxSequence)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
-- Code-Mode MCP Server: search() + execute() with generated SDK from both API schemas.
+- Code-Mode MCP Server: search() + execute() with generated SDK from the federated gateway's schema.
 - Per-concern packages: `nats-protocol`, `domain`, `db`.
 - Docker Desktop Kubernetes + wrangler for local dev, OCI image builds for Kubernetes workloads, CF Worker deployment for frontend/gateway/MCP, and private API routing through Cloudflare Tunnel.
 
@@ -677,12 +692,12 @@ Feature: Bridge Operation Indexing
 **Goal:** The web UI for the explorer. Consumes the GraphQL API built in Milestone 1.
 
 **Components delivered:**
-- Frontend (Nuxt 3 SPA, CF Workers Static Assets): home, transaction detail, account detail, batch pages, bridge operations page, search, system status, network switcher.
+- Frontend (Nuxt 3 SPA, CF Workers Static Assets): home, transaction detail, account detail, contract detail, batch pages, bridge operations page, search, system status, network switcher.
 - Design pass deliverables (delegated to designer).
 
 **Features:**
 
-*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (see spike results), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
+*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (raw fields, labeled when a schema is published for the contract — see §5.2.10), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Contract detail:* Dedicated page for zkApp accounts with State / Events / Actions / Deployments tabs. When a schema is available, fields render with labels and a verification-grade badge; otherwise the page falls back to raw fields with a CTA linking to the submission flow. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
 
 **Future milestone:** Natural language queries in the search bar.
 
@@ -772,7 +787,7 @@ Feature: Public API
 
 ## 10. Deployment and Infrastructure
 
-This section summarizes the accepted deployment model. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for the full topology, host mapping, persistence plan, Cloudflare routing, Terraform/Flux flow, and operational tradeoffs. See the [FluxCD addendum](./spikes/004-deployment-topology/addendums/gitops/flux.md) for the chosen GitOps model and the [ArgoCD addendum](./spikes/004-deployment-topology/addendums/gitops/argocd.md) for the evaluated alternative.
+This section summarizes the accepted deployment model. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for the full topology, host mapping, persistence plan, Cloudflare routing, Terraform/Flux flow, and operational tradeoffs. See the [FluxCD addendum](./spikes/004-deployment-topology/addendums/gitops/flux.md) for the chosen GitOps model and the [ArgoCD addendum](./spikes/004-deployment-topology/addendums/gitops/argocd.md) for the evaluated alternative. See [Spike 003 results](./spikes/003-zkapp-state-display/results.md) and its [contract verification addendum](./spikes/003-zkapp-state-display/addendums/addendum-contract-verification.md) for the Contract Registry API, schema publication, and Cloudflare KV details.
 
 ### 10.1 Local Development
 
@@ -785,7 +800,7 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 
 ### 10.2 Repository and GitOps Boundary
 
-- `zeko-explorer` is the service repo. It owns application code, reusable Kubernetes chart/templates, local Kubernetes setup, Dockerfiles, tests, image builds, and Cloudflare Worker/static asset code.
+- `zeko-explorer` is the service repo. It owns application code, reusable Kubernetes chart/templates, local Kubernetes setup, Dockerfiles, tests, image builds, Cloudflare Worker/static asset code, and the Contract Registry API Worker code.
 - `zeko-k8s` is the private org-level Kubernetes repo. It owns Terraform environments, Flux cluster roots, platform add-ons, explorer environment values, Cloudflare Tunnel private routes, ExternalSecret references, Terraform backend config, and promotion state.
 - This PRD only creates concrete app directories for explorer in `zeko-k8s`. Shared platform resources are limited to cluster-level pieces such as External Secrets and Cloudflare Tunnel controllers. Explorer-owned dependencies, including NATS and SurrealDB, live under `infra/gitops/flux/apps/explorer`.
 
@@ -810,8 +825,9 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 ### 10.5 Cloudflare Edge and Private API Routing
 
 - **Frontend:** Nuxt static assets on Cloudflare Workers Static Assets.
-- **Unified API Gateway:** GraphQL Hive Gateway runs as a Cloudflare Worker. GraphQL Mesh builds the composed graph from Explorer and Bridge schemas.
+- **Unified API Gateway:** GraphQL Hive Gateway runs as a Cloudflare Worker. GraphQL Mesh builds the composed graph from Explorer, Bridge, and Contract Registry schemas.
 - **Private API Routing:** Explorer API and Bridge API are private Kubernetes Services. Cloudflare Tunnel routes gateway-to-service traffic without exposing the APIs as public Hetzner endpoints.
+- **Contract Registry API:** Cloudflare Worker backed by Cloudflare KV. It is deployed with Wrangler, not Flux, and is reached by the gateway through an internal Worker route or service binding.
 - **Gateway Policy:** Cloudflare handles public TLS, WAF/rate limits, CORS, bot protection, request size limits, and auth policy once at the gateway layer.
 - **MCP Server:** Cloudflare Worker with code-mode sandbox. Calls the gateway route or uses explicit internal service credentials for elevated access.
 
@@ -832,10 +848,10 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 | Bridge operations | Separate services | Unified indexer, shared DB | 1 |
 | Per-user bridge history | Full archive scan per wallet | Indexed by public key | 1 |
 | Outer/inner actions | services/actions/* | NATS consumer, same queries | 1 |
-| zkApp events/actions | None | Per-account browsing | 1 (data), 2 (UI) |
+| zkApp events/actions | None | Per-account browsing; raw fields with opt-in labels from a community schema registry | 1 (data + registry API), 2 (UI) |
 | Public API | Archive-Node-API | GraphQL, documented | 4 |
 | Ethereum | N/A | L1 adapter | 4 |
-| Unified gateway | N/A | Cloudflare-hosted Hive Gateway over private Explorer + Bridge APIs | 1 |
+| Unified gateway | N/A | Cloudflare-hosted Hive Gateway over private Explorer + Bridge + Contract Registry APIs | 1 |
 
 ---
 
@@ -855,6 +871,9 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 | Explorer API | TypeScript, Pothos | Code-first, SSE, cursor-based pagination. |
 | Bridge API | TypeScript, Pothos | Separate endpoint, same tech. |
 | MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. Calls gateway or explicit internal service credentials. |
+| Contract Registry API | TypeScript, Pothos, Cloudflare Worker + KV | Standalone Worker; reads schemas from Cloudflare KV. See Section 5.2.10 and [Spike 003 results](./spikes/003-zkapp-state-display/results.md). |
+| Unified Gateway | Hive Gateway on Cloudflare Workers | Unifies Explorer + Bridge + Contract Registry APIs behind one endpoint. See Section 5.2.11 and [Spike 004 results](./spikes/004-deployment-topology/results.md). |
+| Contract Submission Repo | Separate public GitHub repo (`zeko-contract-registry`) | PR-based submission with schema validation, golden fixtures, and optional owner signatures. Manual publish to KV. |
 | Frontend | Nuxt 3 SPA, CF Workers Static Assets | No SSR needed. HTML skeleton + hydration. |
 | Search | Unified bar, auto-detect | NL queries in future milestone. |
 | Testing | Gherkin, Vitest | Living docs + unit/integration. Real NATS/SurrealDB for package tests; Docker Desktop Kubernetes only for local/manual smoke runs. |

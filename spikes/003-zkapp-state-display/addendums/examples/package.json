@@ -1,0 +1,20 @@
+{
+  "name": "zeko-contract-schema-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "bun run src/verify.ts",
+    "sign": "bun run src/sign.ts",
+    "upload": "bun run src/upload.ts",
+    "genkey": "bun run src/genkey.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "o1js": "^2.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/bun": "^1.1.14"
+  }
+}

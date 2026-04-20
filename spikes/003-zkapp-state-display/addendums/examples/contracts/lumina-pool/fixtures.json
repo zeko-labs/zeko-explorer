@@ -1,0 +1,25 @@
+{
+  "fixtures": [
+    { "target": "state",
+      "raw": ["1000000000", "4056640838", "9023684", "0", "0", "0", "0", "0"],
+      "expected": { "reserve0": "1000000000", "reserve1": "4056640838", "totalLiquidity": "9023684" }
+    },
+    { "target": "event",
+      "raw": ["0", "7994353054957568193498626604873088658666758397914343032172656113958151515402", "0",
+              "1000000000", "4056640838", "9023684"],
+      "expected": { "kind": "AddLiquidity", "sender": "B62qipa4xp6pQKqAm5qoviGoHyKaurHvLZiWf3djDNgrzdERm6AowSQ",
+                    "a0In": "1000000000", "a1In": "4056640838", "lpOut": "9023684" }
+    },
+    { "target": "event",
+      "raw": ["3", "7994353054957568193498626604873088658666758397914343032172656113958151515402", "0", "1000000000"],
+      "expected": { "kind": "ReceiveMina", "sender": "B62qipa4xp6pQKqAm5qoviGoHyKaurHvLZiWf3djDNgrzdERm6AowSQ",
+                    "amountIn": "1000000000" }
+    },
+    { "target": "event",
+      "raw": ["4", "7994353054957568193498626604873088658666758397914343032172656113958151515402", "0",
+              "1000000000", "240787553"],
+      "expected": { "kind": "Swap", "sender": "B62qipa4xp6pQKqAm5qoviGoHyKaurHvLZiWf3djDNgrzdERm6AowSQ",
+                    "amountIn": "1000000000", "amountOut": "240787553" }
+    }
+  ]
+}

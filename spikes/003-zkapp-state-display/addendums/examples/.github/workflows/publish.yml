@@ -1,0 +1,38 @@
+name: publish
+
+# Manually triggered by a maintainer after a PR has merged. Re-runs the
+# verifier against a single contract directory and then writes (or deletes)
+# the corresponding Cloudflare KV entries — one per network listed in
+# meta.networks. Never runs automatically on push or PR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "put or delete"
+        type: choice
+        options: [put, delete]
+        required: true
+      dir:
+        description: "Path to contract directory (e.g. contracts/lumina-pool)"
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: contract-registry-publish
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: re-verify before publishing
+        if: inputs.mode == 'put'
+        run: bun run verify "${{ inputs.dir }}"
+
+      - name: ${{ inputs.mode }} Cloudflare KV entries
+        run: bun run upload ${{ inputs.mode }} "${{ inputs.dir }}"
