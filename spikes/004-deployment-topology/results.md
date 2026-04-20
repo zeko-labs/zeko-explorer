@@ -120,7 +120,7 @@ Local resource target:
 - L1 Watcher, DA Monitor, and Backfill are opt-in profiles;
 - NATS and SurrealDB use small local memory limits and short local retention;
 - the frontend should normally run as a local Nuxt dev process, not inside Kubernetes;
-- CI should run Kubernetes integration tests with the same lean local profile.
+- CI should not require Docker Desktop Kubernetes or a full local cluster. Keep CI focused on unit tests, type checks, package-level integration tests with only the dependencies they need, image builds, and deploy-time smoke jobs against real environments.
 
 ---
 
