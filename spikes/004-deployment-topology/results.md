@@ -188,7 +188,8 @@ Use a unified gateway pattern:
 
 - Explorer API and Bridge API are private Kubernetes services.
 - Hive Gateway runs as a Cloudflare Worker.
-- The gateway Worker composes Explorer and Bridge schemas into one public graph.
+- Contract Registry API runs as a Cloudflare Worker backed by Cloudflare KV.
+- The gateway Worker composes Explorer, Bridge, and Contract Registry schemas into one public graph.
 - Build the composed graph with GraphQL Mesh.
 - Run the public graph with GraphQL Hive Gateway on Cloudflare Workers.
 - Apply public rate limiting, WAF, CORS, bot protection, request size limits, and auth policy once at Cloudflare/gateway level.
@@ -206,6 +207,7 @@ Private Cloudflare Tunnel routing:
 |---|---|---|---|
 | Explorer API | Kubernetes private Service | FluxCD from Git-pinned image tags | none |
 | Bridge API | Kubernetes private Service | FluxCD from Git-pinned image tags | none |
+| Contract Registry API | Cloudflare Worker + KV | Wrangler from GitHub Actions | none |
 | Hive Gateway | Cloudflare Worker | Wrangler from GitHub Actions | `api.<network>.explorer.zeko.io` |
 | Frontend | Cloudflare Workers Static Assets | Wrangler from GitHub Actions | `<network>.explorer.zeko.io` |
 | MCP Server | Cloudflare Worker | Wrangler from GitHub Actions | `mcp.<network>.explorer.zeko.io` |
@@ -216,10 +218,11 @@ Request flow:
 1. User or agent calls Cloudflare route.
 2. Cloudflare handles TLS, WAF/rate limits, CORS, bot protections, and caching where safe.
 3. `api.<network>.explorer.zeko.io` invokes the Hive Gateway Worker.
-4. Hive Gateway fetches the private Explorer and Bridge subgraphs through Cloudflare Tunnel routes.
-5. `cloudflared` inside the cluster forwards those requests to the private Kubernetes Services.
+4. Hive Gateway fetches the private Explorer and Bridge subgraphs through Cloudflare Tunnel routes and resolves `contractSchema` against the Contract Registry Worker through an internal Worker route or service binding when the query requires it.
+5. `cloudflared` inside the cluster forwards Explorer and Bridge requests to the private Kubernetes Services.
 6. Explorer API and Bridge API return subgraph responses to Hive Gateway.
-7. Hive Gateway returns the unified response to the client.
+7. Contract Registry API returns the schema response directly to Hive Gateway without traversing Cloudflare Tunnel.
+8. Hive Gateway returns the unified response to the client.
 
 Origin protection:
 
@@ -278,12 +281,24 @@ Use service repos for reusable application deployment contracts and `zeko-k8s` f
 `zeko-explorer` service repo:
 
 ```text
+packages/
+  nats-protocol/
+  domain/
+  db/
+  contract-schema/
 apps/
+  l1-watcher/
+  da-monitor/
+  zeko-indexer/
   explorer-api/
   bridge-api/
+  contract-registry-api/
   frontend/
   hive-gateway/
   mcp-worker/
+tests/
+  acceptance/
+  test-data/
 infra/
   k8s/
     chart/
@@ -695,7 +710,7 @@ This gives the explorer a real Kubernetes and GitOps operating model from day on
 - `PRD.md`
 - `spikes/001-sequencer-connector/results.md`
 - `spikes/002-bridge-correlation/results.md`
-- `spikes/004-deployment-topology.md`
+- `spikes/004-deployment-topology/README.md`
 - `zeko-machines/modules/sequencer.nix`
 - `zeko-machines/modules/da-layer.nix`
 - `zeko-machines/modules/vars-schema.nix`

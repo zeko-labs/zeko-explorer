@@ -191,10 +191,10 @@ Feature: Contract submission verification and manual KV publish
     And it refuses to issue any PUT or DELETE if validation fails
 
   Scenario: Multi-network submission uploads one KV entry per network
-    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-mainnet"]
+    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-m-mainnet"]
     When the upload script runs with mode "put"
     Then the script issues a PUT for key "zeko-m-devnet:<address>"
-    And the script issues a PUT for key "zeko-mainnet:<address>"
+    And the script issues a PUT for key "zeko-m-mainnet:<address>"
     And the value of each PUT equals the contract.json bytes
 
   Scenario: Upload script reads credentials from environment

@@ -68,6 +68,7 @@ The Mina archive schema is designed around L1 consensus:
 
 | Family | Network ID | Settlement Layer | Description |
 |---|---|---|---|
+| Zeko-M | `zeko-m-local` | local/dev dependencies | Local developer environment |
 | Zeko-M | `zeko-m-devnet` | Mina Devnet | Development |
 | Zeko-M | `zeko-m-alphanet` | Mina Devnet | Pre-mainnet staging |
 | Zeko-M | `zeko-m-mainnet` | Mina Mainnet | Production |
@@ -466,10 +467,7 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
 /zeko-explorer
 ├── wrangler.toml                      # Cloudflare Worker configs
 │
-├── packages/
-│   ├── nats-protocol/                 # NATS subject constants + event schemas
-│   ├── domain/                        # Cross-cutting domain types
-│   ├── db/                            # SurrealDB schema definitions + migrations
+├── apps/
 │   ├── l1-watcher/                    # TypeScript
 │   │   └── src/
 │   │       ├── domain/
@@ -486,10 +484,15 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
 │   ├── explorer-api/                  # TypeScript, Pothos
 │   ├── bridge-api/                    # TypeScript, Pothos
 │   ├── contract-registry-api/         # TypeScript, Pothos, CF Worker + KV
-│   ├── gateway/                       # Hive Gateway Worker + GraphQL Mesh composition
-│   ├── contract-schema/               # Shared decoder + JSON Schema types (browser + server)
-│   ├── mcp-server/                    # TypeScript, CF Worker
+│   ├── hive-gateway/                  # Hive Gateway Worker + GraphQL Mesh composition
+│   ├── mcp-worker/                    # TypeScript, CF Worker
 │   └── frontend/                      # Nuxt 3
+│
+├── packages/
+│   ├── nats-protocol/                 # NATS subject constants + event schemas
+│   ├── domain/                        # Cross-cutting domain types
+│   ├── db/                            # SurrealDB schema definitions + migrations
+│   └── contract-schema/               # Shared decoder + JSON Schema types (browser + server)
 │
 ├── tests/
 │   ├── acceptance/                    # Gherkin feature files + step definitions
@@ -502,10 +505,13 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
     ├── k8s/
     │   ├── chart/zeko-explorer/       # Reusable app chart/templates
     │   └── values/local/              # Docker Desktop Kubernetes values
-    └── local/docker-desktop/          # Local Kubernetes assembly
+    ├── local/docker-desktop/          # Local Kubernetes assembly
+    └── scripts/
+        ├── nats-stream-setup/         # JetStream bootstrap job scripts
+        └── surrealdb-migrate/         # SurrealDB migration runner scripts
 ```
 
-Each package: DDD internally (domain core, infrastructure boundary, repository interfaces).
+Each app or shared package follows DDD internally (domain core, infrastructure boundary, repository interfaces).
 
 ---
 

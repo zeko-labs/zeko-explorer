@@ -41,9 +41,9 @@ Feature: GraphQL contractSchema query and decoder placement
     Then the resolver returns null
 
   Scenario: Multi-network contract resolves independently per network
-    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-mainnet"]
+    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-m-mainnet"]
     When a client executes contractSchema(network: "zeko-m-devnet", address: ADDR)
-    And a client executes contractSchema(network: "zeko-mainnet", address: ADDR)
+    And a client executes contractSchema(network: "zeko-m-mainnet", address: ADDR)
     Then both resolvers return ContractSchema objects whose "submission" fields are byte-equal
 
   # GraphQL — on-chain data stays raw

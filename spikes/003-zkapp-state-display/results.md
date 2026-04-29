@@ -137,7 +137,7 @@ Every `contract.json` declares `"version": 1`. The schema file is named `contrac
 
 ### 4.2 KV layout
 
-One KV entry per `(network, address)` pair. A single submission with `meta.networks: ["zeko-m-devnet", "zeko-mainnet"]` produces two entries with the same value.
+One KV entry per `(network, address)` pair. A single submission with `meta.networks: ["zeko-m-devnet", "zeko-m-mainnet"]` produces two entries with the same value.
 
 | Key | Value | Writer | Reader |
 | --- | --- | --- | --- |
@@ -388,7 +388,7 @@ type ZkappAction {
 }
 
 type ContractSchema {
-  network: String!                 # "zeko-m-devnet" | "zeko-mainnet"
+  network: String!                 # "zeko-m-devnet" | "zeko-m-mainnet"
   address: String!
   version: Int!                    # currently always 1
   grade: String!                   # "owner-signed" | "source-linked" | "community-submitted"
