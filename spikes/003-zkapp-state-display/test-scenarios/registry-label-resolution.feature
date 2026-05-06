@@ -4,7 +4,7 @@ Feature: GraphQL contractSchema query and decoder placement
   single GraphQL query, `contractSchema(network, address)`, which resolves
   from Cloudflare KV with a 5-minute edge cache. The Explorer API continues
   to return raw field strings only for accounts, events, and actions. The
-  federated Hive gateway (designed in spike 4) joins the two so a UI page
+  unified Hive gateway (designed in spike 4) joins the two so a UI page
   can fetch raw fields and labels in one round trip. Decoding — running the
   shared interpreter in @zeko/contract-schema — happens in the UI by default.
   The indexer never reads schemas.
@@ -41,9 +41,9 @@ Feature: GraphQL contractSchema query and decoder placement
     Then the resolver returns null
 
   Scenario: Multi-network contract resolves independently per network
-    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-mainnet"]
+    Given the submission's meta.networks is ["zeko-m-devnet", "zeko-m-mainnet"]
     When a client executes contractSchema(network: "zeko-m-devnet", address: ADDR)
-    And a client executes contractSchema(network: "zeko-mainnet", address: ADDR)
+    And a client executes contractSchema(network: "zeko-m-mainnet", address: ADDR)
     Then both resolvers return ContractSchema objects whose "submission" fields are byte-equal
 
   # GraphQL — on-chain data stays raw

@@ -12,7 +12,7 @@ export type DiscriminatedShape = {
 };
 export type Variants = null | SingleShape | DiscriminatedShape;
 
-export type Network = "zeko-m-devnet" | "zeko-mainnet";
+export type Network = "zeko-m-devnet" | "zeko-m-mainnet";
 
 export type Submission = {
   $schema?: string;
