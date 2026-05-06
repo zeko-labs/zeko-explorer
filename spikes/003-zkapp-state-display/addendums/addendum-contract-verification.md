@@ -36,7 +36,7 @@ This document specifies how a zkApp on Mina/Zeko is described, submitted, verifi
           │                                       │
           ▼                                       ▼
    ┌────────────────────────────────────────────────────────────┐
-   │ Federated Hive gateway (see spike 4)                       │
+   │ Unified Hive gateway (see spike 4)                         │
    │   Explorer API + Bridge API + Contract Registry API        │
    └──────────────────────────┬─────────────────────────────────┘
                               │ single GraphQL endpoint
@@ -203,7 +203,7 @@ The upload script ([`examples/src/upload.ts`](./examples/src/upload.ts)) re-vali
 
 ## 7. Runtime read path (GraphQL)
 
-A standalone **Contract Registry API** (sibling of the Explorer and Bridge APIs in this monorepo) exposes one query and one type. Everything else — accounts, events, actions — stays on the Explorer API and returns raw fields only. The federated Hive gateway (spike 4) joins the two so a UI page can fetch raw fields and labels in a single round trip.
+A standalone **Contract Registry API** (sibling of the Explorer and Bridge APIs in this monorepo) exposes one query and one type. Everything else — accounts, events, actions — stays on the Explorer API and returns raw fields only. The unified Hive gateway (spike 4) joins the two so a UI page can fetch raw fields and labels in a single round trip.
 
 ```graphql
 scalar JSON
@@ -243,7 +243,7 @@ The resolver reads `${network}:${address}` from KV and returns `null` on miss. T
 
 ### 7.1 Where decoding runs
 
-Decoding is a pure function of `(raw_fields, schema)`. It runs in the UI: the federated Hive gateway (spike 4) joins a single page query into Explorer-API raw fields and Contract-Registry-API schema, and the shared `@zeko/contract-schema` module decodes in the browser. Server-side decoding (e.g. as a gateway custom resolver, useful for hot multi-contract feeds) is a future option scoped to spike 4 — not in scope here. The indexer stays dumb either way.
+Decoding is a pure function of `(raw_fields, schema)`. It runs in the UI: the unified Hive gateway (spike 4) joins a single page query into Explorer-API raw fields and Contract-Registry-API schema, and the shared `@zeko/contract-schema` module decodes in the browser. Server-side decoding (e.g. as a gateway custom resolver, useful for hot multi-contract feeds) is a future option scoped to spike 4 — not in scope here. The indexer stays dumb either way.
 
 ## 8. Failure modes (verbatim)
 

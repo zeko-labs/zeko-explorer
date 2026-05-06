@@ -91,9 +91,9 @@ The explorer renders raw fields by default and overlays labels when a contract h
 | --- | --- | --- |
 | **Indexer** | Persist the raw 8-field state, raw event field arrays, and raw action field arrays exactly as the sequencer publishes them. Never reads schemas. | SurrealDB |
 | **Registry repo** (`zeko-contract-registry`, separate public repo) | Hold one versioned submission per contract — `contracts/<name>/contract.json` + `contracts/<name>/fixtures.json`. PR + CI is the only write path. | Git |
-| **Cloudflare KV** | Runtime schema store. One entry per `(network, address)` pair — a single submission with `meta.networks: ["zeko-m-devnet", ...]` produces one KV entry per listed network. Written by a maintainer-triggered `workflow_dispatch` publish job, read by the explorer API. | Cloudflare KV |
-| **Contract Registry API** | Standalone GraphQL service in this monorepo (sibling of the Explorer and Bridge APIs). Exposes `contractSchema(network, address)` as an edge-cached pass-through over Cloudflare KV. Federated behind the Hive gateway (spike 4) so the UI fetches raw fields and labels in one round trip. | — (KV is the store) |
-| **UI** | Calls the federated gateway, runs `@zeko/contract-schema` in the browser to label raw fields against the schema, and renders both side by side. | — |
+| **Cloudflare KV** | Runtime schema store. One entry per `(network, address)` pair — a single submission with `meta.networks: ["zeko-m-devnet", ...]` produces one KV entry per listed network. Written by a maintainer-triggered `workflow_dispatch` publish job, read by the Contract Registry API. | Cloudflare KV |
+| **Contract Registry API** | Standalone GraphQL service in this monorepo (sibling of the Explorer and Bridge APIs). Exposes `contractSchema(network, address)` as an edge-cached pass-through over Cloudflare KV. Composed through the unified Hive gateway (spike 4) so the UI fetches raw fields and labels in one round trip. | — (KV is the store) |
+| **UI** | Calls the unified gateway, runs `@zeko/contract-schema` in the browser to label raw fields against the schema, and renders both side by side. | — |
 
 ### Data flow
 
@@ -109,18 +109,18 @@ Author opens PR → CI runs `bun run verify <dir>` → maintainer merges to main
                                                                │
                                             contract-registry-api: contractSchema(net, addr)
                                                                │
-                                            federated Hive gateway (spike 4)
+                                            unified Hive gateway (spike 4)
                                                                │
                              raw fields (Explorer API) + labels (UI runs interpreter)
 ```
 
-Publish is never automatic. The merge is the review signal; `workflow_dispatch` is the deploy signal. Decoding is a pure function of `(raw_fields, schema)` and runs in the UI — the federated gateway gives the UI both inputs in a single round trip.
+Publish is never automatic. The merge is the review signal; `workflow_dispatch` is the deploy signal. Decoding is a pure function of `(raw_fields, schema)` and runs in the UI — the unified gateway gives the UI both inputs in a single round trip.
 
 ### Milestone scope
 
 | Milestone | Scope |
 | --- | --- |
-| **M1 (backend)** | Stand up `zeko-contract-registry` with the Bun verify CLI, the `verify` GitHub Actions job (runs on PRs), and the `publish` job (runs on `workflow_dispatch` only). Publish `@zeko/contract-schema` (JSON Schema v1 + TS types + interpreter + signature helper + TypeScript upload script). Stand up a standalone **Contract Registry API** in this monorepo (sibling of `explorer-api` and `bridge-api`) exposing the `ContractSchema` type and `contractSchema(network, address)` query as an edge-cached KV pass-through; the federated Hive gateway (spike 4) joins it with the Explorer and Bridge APIs. Seed PRs for Zeko bridge outer + inner. |
+| **M1 (backend)** | Stand up `zeko-contract-registry` with the Bun verify CLI, the `verify` GitHub Actions job (runs on PRs), and the `publish` job (runs on `workflow_dispatch` only). Publish `@zeko/contract-schema` (JSON Schema v1 + TS types + interpreter + signature helper + TypeScript upload script). Stand up a standalone **Contract Registry API** in this monorepo (sibling of `explorer-api` and `bridge-api`) exposing the `ContractSchema` type and `contractSchema(network, address)` query as an edge-cached KV pass-through; the unified Hive gateway (spike 4) composes it with the Explorer and Bridge APIs. Seed PRs for Zeko bridge outer + inner. |
 | **M2 (frontend)** | Contract page with State / Events / Actions / Deployments tabs. UI queries `contractSchema`, calls the interpreter, renders labeled values next to raw fields. Grade badge per contract. Raw-only fallback for unknown contracts with a "Submit this contract" CTA pointing at the registry's PR template. |
 
 The full pipeline specification — versioned JSON Schema, DSL, verify stages, signature scheme, CI workflow, TypeScript upload script, and KV layout — is in [`addendums/addendum-contract-verification.md`](addendums/addendum-contract-verification.md). A runnable example with verbatim CI output for every flow is in [`addendums/examples/`](addendums/examples/).
@@ -345,7 +345,7 @@ The Mina prefix string and algorithm are documented in `mina/src/lib/mina_base/z
 
 ## 7. API Shape — Specification
 
-The explorer fronts two GraphQL services behind the federated Hive gateway (designed in spike 4):
+The explorer reads zkApp display data through the unified Hive gateway (designed in spike 4):
 
 - **Explorer API** — indexed on-chain data (accounts, events, actions) returned as raw fields only.
 - **Contract Registry API** — a single `contractSchema(network, address)` query reading from Cloudflare KV.
@@ -466,7 +466,7 @@ This approach piggybacks on the transaction-level rollback machinery — no zkAp
 | How does Minascan display zkApp state? | Developer-opt-in via contract verification + custom metadata. Raw fields without verification. |
 | Community conventions for annotating state fields? | None standardized. No ABI equivalent in the Mina ecosystem. |
 | How are events and actions structured? | Events: named, typed field arrays via `emitEvent()`. Actions: similar but with `actionState` rolling hash and reducer processing. Both stored as raw field arrays. Event/action names are **not** persisted on-chain — multi-type contracts need a discriminator field (§4.1). |
-| Can field labels be associated with a deployed contract? | Yes — by PR into `zeko-contract-registry` (separate repo). Each contract is a directory with `contract.json` (versioned: `version: 1`) describing state/events/actions via a small declarative DSL, plus `fixtures.json` with golden test cases. CI runs the Bun verify CLI against the fixtures (deep-equal; mismatch exits 1), optionally verifies an o1js owner signature, and optionally builds the source repo for a vkey hash compare. Publish is gated behind a maintainer-triggered `workflow_dispatch` that calls a TypeScript upload script — one Cloudflare KV `PUT` per network listed in `meta.networks`. A standalone Contract Registry API (sibling of the Explorer and Bridge APIs in this monorepo) serves the schema via a `contractSchema(network, address)` query, edge-cached. The federated Hive gateway (spike 4) joins it with the Explorer API so the UI fetches raw fields and labels in one round trip; decoding runs in the UI. Full design in `addendums/addendum-contract-verification.md`; runnable end-to-end proof at `addendums/examples/`. |
+| Can field labels be associated with a deployed contract? | Yes — by PR into `zeko-contract-registry` (separate repo). Each contract is a directory with `contract.json` (versioned: `version: 1`) describing state/events/actions via a small declarative DSL, plus `fixtures.json` with golden test cases. CI runs the Bun verify CLI against the fixtures (deep-equal; mismatch exits 1), optionally verifies an o1js owner signature, and optionally builds the source repo for a vkey hash compare. Publish is gated behind a maintainer-triggered `workflow_dispatch` that calls a TypeScript upload script — one Cloudflare KV `PUT` per network listed in `meta.networks`. A standalone Contract Registry API (sibling of the Explorer and Bridge APIs in this monorepo) serves the schema via a `contractSchema(network, address)` query, edge-cached. The unified Hive gateway (spike 4) composes it with the Explorer API so the UI fetches raw fields and labels in one round trip; decoding runs in the UI. Full design in `addendums/addendum-contract-verification.md`; runnable end-to-end proof at `addendums/examples/`. |
 | For Zeko's own contracts, can we hardcode labels? | No — they submit through the same PR flow. Seed PRs add the bridge outer / inner on M1 launch. The bridge's `action[0] ∈ {"0","1"}` convention (spike 002 §1) is expressed as `discriminator: { at: 0 }` with two variants; the interpreter dispatches each action record to the matching variant at decode time. |
 | Why a static DSL instead of per-contract code? | A static schema is reviewable by diff, runnable through the same interpreter in CI and the UI, and never executes user-supplied JavaScript. Golden fixtures prove the author's mental model matches the interpreter's output. |
 | How do we verify that a submitter owns the contract? | Three acceptance grades. (a) **Owner-signed:** optional `owner` block carrying an o1js signature over the canonical payload; verified by `Signature.verify` against `meta.address` — only the deploying key can forge this. (b) **Source-linked:** optional `meta.source` points at a public repo and commit; CI builds it and compares the resulting vkey hash to `meta.vkeyHash`. (c) **Community-submitted:** neither present; accepted on PR reviewer judgment, UI displays a "Community-submitted" badge. Grade is surfaced in the API so the frontend can render appropriately. |

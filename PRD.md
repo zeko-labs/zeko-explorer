@@ -807,7 +807,7 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 
 - **Docker Desktop Kubernetes** is the default local runtime.
 - Local development uses the same Kubernetes shape as remote where practical: NATS, SurrealDB, indexer, APIs, setup Jobs, and opt-in watcher/backfill workloads.
-- **Wrangler** runs Cloudflare Workers locally for the Hive Gateway, MCP Worker, and frontend/static asset workflows.
+- **Wrangler** runs Cloudflare Workers locally for the Hive Gateway, Contract Registry API, MCP Worker, and frontend/static asset workflows.
 - **proto** provides reproducible development toolchains.
 - **moonrepo** orchestrates local tasks such as building local images, bringing up the local cluster, port-forwarding services, and running dev processes.
 - The local profile must stay lean: target 4 CPU / 6 GB RAM allocated to Docker Desktop, with L1 Watcher, DA Monitor, and Backfill disabled unless explicitly enabled.

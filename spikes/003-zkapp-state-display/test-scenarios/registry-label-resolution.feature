@@ -4,7 +4,7 @@ Feature: GraphQL contractSchema query and decoder placement
   single GraphQL query, `contractSchema(network, address)`, which resolves
   from Cloudflare KV with a 5-minute edge cache. The Explorer API continues
   to return raw field strings only for accounts, events, and actions. The
-  federated Hive gateway (designed in spike 4) joins the two so a UI page
+  unified Hive gateway (designed in spike 4) joins the two so a UI page
   can fetch raw fields and labels in one round trip. Decoding — running the
   shared interpreter in @zeko/contract-schema — happens in the UI by default.
   The indexer never reads schemas.

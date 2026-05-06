@@ -92,6 +92,7 @@ Local workloads for `zeko-m-local`:
 | Bridge API | Deployment + Service | reads SurrealDB; supports SSE |
 | Frontend | local dev server | Nuxt local dev during Milestone 2; production deploys to Cloudflare, not Kubernetes |
 | Hive Gateway Worker | `wrangler dev` | runs outside cluster and calls port-forwarded Explorer/Bridge APIs |
+| Contract Registry API Worker | `wrangler dev` | runs outside cluster and uses local/preview Cloudflare KV bindings |
 | MCP Worker | `wrangler dev` | runs outside cluster and calls the local Hive Gateway Worker |
 
 Local commands should converge on:
@@ -110,7 +111,7 @@ moon run infra:dev
 - `localhost:4222 -> service/nats`, only when local debugging needs direct NATS access;
 - `localhost:8000 -> service/surrealdb`, only when local debugging needs direct DB access.
 
-Wrangler uses those local URLs for the Hive Gateway and MCP Worker. Local development does not create a separate API routing layer.
+Wrangler uses those local URLs for the Hive Gateway and MCP Worker. Contract Registry API runs through Wrangler with local or preview KV bindings. Local development does not create a separate API routing layer.
 
 Package-level tests may start only the dependencies they need, for example NATS and SurrealDB without the full cluster. The default developer workflow remains Docker Desktop Kubernetes.
 
@@ -150,6 +151,7 @@ Not container images:
 
 - production frontend: built by CI and deployed to Cloudflare Workers Static Assets with Wrangler;
 - Hive Gateway: built by CI and deployed as a Cloudflare Worker;
+- Contract Registry API: built by CI and deployed as a Cloudflare Worker;
 - MCP Server: built by CI and deployed as a Cloudflare Worker;
 The rule is: Kubernetes workloads use OCI images; Cloudflare workloads use Wrangler artifacts; repo scripts do not need images unless they run inside Kubernetes.
 
@@ -172,7 +174,7 @@ GitHub Actions workflows:
 | `terraform-plan.yml` | `zeko-k8s` PR touching `infra/terraform/**` | Terraform plan for affected environment |
 | `terraform-apply.yml` | `zeko-k8s` manual approval / protected branch | Terraform apply through GitHub Actions |
 | `promote.yml` | image release / manual | open or update `zeko-k8s` promotion PRs with pinned image tags |
-| `cloudflare.yml` | service repo frontend/gateway/MCP changes | Wrangler deploy for frontend, Hive Gateway Worker, and MCP Worker |
+| `cloudflare.yml` | service repo frontend/gateway/registry/MCP changes | Wrangler deploy for frontend, Hive Gateway Worker, Contract Registry API Worker, and MCP Worker |
 
 GitHub Actions secrets are sufficient for bootstrap. Keep infrastructure provider credentials in `zeko-k8s` environments. Service repos should only have registry and Cloudflare Worker deploy credentials needed for image and Worker/static asset publishing. For Kubernetes runtime secrets use Infisical + External Secrets Operator when available.
 
@@ -684,7 +686,7 @@ Flow:
 8. Flux reconciles Kustomizations and HelmReleases in dependency order.
 9. Flux applies setup Jobs and CronJobs, rolls workloads, and updates private Cloudflare Tunnel resources.
 10. A Flux-managed smoke-test Job verifies API, bridge, NATS, SurrealDB, Hive Gateway, and Cloudflare Tunnel routes.
-11. `cloudflare.yml` deploys the frontend, Hive Gateway Worker, and MCP Worker with Wrangler when those artifacts change.
+11. `cloudflare.yml` deploys the frontend, Hive Gateway Worker, Contract Registry API Worker, and MCP Worker with Wrangler when those artifacts change.
 
 Flux is the remote Kubernetes deployer and reads desired state from `zeko-k8s`. GitHub Actions must not deploy remote Kubernetes workloads directly or run `helm upgrade` against remote clusters. Direct Helm remains useful only for local development and debugging through `moon` tasks.
 
