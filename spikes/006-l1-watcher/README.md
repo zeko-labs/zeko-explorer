@@ -1,6 +1,6 @@
 # Spike 006: L1 Watcher — Settlement Detection, Rollback Handling, and Bridge Events
 
-**Status:** Not started
+**Status:** Complete
 **Blocking:** Milestone 1 (L1 data ingestion)
 **Owner:** TBD
 
