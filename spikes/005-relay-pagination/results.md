@@ -44,12 +44,12 @@ The fixture is a list of 50 bridge operations (5 distinct `aux` strings, FIFO `a
 Every indexed row is assigned a ULID primary key at insert time. ULID is time-ordered, URL-safe, and 16 bytes binary (26 chars Crockford base32). It serves three purposes simultaneously:
 
 - **SurrealDB record ID**: `bridge_operation:01HYZ...`. The primary B-tree key.
-- **`Node.id` for Approach A**: the global ID is the ULID directly — no base64 wrapping, no synthetic `Type:key` encoding.
-- **Stable cache key for clients**: `__typename + id` is the default normalized-cache identity in both Apollo and urql graphcache.
+- **Inner identity for `Node.id`**: Pothos `builder.node` wraps the inner ID with the standard Relay envelope `base64("Type:innerID")`. The inner ID is the row's ULID, so the global ID is `base64("BridgeOperation:01HYZ...")`. The envelope is what clients see on the wire and store as the cache key — it is opaque, type-tagged, and trivially decodable for refetch routing. We use the Pothos default; we do **not** override `encodeGlobalID` / `decodeGlobalID` to expose bare ULIDs.
+- **Stable cache key for clients**: `__typename + id` is the default normalized-cache identity in both Apollo and urql graphcache. The `id` they index is the base64 envelope; that's fine — it is unique, stable, and never reinterpreted client-side.
 
-Natural keys (`tx_hash`, `(aux, auxSequence)`, `public_key`) remain queryable via dedicated root fields (`transaction(hash:)`, `bridgeOperation(aux:, auxSequence:)`, `account(publicKey:)`). The two coexist: ULID is the cache/refetch handle, natural keys are the human-addressable lookups. This is the same pattern GitHub uses (`node(id:)` for refetch, `repository(owner:, name:)` for human lookup).
+Natural keys (`tx_hash`, `(aux, auxSequence)`, `public_key`) remain queryable via dedicated root fields (`transaction(hash:)`, `bridgeOperation(aux:, auxSequence:)`, `account(publicKey:)`). The two coexist: the global ID is the cache/refetch handle, natural keys are the human-addressable lookups. This is the same pattern GitHub uses (`node(id:)` for refetch, `repository(owner:, name:)` for human lookup).
 
-The POC uses `${aux}|${auxSequence}` as a synthetic global ID because the in-memory fixture predates the ULID column. In production, the global ID is the row's ULID.
+The POC uses `${aux}|${auxSequence}` as the inner ID because the in-memory fixture predates the ULID column. In production the inner ID is the row's ULID; the outer envelope is identical.
 
 ### 3.2 Approach A — Full Relay (Node + global IDs + Connections)
 
@@ -338,7 +338,7 @@ This works, but it's per-type configuration the frontend maintains in sync with 
 
 The explorer fans out SurrealDB live queries to clients via SSE. When a row's status changes (e.g., `submitted → completed`), the subscription emits a delta.
 
-- **A**: emit `{ id: <ulid>, status: COMPLETED }`. The cache looks up the row by `Node.id` in its normalized map and patches `status` in O(1). Works the same in Apollo and urql graphcache without any schema-shape-specific configuration.
+- **A**: emit `{ id: <global-ID>, status: COMPLETED }` (where `<global-ID>` is the standard Pothos `base64("BridgeOperation:<ulid>")` envelope). The cache looks up the row by `Node.id` in its normalized map and patches `status` in O(1). Works the same in Apollo and urql graphcache without any schema-shape-specific configuration.
 - **B**: emit `{ aux, auxSequence, status }`. The cache patch goes through the configured `keyFields` resolver — O(1) if configured (§6.4), or O(N) scan across cached pages if not. Possible, but requires the per-type config to be present and correct.
 
 ### 6.6 Net
@@ -359,7 +359,7 @@ A block explorer is read-bottom-up (newest first). The natural user gesture is "
 
 There is no use case across Milestones 1–4 (transaction history, account activity, bridge op list, zkApp events/actions, settlement batches, ethereum-side equivalents) where a user starts at "row N" and pages backward. Live updates land at the front of the list via subscriptions, not via backward pagination.
 
-**Conclusion: forward only in v1.** Approach A inherits the full Relay arg set from `t.connection`; resolvers reject `last`/`before` until a use case demands it. Approach B exposes `limit` + `after` only.
+**Conclusion: forward is the only modelled flow in v1.** Approach A inherits the full Relay arg set from `t.connection` and `resolveCursorConnection` handles `last`/`before` for free, so the resolvers accept them — there is no implementation cost or schema-shape change to leaving them on, and a niche client use case (e.g., MCP agent walking backward from a known cursor) costs nothing extra. Approach B exposes `limit` + `after` only.
 
 ---
 
@@ -422,7 +422,7 @@ Both wire shapes are first-class in the clients we use. Neither shape is structu
 
 The decision rests on five observations:
 
-1. **Once ULID is the DB primary key, the structural objection to Approach A dissolves.** The global ID is the database record key, not a synthetic base64 wrapper around natural keys. Natural keys remain queryable via dedicated root fields. The two coexist cleanly — same pattern GitHub uses (`node(id:)` for refetch, typed root queries for human lookup).
+1. **Once ULID is the DB primary key, the structural objection to Approach A dissolves.** The global ID's inner ID is the database record key — the standard Pothos `base64("Type:ULID")` envelope is just the type-tagged wire format every Relay client already expects. There is no second synthetic key competing with the natural ones; natural keys remain queryable via dedicated root fields. The two coexist cleanly — same pattern GitHub uses (`node(id:)` for refetch, typed root queries for human lookup).
 
 2. **`Node.id` is the default normalized-cache identity in both Apollo and urql graphcache.** Approach A inherits client-side row identity, subscription patching, and Apollo `relayStylePagination` for free (§6.4, §6.5). Approach B works equivalently but requires per-type `keyFields` configuration the frontend maintains in sync with the API schema. The cost of Approach A's convention is paid once at the API; the cost of Approach B's deviation is paid at every client integration.
 
@@ -446,13 +446,13 @@ A "hybrid" shape would adopt Connection wrappers (`edges`, `node`, `pageInfo`) w
 
 Across the Explorer, Bridge, and Contract Registry APIs:
 
-1. **Every indexed row carries a ULID primary key**, assigned at insert time by the indexer. SurrealDB record IDs use this ULID directly (`bridge_operation:01HYZ...`); the GraphQL `Node.id` is the same ULID.
+1. **Every indexed row carries a ULID primary key**, assigned at insert time by the indexer. SurrealDB record IDs use this ULID directly (`bridge_operation:01HYZ...`); the GraphQL `Node.id` is the standard Pothos envelope `base64("Type:<ulid>")` over that same ULID. The inner ID never diverges from the database record key.
 2. **Two query shapes, picked by the data:**
    - **Range-bounded reads** (action witnesses, block ranges, event windows): `someThing(input: { from?, to?, max? }): [SomeThing!]!`. Flat list, range-bounded args. Matches the existing zeko-ui actions API convention 1:1.
    - **Open-ended cursor reads** (transactions, bridge op history, zkApp events): `someThing(filter…, first: Int = 20, after: String): SomeThingConnection`. Returns the standard Relay shape (`edges`, `node`, `pageInfo`).
 3. **Every paginated type implements `Node`.** `id: ID!` is the row's ULID. The schema exposes `node(id: ID!): Node` as the polymorphic refetch root.
 4. **Single-row lookups also use natural keys.** `transaction(hash: String!)`, `account(publicKey: String!)`, `bridgeOperation(aux: String!, auxSequence: Int!)`. Natural-key lookups and `node(id:)` coexist.
-5. **Pagination args.** `first: Int = 20, after: String`. Server clamps `first` to 100. `last`/`before` are accepted by the schema (free with `t.connection`) but resolvers reject them until a use case demands it (§7).
+5. **Pagination args.** Forward (`first: Int = 20, after: String`) is the modelled flow. Server clamps `first`/`last` to 100. `last`/`before` are accepted because `resolveCursorConnection` handles them for free; we don't artificially reject them (§7).
 6. **Cursors are opaque.** Version-prefixed base64-JSON of the keyset sort tuple. Clients MUST round-trip unchanged.
 7. **`PageInfo` is shareable across federated subgraphs** via the `@shareable` directive.
 8. **Subscriptions emit single nodes**, not pages. SurrealDB live queries push deltas keyed by `Node.id`; the client cache patches in place via its `__typename + id` index.
@@ -508,7 +508,7 @@ A precise count needs a full `COUNT(*)` query — expensive on growing tables, r
 | Q2. Does the explorer frontend use Apollo Client? | No — `@urql/vue`. urql graphcache uses the same `__typename + id` cache identity as Apollo, so `Node.id` benefits transfer. | §2 |
 | Q3. How does Pothos handle cursor-based pagination without the Relay plugin? | A page wrapper via `objectRef.implement` plus a resolver that reads `limit + 1` and computes `hasMore`. ~10 lines per list query. Documented for completeness; not the recommended path. | §4 |
 | Q4. How are SurrealDB cursors implemented? | Opaque base64-url JSON of the keyset sort tuple, with a 1-byte version prefix. Sort tuples per query, ending in a strictly-unique tie-breaker. ULID primary keys enable record-ID range queries for ingestion-ordered cursors. | §5 |
-| Q5. Is backward pagination needed? | No across Milestones 1–4. Forward only in v1; the schema accepts the full Relay arg set, but resolvers reject `last`/`before` until needed. | §7 |
+| Q5. Is backward pagination needed? | No across Milestones 1–4 — forward is the only modelled flow. The schema accepts the full Relay arg set and `resolveCursorConnection` handles `last`/`before` for free, so we don't artificially reject them. | §7 |
 
 ---
 

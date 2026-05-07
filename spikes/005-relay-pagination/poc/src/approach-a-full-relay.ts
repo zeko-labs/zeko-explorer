@@ -44,6 +44,7 @@ const BridgeOpRef = builder.node(builder.objectRef<BridgeOp>("BridgeOperation"),
   id: { resolve: (op) => `${op.aux}|${op.auxSequence}` },
   loadOne: (id, { ops }) => {
     const sep = id.lastIndexOf("|")
+    if (sep === -1) return null
     const aux = id.slice(0, sep)
     const seq = id.slice(sep + 1)
     return ops.find((o) => o.aux === aux && String(o.auxSequence) === seq) ?? null

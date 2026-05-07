@@ -76,7 +76,7 @@ builder.queryField("bridgeOperations", (t) =>
       return {
         items,
         hasMore,
-        nextCursor: hasMore ? encodeCursor(items[items.length - 1]!) : null,
+        nextCursor: hasMore ? encodeCursor(items.at(-1)!) : null,
       }
     },
   })
