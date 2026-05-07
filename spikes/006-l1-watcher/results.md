@@ -1,4 +1,4 @@
-# Spike 006: L1 Watcher - Results
+# Spike 006: Zeko-M L1 Watcher - Results
 
 **Status:** Complete
 **Date:** 2026-05-07
@@ -7,7 +7,9 @@
 
 ## Implementer Summary
 
-Build `packages/l1-watcher` as a deployable TypeScript service. It is the only component that reads Mina L1 data and publishes normalized L1 facts to NATS:
+Build `packages/l1-watcher` as a deployable TypeScript service package, then deploy one watcher process per Zeko network. A process is configured for exactly one network and exactly one L1 provider. Do not run a single watcher process that watches both Mina and Ethereum, and do not multiplex several Zeko networks inside one watcher.
+
+Spike 006 specifies the **Zeko-M watcher deployment**, which uses the Mina adapter. It is the only component that reads Mina L1 data for a given Zeko-M network and publishes normalized L1 facts to NATS:
 
 - `zeko.l1.settlements`: Zeko batch settlement commits and finalized updates.
 - `zeko.l1.outer-actions`: raw and parsed commit/witness actions from `OUTER_PK`.
@@ -15,12 +17,14 @@ Build `packages/l1-watcher` as a deployable TypeScript service. It is the only c
 - `zeko.l1.rollbacks`: L1 reorgs that orphan already-published L1 facts.
 - `zeko.health`: watcher freshness, lag, and dependency status.
 
-The watcher has two remote L1 inputs:
+Each Zeko-M watcher process has two remote Mina inputs:
 
 1. Hosted Mina daemon GraphQL for live best-chain blocks, recent account updates, and reorg detection.
 2. Public Archive-Node-API GraphQL for historical catch-up. We are not assuming access to the archive Postgres database.
 
-Current Archive-Node-API is enough for `OUTER_PK` actions, but not enough for historical bridge-event detection. Milestone 1 needs an upstream Archive-Node-API change that exposes full zkApp command account updates by block range. The proposed upstream PR shape is documented in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
+Current Archive-Node-API is enough for `OUTER_PK` actions, but not enough for historical bridge-event detection. Milestone 1 needs an upstream Archive-Node-API change that exposes full zkApp command account updates by block range. This is a Mina/Zeko-M requirement only; it is not an Ethereum adapter requirement. The proposed upstream PR shape is documented in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
+
+Future Zeko-E networks should run separate watcher processes configured with an Ethereum adapter. The shared package can contain both adapter implementations, but adapter selection is static per process. Cross-network or cross-provider multiplexing is out of scope and should not be implemented.
 
 The implementation spec, message schemas, adapter types, fault-tolerance behavior, and archive-reader requirement are split out:
 
@@ -37,7 +41,17 @@ The implementation spec, message schemas, adapter types, fault-tolerance behavio
 
 ### Process Model
 
-Run one watcher process per Zeko network. Do not multiplex networks in one process.
+Run one watcher process per Zeko network. Do not multiplex networks or L1 providers in one process.
+
+Runtime examples:
+
+| Network | Watcher process | Adapter | L1 provider |
+|---|---|---|---|
+| `zeko-m-devnet` | one dedicated process | Mina | Mina daemon + Archive-Node-API |
+| `zeko-m-alphanet` | one dedicated process | Mina | Mina daemon + Archive-Node-API |
+| `zeko-m-mainnet` | one dedicated process | Mina | Mina daemon + Archive-Node-API |
+| `zeko-e-testnet-1` | separate future process | Ethereum | Ethereum JSON-RPC/archive |
+| `zeko-e-mainnet` | separate future process | Ethereum | Ethereum JSON-RPC/archive |
 
 ```
 packages/l1-watcher
@@ -59,12 +73,20 @@ packages/l1-watcher
         mina-bridge-decoder.ts
         mina-action-decoder.ts
         mina-reorg-detector.ts
+      ethereum/
+        README.md        # Milestone 4; separate adapter, not used by Zeko-M deployments
     health/
       health-server.ts
       heartbeat.ts
 ```
 
 The watcher is not a web API. Its HTTP surface is only `GET /healthz` for container orchestration. The system API reads freshness from `sync_status`, not by calling the watcher.
+
+Adapter boundary:
+
+- The shared service owns process lifecycle, config validation, health, NATS publication, durable cursor/state writes, and retry/backoff supervision.
+- The Mina adapter owns Mina daemon queries/subscriptions, Archive-Node-API queries, Mina account update/action/event decoding, Zeko-M finality depth, and Mina reorg interpretation.
+- The future Ethereum adapter must be a different adapter selected by a different watcher process for a Zeko-E network. It must not inherit Mina-specific assumptions like `bestChain(290)`, Archive-Node-API, Mina actions, or Mina account updates.
 
 ### Durable State
 
@@ -103,6 +125,7 @@ Required environment:
 | Env var | Required | Meaning |
 |---|---|---|
 | `NETWORK` | yes | `zeko-m-devnet`, `zeko-m-alphanet`, or `zeko-m-mainnet`. |
+| `L1_PROVIDER` | yes | `mina` for this spike. Future Zeko-E deployments use `ethereum` in separate processes. |
 | `NATS_URL` | yes | JetStream endpoint. |
 | `SURREALDB_URL` | yes | Durable watcher state and `sync_status`. |
 | `SURREALDB_NAMESPACE` / `SURREALDB_DATABASE` | yes | Target namespace/database. |

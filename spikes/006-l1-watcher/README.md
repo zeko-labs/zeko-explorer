@@ -1,4 +1,4 @@
-# Spike 006: L1 Watcher — Settlement Detection, Rollback Handling, and Bridge Events
+# Spike 006: Zeko-M L1 Watcher — Settlement Detection, Rollback Handling, and Bridge Events
 
 **Status:** Complete
 **Blocking:** Milestone 1 (L1 data ingestion)
@@ -8,9 +8,23 @@
 
 ## Context
 
-The L1 Watcher is the single entry point for all L1 settlement chain data into the NATS event log. It monitors both a **live L1 node** (for tip tracking and rollback detection) and an **L1 archive** (for outer actions and historical data). It publishes to four NATS subjects: `zeko.l1.settlements`, `zeko.l1.rollbacks`, `zeko.l1.outer-actions`, and `zeko.l1.bridge-events`.
+The L1 Watcher is a service type, not a singleton deployment. Each Zeko network runs its own watcher process. A watcher process is configured for exactly one network and exactly one L1 provider.
+
+For this spike, the target deployment is a **Zeko-M watcher** that uses the Mina adapter. It monitors one Mina live node and one Mina archive source for that Zeko-M network, then publishes normalized L1 facts into the shared NATS event log. It does not watch Ethereum. A future Zeko-E network will run its own separate watcher process using the Ethereum adapter.
+
+The Zeko-M watcher publishes to four NATS subjects: `zeko.l1.settlements`, `zeko.l1.rollbacks`, `zeko.l1.outer-actions`, and `zeko.l1.bridge-events`.
 
 The PRD defines the L1 Watcher at a high level (Section 5.2.2), but the following design questions are unresolved and must be investigated before implementation.
+
+Nomenclature used by this spike:
+
+- **L1 Watcher**: the deployable service/package shape. It is instantiated once per network.
+- **Zeko-M watcher**: an L1 Watcher process configured for a Zeko-M network and the Mina adapter.
+- **Mina adapter**: the adapter used by Zeko-M watcher deployments.
+- **Zeko-E watcher**: a separate future L1 Watcher process configured for a Zeko-E network and the Ethereum adapter.
+- **Ethereum adapter**: future Milestone 4 work. It is not implemented or specified by this spike beyond the interface boundary.
+
+Do not deploy one watcher process that watches both Mina and Ethereum, or multiple Zeko networks, at the same time.
 
 ---
 
@@ -84,11 +98,11 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 
 **Key design question:** `aux` is NOT unique — identical deposits/withdrawals produce the same `aux` (see `spikes/002-bridge-correlation/results.md` §2). The indexer disambiguates via `(aux, aux_sequence)` using FIFO ordering. Should the L1 Watcher compute `aux_sequence`, or should it publish raw events and let the indexer assign sequence numbers?
 
-### 5. Abstract L1 Interface
+### 5. Adapter Boundary
 
-- The PRD specifies an abstract L1 interface supporting both Mina and Ethereum. What is the minimal interface that covers both?
+- The PRD specifies an L1 adapter boundary so each network-specific watcher can use the correct L1 provider. What is the minimal interface that the Mina adapter must implement without preventing a future Ethereum adapter?
 - Which operations are L1-specific (e.g., Mina actions vs. Ethereum events) and which are generic (tip tracking, confirmation depth)?
-- Should the interface be designed now or deferred until Milestone 4 (Ethereum support)?
+- Which parts belong in the shared watcher process and which parts belong inside the Mina adapter?
 
 ### 6. NATS Event Schemas
 
@@ -113,7 +127,7 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 4. **L1 rollback detection design:** Fork detection algorithm, reconciliation after outages, rollback event format.
 5. **Outer action ingestion design:** How outer actions are queried, paginated, and published to NATS.
 6. **Bridge event detection design:** Concrete mechanisms for detecting deposit submissions (user-level AccountUpdates), withdrawal finalizations, and cancel deposits (no outer action — counter-based detection). Includes Poseidon hash computation approach for `aux`. See Section 4 for spike-002-derived requirements.
-7. **Abstract L1 interface sketch:** Minimal TypeScript interface that the Mina adapter implements.
+7. **L1 adapter boundary sketch:** Minimal TypeScript interface that the Mina adapter implements, with no runtime requirement that one process watches multiple L1 providers.
 8. **Failure mode table:** All failure scenarios with detection and recovery strategies.
 
 ---
