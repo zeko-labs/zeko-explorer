@@ -1,0 +1,50 @@
+type BridgeOperation implements Node {
+  amount: String!
+  aux: String!
+  auxSequence: Int!
+  id: ID!
+  recipient: String!
+  sender: String!
+  status: BridgeOperationStatus!
+  submitBlockHeight: Int!
+  type: BridgeOperationType!
+}
+
+enum BridgeOperationStatus {
+  COMMITTED
+  COMPLETED
+  L1_WITNESSED
+  SUBMITTED
+}
+
+enum BridgeOperationType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+interface Node {
+  id: ID!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+}
+
+type Query {
+  bridgeOperations(after: String, before: String, first: Int, last: Int, publicKey: String!): QueryBridgeOperationsConnection
+  node(id: ID!): Node
+  nodes(ids: [ID!]!): [Node]!
+}
+
+type QueryBridgeOperationsConnection {
+  edges: [QueryBridgeOperationsConnectionEdge]
+  pageInfo: PageInfo!
+}
+
+type QueryBridgeOperationsConnectionEdge {
+  cursor: String!
+  node: BridgeOperation
+}
