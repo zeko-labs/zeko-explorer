@@ -15,7 +15,7 @@ Feature: L1 Watcher Dependency Startup Resilience
     When the L1 watcher starts
     Then the watcher process stays alive
     And "/healthz" reports status "degraded"
-    And health includes limitation "l1_daemon_unavailable"
+    And health includes limitation "l1_live_unavailable"
     And archive-backed catch-up continues from the durable cursors
     And no finalized settlement depth is advanced from stale daemon data
 

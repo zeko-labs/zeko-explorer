@@ -5,21 +5,33 @@ These are the payload contracts for `packages/nats-protocol`.
 ## Shared Envelope
 
 ```ts
+export type L1Provider = "mina" | "ethereum";
+export type L1Network =
+  | "zeko-m-devnet"
+  | "zeko-m-alphanet"
+  | "zeko-m-mainnet"
+  | "zeko-e-testnet-1"
+  | "zeko-e-mainnet";
+
 export type L1Envelope = {
   schemaVersion: 1;
-  network: "zeko-m-devnet" | "zeko-m-alphanet" | "zeko-m-mainnet";
+  provider: L1Provider;
+  network: L1Network;
   source: "l1-watcher";
   observedAt: string;
   block: {
     height: number;
-    stateHash: string;
+    hash: string;
     parentHash: string;
-    slot: number;
+    slot?: number;
     timestamp?: string;
     confirmationDepth: number;
+    providerFields?: Record<string, unknown>;
   };
 };
 ```
+
+For Mina, `block.hash` is the Mina state hash and `block.slot` is populated. For Ethereum, `block.hash` is the Ethereum block hash and Ethereum-specific fields stay under `providerFields`.
 
 ## `zeko.l1.settlements`
 
@@ -103,7 +115,7 @@ export type L1BridgeEvent = L1Envelope & {
   bridgeEventId: string;
   type: "deposit_submitted" | "withdrawal_finalized" | "deposit_cancelled";
   userPk: string;
-  userPkSource: "account_update" | "fee_payer";
+  userPkSource: "account_update" | "fee_payer" | "event_log" | "unknown";
   txHash: string;
   aux?: string;
   amount?: string;
@@ -143,23 +155,24 @@ The watcher must not include `aux_sequence`.
 ```ts
 export type L1RollbackEvent = {
   schemaVersion: 1;
-  network: "zeko-m-devnet" | "zeko-m-alphanet" | "zeko-m-mainnet";
+  provider: L1Provider;
+  network: L1Network;
   source: "l1-watcher";
   subject: "zeko.l1.rollbacks";
   rollbackId: string;
   detectedAt: string;
   commonAncestor: {
     height: number;
-    stateHash: string;
+    hash: string;
   };
   orphanedBlocks: Array<{
     height: number;
-    stateHash: string;
+    hash: string;
     parentHash: string;
   }>;
   replacementBlocks: Array<{
     height: number;
-    stateHash: string;
+    hash: string;
     parentHash: string;
   }>;
   affected: {
@@ -172,7 +185,7 @@ export type L1RollbackEvent = {
 
 ID format:
 
-- `rollbackId = ${commonAncestor.stateHash}:${orphanedBlocks[0].stateHash}:${replacementBlocks[0]?.stateHash ?? "none"}`
+- `rollbackId = ${commonAncestor.hash}:${orphanedBlocks[0].hash}:${replacementBlocks[0]?.hash ?? "none"}`
 - `Nats-Msg-Id = l1-rollback:${network}:${rollbackId}`
 
 ## `zeko.health`
@@ -182,14 +195,15 @@ export type L1WatcherHealth = {
   schemaVersion: 1;
   service: "l1-watcher";
   instanceId: string;
-  network: string;
+  provider: L1Provider;
+  network: L1Network;
   status: "healthy" | "degraded" | "down";
   observedAt: string;
   l1LiveNode: {
     connected: boolean;
     syncStatus?: string;
     tipHeight?: number;
-    tipStateHash?: string;
+    tipHash?: string;
     lastBlockAt?: string;
     lastError?: string;
   };
@@ -228,7 +242,7 @@ export type L1WatcherHealth = {
 
 Common `limitations` values:
 
-- `l1_daemon_unavailable`
+- `l1_live_unavailable`
 - `l1_archive_unavailable`
 - `historical_bridge_events_unavailable`
 - `bridge_event_gap_unrecoverable`

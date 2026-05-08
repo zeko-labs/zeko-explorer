@@ -17,7 +17,7 @@ Feature: Mina Daemon and Archive Recovery
     Then the outer action poller publishes the new outer actions
     And the outer action cursor advances after JetStream acknowledgements
     And settlement finality is marked stale
-    And health includes limitation "l1_daemon_unavailable"
+    And health includes limitation "l1_live_unavailable"
 
   Scenario: Daemon recovers before missed blocks leave the daemon frontier
     Given the hosted Mina daemon was unavailable for fewer than 290 blocks
@@ -25,7 +25,7 @@ Feature: Mina Daemon and Archive Recovery
     When the hosted Mina daemon becomes available again
     Then the watcher reconciles the retained best chain window
     And the missed bridge events are published in block order
-    And health clears limitation "l1_daemon_unavailable"
+    And health clears limitation "l1_live_unavailable"
     And no unrecoverable bridge gap is reported
 
   Scenario: Daemon outage exceeds the daemon frontier without historical zkApp commands
