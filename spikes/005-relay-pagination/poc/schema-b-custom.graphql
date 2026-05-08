@@ -1,0 +1,32 @@
+type BridgeOperation {
+  amount: String!
+  aux: String!
+  auxSequence: Int!
+  recipient: String!
+  sender: String!
+  status: BridgeOperationStatus!
+  submitBlockHeight: Int!
+  type: BridgeOperationType!
+}
+
+enum BridgeOperationStatus {
+  COMMITTED
+  COMPLETED
+  L1_WITNESSED
+  SUBMITTED
+}
+
+enum BridgeOperationType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+type BridgeOperationsPage {
+  hasMore: Boolean!
+  items: [BridgeOperation!]!
+  nextCursor: String
+}
+
+type Query {
+  bridgeOperations(after: String, limit: Int, publicKey: String!): BridgeOperationsPage
+}
