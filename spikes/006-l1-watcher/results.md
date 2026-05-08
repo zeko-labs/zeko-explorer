@@ -7,9 +7,9 @@
 
 ## Implementer Summary
 
-This spike specifies the **Mina adapter** for the L1 Watcher used in Zeko-M infra stacks. It is not an infrastructure topology document.
+This spike specifies the **Mina adapter** for the L1 Watcher used in Zeko-M infra stacks.
 
-Each network already has its own infra stack. The watcher running inside a Zeko-M stack uses the Mina adapter described here. The adapter reads Mina L1 data for that stack and hands normalized L1 facts to the watcher for publication to NATS:
+The stack supplies the watcher runtime, NATS, SurrealDB, APIs, and Mina endpoints. The adapter reads Mina L1 data for that stack and hands normalized L1 facts to the watcher for publication to NATS:
 
 - `zeko.l1.settlements`: Zeko batch settlement commits and finalized updates.
 - `zeko.l1.outer-actions`: raw and parsed commit/witness actions from `OUTER_PK`.
@@ -20,11 +20,9 @@ Each network already has its own infra stack. The watcher running inside a Zeko-
 The Mina adapter has two remote Mina inputs:
 
 1. Hosted Mina daemon GraphQL for live best-chain blocks, recent account updates, and reorg detection.
-2. Public Archive-Node-API GraphQL for historical catch-up. We are not assuming access to the archive Postgres database.
+2. Public Archive-Node-API GraphQL for historical catch-up.
 
-Current Archive-Node-API is enough for `OUTER_PK` actions, but not enough for historical bridge-event detection. Milestone 1 needs an upstream Archive-Node-API change that exposes full zkApp command account updates by block range. This is a Mina adapter requirement. The proposed upstream PR shape is documented in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
-
-This spike does not specify the Ethereum adapter. Do not infer that one watcher should watch both Mina and Ethereum, or that this document defines cross-network deployment orchestration. The network-specific infra stack already owns deployment boundaries.
+Current Archive-Node-API supports `OUTER_PK` actions. Historical bridge-event detection also needs full zkApp command account updates by block range, so Milestone 1 needs an upstream Archive-Node-API change. This is a Mina adapter requirement. The proposed upstream PR shape is documented in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
 
 The implementation spec, message schemas, adapter types, fault-tolerance behavior, and archive-reader requirement are split out:
 
@@ -41,15 +39,12 @@ The implementation spec, message schemas, adapter types, fault-tolerance behavio
 
 ### Scope Boundary
 
-The infra stack is already network-scoped. This document only describes what the Mina adapter does inside a Zeko-M stack.
-
-For a Zeko-M stack:
+Inside a Zeko-M stack:
 
 - The stack provides the network context, NATS, SurrealDB, API services, and configured Mina endpoints.
 - The L1 Watcher uses the Mina adapter.
 - The Mina adapter reads Mina daemon and Archive-Node-API data.
 - The watcher publishes the adapter's normalized facts to `zeko.l1.*` and `zeko.health`.
-- Ethereum/Zeko-E behavior is out of scope for this spike.
 
 ```
 packages/l1-watcher
@@ -76,17 +71,16 @@ packages/l1-watcher
       heartbeat.ts
 ```
 
-The watcher is not a web API. Its HTTP surface is only `GET /healthz` for container orchestration. The system API reads freshness from `sync_status`, not by calling the watcher.
+HTTP surface: `GET /healthz` for container orchestration. The system API reads freshness from `sync_status`.
 
 Mina adapter boundary:
 
 - The shared service owns process lifecycle, config validation, health, NATS publication, durable cursor/state writes, and retry/backoff supervision.
 - The Mina adapter owns Mina daemon queries/subscriptions, Archive-Node-API queries, Mina account update/action/event decoding, Zeko-M finality depth, and Mina reorg interpretation.
-- Ethereum-specific assumptions do not belong in this document.
 
 ### Durable State
 
-Use SurrealDB for watcher state and heartbeat state. Do not introduce an embedded SQLite file.
+Use SurrealDB for watcher state and heartbeat state.
 
 Required state records:
 
@@ -114,8 +108,6 @@ Run these loops in one process with independent retry/backoff. A failure in one 
 
 ### Stack Integration
 
-The network infra stack owns deployment topology. The watcher runs in the same Zeko-M stack as NATS, SurrealDB, APIs, and Mina endpoint access. This spike only specifies the Mina adapter requirements and the watcher integration points that adapter needs.
-
 Stack-provided configuration:
 
 | Env var | Required | Meaning |
@@ -135,7 +127,7 @@ Stack-provided configuration:
 
 Container readiness:
 
-- Ready only after static config is valid and the process can serve `/healthz`. Dependency outages are reported as degraded/down health, not as a hard crash.
+- Ready after static config is valid and the process can serve `/healthz`. Dependency outages are reported as degraded/down health while the process remains alive.
 - Healthy if all dependencies are reachable and both archive cursors are near archive tip.
 - Degraded if daemon or archive is down, archive lag exceeds threshold, helper cancel counter mismatch exists, or bridge backfill cannot run.
 
@@ -194,7 +186,7 @@ Detection:
 
 The watcher publishes `zeko.l1.settlements` when a settlement is first seen and when the finality level changes. `finalized` means `confirmationDepth >= 290`. Depths `0..289` remain `settling`.
 
-The watcher does not decide which L2 transactions belong to the batch. It publishes the commit's `innerActionState` and `innerActionStateLength`; the indexer walks the indexed L2 inner action chain to associate bridge operations and transactions.
+The watcher publishes the commit's `innerActionState` and `innerActionStateLength`. The indexer walks the indexed L2 inner action chain to associate bridge operations and transactions with the batch.
 
 ### Outer Actions
 
@@ -252,7 +244,7 @@ If no common ancestor exists in the daemon window, the watcher cannot fully prov
 
 ## Historical Bridge Event Gap
 
-The current Archive-Node-API does not expose enough block transaction detail to rebuild bridge events historically. Its `blocks` query returns zkApp command hashes, fee payer, status, and memo, but not account update actions/events/app state/preconditions. Deposit and cancel detection require those account update details.
+The current Archive-Node-API `blocks` query returns zkApp command hashes, fee payer, status, and memo. Historical bridge reconstruction also needs account update actions/events/app state/preconditions, because deposit and cancel detection require those details.
 
 If this is not fixed upstream, the watcher can still run but only with these guarantees:
 
@@ -266,7 +258,7 @@ If this is not fixed upstream, the watcher can still run but only with these gua
 
 Decision for Milestone 1:
 
-Do not require direct archive DB access. Upstream Archive-Node-API with a `zkappCommands(input)` query that returns full account update actions/events/app state/preconditions. The exact required query shape and PR implementation plan are specified in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
+Use upstream Archive-Node-API with a `zkappCommands(input)` query that returns full account update actions/events/app state/preconditions. The exact required query shape and PR implementation plan are specified in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
 
 ---
 
@@ -290,10 +282,10 @@ The full failure matrix and UI/API degradation contract are in [Fault tolerance 
 ## Implementation Notes That Matter
 
 - Use `chainReorganization` only as a wake-up signal. The rollback truth comes from comparing `bestChain(290)` state hashes.
-- Do not use `newBlock(publicKey: OUTER_PK)` as the only live subscription. It misses deposit submissions because those are user account actions whose payload mentions `OUTER_PK`.
-- Do not assign `aux_sequence` in the watcher. The indexer assigns it from durable bridge operation ordering.
-- Do not advance any cursor before NATS ack.
-- Do not publish new data facts while SurrealDB state writes fail. That creates unbounded duplicate or missing publication risk. The process still stays alive and reports degraded/down health.
+- Subscribe broadly enough to observe user account updates, not only `newBlock(publicKey: OUTER_PK)`, because deposit submissions are user account actions whose payload mentions `OUTER_PK`.
+- Leave `aux_sequence` assignment to the indexer, which derives it from durable bridge operation ordering.
+- Advance cursors only after NATS ack.
+- Pause new data facts while SurrealDB state writes fail. Publishing without durable state creates unbounded duplicate or missing publication risk. The process still stays alive and reports degraded/down health.
 - Publish raw fields along with parsed fields. This protects the indexer from decoder bugs and supports later reprocessing.
 - Treat unknown outer action discriminants and helper counter mismatches as degraded health, not silent skips.
 

@@ -1,6 +1,6 @@
 # Mina L1 Watcher Adapter Implementation Spec
 
-This file is the handoff for the engineer implementing the Mina adapter used by the L1 Watcher in Zeko-M infra stacks. It is not a deployment topology document and does not describe a watcher that handles multiple networks or multiple L1 providers.
+This file is the handoff for the engineer implementing the Mina adapter used by the L1 Watcher in Zeko-M infra stacks.
 
 ## Package Boundary
 
@@ -78,7 +78,7 @@ Behavior:
 8. Publish finality update if a settlement crosses from `settling` to `finalized`.
 9. Persist updated block window.
 
-Do not trust subscription payloads as complete state. Always reconcile through `bestChain`.
+Use subscription payloads as wake-up signals. Always reconcile through `bestChain`.
 
 ### Outer Action Poller
 
@@ -101,7 +101,7 @@ Behavior:
    - persist published IDs.
 4. Advance `outer_actions` cursor only after all messages in the chunk ack.
 
-Keep the cursor height based, not action-state based. Action-state filters are useful for diagnostics, but height ranges are simpler and match the archive API's documented scan cap.
+Keep the cursor height based. Action-state filters are useful for diagnostics, but height ranges are simpler and match the archive API's documented scan cap.
 
 ### Bridge Event Backfill Poller
 
@@ -190,8 +190,8 @@ DEFINE INDEX idx_l1_watcher_published_block ON l1_watcher_published FIELDS netwo
 
 | Dependency | If down | Continue? |
 |---|---|---|
-| NATS | Mark down. Do not advance cursors. Buffer only bounded in-memory data for very short outages. | Process continues; data progress pauses. |
-| SurrealDB | Mark down. Do not publish data because state cannot be persisted. | Process continues; data progress pauses. |
+| NATS | Mark down. Keep cursors unchanged. Buffer only bounded in-memory data for very short outages. | Process continues; data progress pauses. |
+| SurrealDB | Mark down. Pause data publication because state cannot be persisted. | Process continues; data progress pauses. |
 | Mina daemon | Mark degraded. Keep archive pollers running. | Outer action and bridge backfill continue. |
 | Archive API | Mark degraded. Keep daemon live loop running. | Historical catch-up stops. |
 

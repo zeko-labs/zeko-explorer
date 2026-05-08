@@ -8,11 +8,9 @@
 
 ## Context
 
-This spike describes the **Mina adapter** for the L1 Watcher used by Zeko-M networks. It is not an infrastructure topology document.
+This spike describes the **Mina adapter** for the L1 Watcher used by Zeko-M networks.
 
-Each network already has its own infra stack. The watcher that runs inside a Zeko-M stack uses the Mina adapter described here. It monitors the Mina live node and Mina archive source configured for that stack, then publishes normalized L1 facts into that stack's NATS event log.
-
-This document does not describe an L1 Watcher that watches multiple networks, and it does not describe an L1 Watcher that watches both Mina and Ethereum. Ethereum/Zeko-E needs its own adapter design.
+The Zeko-M infra stack supplies the watcher runtime, NATS, SurrealDB, APIs, and Mina endpoints. The Mina adapter monitors the configured Mina live node and archive source, then produces normalized L1 facts for the stack's NATS event log.
 
 The Mina adapter produces facts for four NATS subjects: `zeko.l1.settlements`, `zeko.l1.rollbacks`, `zeko.l1.outer-actions`, and `zeko.l1.bridge-events`.
 
@@ -22,10 +20,7 @@ Nomenclature used by this spike:
 
 - **L1 Watcher**: the explorer component that publishes normalized L1 facts into NATS.
 - **Mina adapter**: the Zeko-M implementation of the L1 Watcher input/decoder logic. This is what Spike 006 specifies.
-- **Zeko-M stack**: the already network-scoped infra stack that runs the watcher, NATS, SurrealDB, APIs, and related services for a Zeko-M network.
-- **Ethereum adapter**: future Zeko-E work. It is not specified by this spike.
-
-Do not infer a multi-network or multi-provider deployment model from this document. The infra stack owns deployment boundaries; this spike owns Mina adapter behavior.
+- **Zeko-M stack**: the infra stack that runs the watcher, NATS, SurrealDB, APIs, and related services for a Zeko-M network.
 
 ---
 
