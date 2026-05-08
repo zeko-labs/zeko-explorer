@@ -1,10 +1,10 @@
-# L1 Watcher Implementation Spec
+# Mina L1 Watcher Adapter Implementation Spec
 
-This file is the handoff for the engineer implementing `packages/l1-watcher`.
+This file is the handoff for the engineer implementing the Mina adapter used by the L1 Watcher in Zeko-M infra stacks. It is not a deployment topology document and does not describe a watcher that handles multiple networks or multiple L1 providers.
 
 ## Package Boundary
 
-Implement as a TypeScript package in the monorepo:
+Implement the Mina adapter and the watcher integration points it needs inside the TypeScript package:
 
 ```
 packages/l1-watcher/
@@ -42,7 +42,7 @@ Suggested dependencies:
 
 ## Boot Sequence
 
-1. Parse config and fail fast only on invalid static configuration, such as missing network name or malformed public keys.
+1. Parse stack-provided config and fail fast only on invalid static configuration, such as missing stack/network context or malformed public keys.
 2. Generate `instanceId`.
 3. Start `GET /healthz`.
 4. Start dependency connection managers for SurrealDB, NATS, Mina daemon HTTP/WebSocket, and Archive-Node-API.
