@@ -42,8 +42,8 @@ Feature: Query catalog
 
   Scenario: Smart contract transaction feed is receiver-indexed
     When I run query "transactions-by-receiver-first-page" with:
-      | account | account:01J0000000000000000000ZKAP |
-      | limit   | 3                                      |
+      | public_key | "B62qContract" |
+      | limit      | 3              |
     Then the result should contain 3 rows
     And the rows should be ordered by descending field "block_height"
 

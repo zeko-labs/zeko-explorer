@@ -157,6 +157,12 @@ DEFINE FIELD OVERWRITE status ON TABLE transaction TYPE "applied" | "reverted";
 DEFINE FIELD OVERWRITE sender ON TABLE transaction TYPE option<record<account>>;
 DEFINE FIELD OVERWRITE receiver ON TABLE transaction TYPE option<record<account>>;
 DEFINE FIELD OVERWRITE fee_payer ON TABLE transaction TYPE option<record<account>>;
+-- Scalar public-key copies are deliberate feed keys. Keep record fields and graph
+-- edges for bounded detail traversal; use these strings for high-volume account
+-- and smart-contract transaction feeds so the index key is compact and stable.
+DEFINE FIELD OVERWRITE sender_public_key ON TABLE transaction TYPE option<string>;
+DEFINE FIELD OVERWRITE receiver_public_key ON TABLE transaction TYPE option<string>;
+DEFINE FIELD OVERWRITE fee_payer_public_key ON TABLE transaction TYPE option<string>;
 DEFINE FIELD OVERWRITE amount ON TABLE transaction TYPE option<string>;
 DEFINE FIELD OVERWRITE fee ON TABLE transaction TYPE option<string>;
 DEFINE FIELD OVERWRITE nonce ON TABLE transaction TYPE option<int>;
@@ -180,6 +186,9 @@ DEFINE INDEX OVERWRITE idx_tx_feed ON TABLE transaction FIELDS sort_block_height
 DEFINE INDEX OVERWRITE idx_tx_sender_feed ON TABLE transaction FIELDS sender, sort_block_height, sort_tx_index, id;
 DEFINE INDEX OVERWRITE idx_tx_receiver_feed ON TABLE transaction FIELDS receiver, sort_block_height, sort_tx_index, id;
 DEFINE INDEX OVERWRITE idx_tx_fee_payer_feed ON TABLE transaction FIELDS fee_payer, sort_block_height, sort_tx_index, id;
+DEFINE INDEX OVERWRITE idx_tx_sender_key_feed ON TABLE transaction FIELDS sender_public_key, sort_block_height, sort_tx_index, id;
+DEFINE INDEX OVERWRITE idx_tx_receiver_key_feed ON TABLE transaction FIELDS receiver_public_key, sort_block_height, sort_tx_index, id;
+DEFINE INDEX OVERWRITE idx_tx_fee_payer_key_feed ON TABLE transaction FIELDS fee_payer_public_key, sort_block_height, sort_tx_index, id;
 DEFINE INDEX OVERWRITE idx_tx_status_feed ON TABLE transaction FIELDS status, sort_block_height, sort_tx_index, id;
 DEFINE INDEX OVERWRITE idx_tx_type_feed ON TABLE transaction FIELDS type, sort_block_height, sort_tx_index, id;
 DEFINE INDEX OVERWRITE idx_tx_target_ledger ON TABLE transaction FIELDS target_ledger_hash UNIQUE;
@@ -469,7 +478,7 @@ DEFINE INDEX OVERWRITE idx_action_ledger ON TABLE zkapp_action FIELDS target_led
 -- 4. For every missing or inferred evidence item, the indexer upserts one
 --    `bridge_quality_issue` row keyed by `(bridge_operation, reason)`.
 -- 5. For every previously open issue that is now satisfied, the indexer sets
---    `bridge_quality_issue.resolved_at`.
+--    `bridge_quality_issue.resolved_at` and flips `is_open` to false.
 -- 6. The denormalized summary on `bridge_operation` is then recomputed from open
 --    issue rows: no open issues => `complete`; any open `unrecoverable` issue
 --    => `unrecoverable`; else any open `inferred` issue => `inferred`; else
@@ -540,9 +549,10 @@ DEFINE INDEX OVERWRITE idx_bo_timeout ON TABLE bridge_operation FIELDS type, sta
 -- Decision: do not expose incomplete bridge evidence by scanning
 -- `bridge_operation.data_quality`. Low-cardinality quality filters degrade at
 -- scale and are operator/product ambiguous. The indexer writes one
--- `bridge_quality_issue` row per non-complete reason. Public/operator issue
--- lists read this compact table; normal bridge history still reads
--- `bridge_operation`.
+-- `bridge_quality_issue` row per non-complete reason. Operator issue lists read
+-- this compact table; public bridge history still reads `bridge_operation`.
+-- The 2.2M-row benchmark keeps this table out of public request paths until a
+-- smaller public-facing queue/materialized severity bucket is measured.
 --------------------------------------------------------------------------------
 
 DEFINE TABLE OVERWRITE bridge_quality_issue SCHEMAFULL;
@@ -563,8 +573,9 @@ DEFINE FIELD OVERWRITE sort_submit_block_height ON TABLE bridge_quality_issue TY
 DEFINE FIELD OVERWRITE submit_timestamp ON TABLE bridge_quality_issue TYPE datetime;
 DEFINE FIELD OVERWRITE detected_at ON TABLE bridge_quality_issue TYPE datetime DEFAULT time::now() READONLY;
 DEFINE FIELD OVERWRITE resolved_at ON TABLE bridge_quality_issue TYPE option<datetime>;
+DEFINE FIELD OVERWRITE is_open ON TABLE bridge_quality_issue TYPE bool DEFAULT true;
 DEFINE INDEX OVERWRITE idx_bqi_unique ON TABLE bridge_quality_issue FIELDS bridge_operation, reason UNIQUE;
-DEFINE INDEX OVERWRITE idx_bqi_open_feed ON TABLE bridge_quality_issue FIELDS resolved_at, data_quality, sort_submit_block_height, id;
+DEFINE INDEX OVERWRITE idx_bqi_open_feed ON TABLE bridge_quality_issue FIELDS is_open, data_quality, sort_submit_block_height, id;
 DEFINE INDEX OVERWRITE idx_bqi_reason_feed ON TABLE bridge_quality_issue FIELDS reason, sort_submit_block_height, id;
 DEFINE INDEX OVERWRITE idx_bqi_bridge ON TABLE bridge_quality_issue FIELDS bridge_operation;
 
@@ -580,9 +591,14 @@ DEFINE INDEX OVERWRITE idx_bqi_bridge ON TABLE bridge_quality_issue FIELDS bridg
 DEFINE TABLE OVERWRITE account_transaction TYPE RELATION IN transaction OUT account ENFORCED SCHEMAFULL;
 DEFINE FIELD OVERWRITE role ON TABLE account_transaction TYPE "sender" | "receiver" | "fee_payer" | "touched";
 DEFINE FIELD OVERWRITE amount_delta ON TABLE account_transaction TYPE option<string>;
+DEFINE FIELD OVERWRITE account_public_key ON TABLE account_transaction TYPE option<string>;
+DEFINE FIELD OVERWRITE sort_block_height ON TABLE account_transaction TYPE option<int>;
+DEFINE FIELD OVERWRITE sort_tx_index ON TABLE account_transaction TYPE option<int>;
 DEFINE FIELD OVERWRITE created_at ON TABLE account_transaction TYPE datetime DEFAULT time::now() READONLY;
 DEFINE INDEX OVERWRITE idx_account_tx_in ON TABLE account_transaction FIELDS in, role;
 DEFINE INDEX OVERWRITE idx_account_tx_out ON TABLE account_transaction FIELDS out, role;
+DEFINE INDEX OVERWRITE idx_account_tx_out_feed ON TABLE account_transaction FIELDS out, role, sort_block_height, sort_tx_index;
+DEFINE INDEX OVERWRITE idx_account_tx_public_key_feed ON TABLE account_transaction FIELDS account_public_key, role, sort_block_height, sort_tx_index;
 DEFINE INDEX OVERWRITE idx_account_tx_unique ON TABLE account_transaction FIELDS in, out, role UNIQUE;
 
 DEFINE TABLE OVERWRITE batch_transaction TYPE RELATION IN batch OUT transaction ENFORCED SCHEMAFULL;

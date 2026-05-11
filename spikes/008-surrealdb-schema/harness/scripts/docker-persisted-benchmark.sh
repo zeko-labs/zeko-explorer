@@ -7,7 +7,7 @@ VOLUME="${SPIKE008_DOCKER_VOLUME:-spike-008-surrealdb-benchmark-data}"
 PORT="${SPIKE008_DOCKER_PORT:-8129}"
 DB="${BENCH_DB_NAME:-bench_import}"
 REPORT_DIR="${SPIKE008_REPORT_DIR:-$(pwd)/reports}"
-IMPORT_FILE="${BENCH_IMPORT_FILE:-${REPORT_DIR}/benchmark-import.surql}"
+IMPORT_DIR="${BENCH_IMPORT_DIR:-${REPORT_DIR}/benchmark-import}"
 
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
@@ -18,7 +18,7 @@ cleanup
 trap cleanup EXIT
 
 mkdir -p "$REPORT_DIR"
-BENCH_IMPORT_FILE="$IMPORT_FILE" pnpm run benchmark:generate-import
+BENCH_IMPORT_DIR="$IMPORT_DIR" BENCH_INDEX_PROFILE="${BENCH_INDEX_PROFILE:-benchmark-inline}" pnpm run benchmark:generate-import
 
 docker volume create "$VOLUME" >/dev/null
 docker run \
@@ -47,7 +47,10 @@ until curl --silent --fail \
   sleep 1
 done
 
-docker exec "$CONTAINER" /surreal import --endpoint "http://127.0.0.1:8000" --username root --password root --namespace spike008 --database "$DB" "/import/$(basename "$IMPORT_FILE")"
+for file in "$IMPORT_DIR"/*.surql; do
+  echo "[import] $(basename "$file")"
+  docker exec "$CONTAINER" /surreal import --endpoint "http://127.0.0.1:8000" --username root --password root --namespace spike008 --database "$DB" "/import/$(basename "$IMPORT_DIR")/$(basename "$file")"
+done
 imported_at="$(date +%s)"
 
 SPIKE008_SURREAL_ENDPOINT="http://127.0.0.1:${PORT}" \

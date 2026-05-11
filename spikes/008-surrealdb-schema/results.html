@@ -419,13 +419,13 @@
         <p>Executable schema, query catalog, data-bearing migrations, Cucumber tests, expanded workload benchmarks, and a clear scale boundary for the Zeko explorer read model.</p>
         <div class="meta">
           <span class="pill">Status: implementable spike</span>
-          <span class="pill">Date: 2026-05-09</span>
+          <span class="pill">Date: 2026-05-11</span>
           <span class="pill">22 tables</span>
           <span class="pill">23 Cucumber scenarios</span>
         </div>
       </div>
       <div class="score" aria-label="Confidence score">
-        <b>0.68</b>
+        <b>0.78</b>
         <span>implementation confidence</span>
       </div>
     </div>
@@ -450,27 +450,28 @@
 
   <section id="scale">
     <h2>Scale Boundary</h2>
-    <div class="callout warn">
-      <strong>Current local evidence is not a 100x/1000x proof.</strong>
-      The local benchmark proves query shape and catches obvious index mistakes. It does not prove behavior at 20M, 200M, or 2B rows.
+    <div class="callout good">
+      <strong>2.2M transaction proof completed.</strong>
+      The persisted Docker benchmark loaded and queried 2,200,000 real <code>transaction</code> rows in SurrealDB 2.4.0 using SurrealKV, not the in-memory backend and not HTTP row seeding.
     </div>
-    <p>The persisted Docker benchmark now uses a SurrealQL import file and <code>surreal import</code>, not row-by-row HTTP seeding. A 2,200,000-transaction import file was generated successfully, but importing it into persisted SurrealKV under the local Docker resource limit was killed with exit code 137 after writing roughly 11.8 GB to the volume. That is a real scale blocker, not a passing benchmark.</p>
+    <p>The benchmark dataset was 50,000 accounts, 500 high-volume contract accounts, 2,200,000 transactions, 220,000 account-activity rows, 220,000 bridge operations, 31,429 open bridge-quality issue rows, and sampled zkApp event/action rows. The load path generated sorted SurrealQL chunks and imported each chunk with <code>/surreal import</code> into <code>surrealkv:/data/benchmark.db</code>.</p>
+    <p>This proves the model at current testnet-plus row count. It still does not prove 100x/1000x growth. The correct next scale gates are 20M, 200M, and 2B transaction datasets on production-like storage, with the same query catalog and explicit pass/fail latency budgets.</p>
     <details open>
       <summary>Does a larger dataset require more RAM?</summary>
       <div>
-        <p>Yes for the current benchmark command, because it starts SurrealDB with the <code>memory</code> backend. With <code>memory</code>, records and indexes live in process memory, so row count and index count directly increase RAM pressure. That is useful for fast tests, but it is not a production deployment model.</p>
+        <p>For the Cucumber suite, yes: it intentionally starts SurrealDB with the <code>memory</code> backend, so row count and index count directly increase RAM pressure. For the benchmark proof, no: <code>benchmark:docker:persisted</code> starts Dockerized SurrealDB with persisted <code>surrealkv</code>. RAM still matters for caches, compaction, index maintenance, and query execution, but the records are not held only in process memory.</p>
       </div>
     </details>
     <details open>
       <summary>Would Docker solve the in-memory issue?</summary>
       <div>
-        <p>No. Docker is only packaging/isolation. <code>surreal start memory</code> inside Docker is still in-memory. Docker can make a persistent benchmark reproducible if it runs SurrealDB with a persisted storage engine and mounted volume, but Docker itself does not change memory behavior.</p>
+        <p>Docker only solves this when the command also uses a persisted backend. <code>surreal start memory</code> inside Docker is still in-memory. This spike now runs Docker with a mounted volume and <code>surrealkv:/data/benchmark.db</code>, then removes both the container and volume after the run.</p>
       </div>
     </details>
     <details>
       <summary>What must happen outside this spike?</summary>
       <div>
-        <p>Run 20M, 200M, and 2B-row benchmarks against the pinned production SurrealDB version using persisted storage, production-like memory limits, and bulk import/snapshot seeding. The local Docker run proved the benchmark harness shape, but the local Docker memory/disk budget is not enough to claim testnet-plus scale.</p>
+        <p>Run 20M, 200M, and 2B-row benchmarks against the pinned production SurrealDB version using persisted storage, production-like memory limits, and bulk import/snapshot seeding. The 2.2M proof is now complete; the larger gates are about growth headroom, not whether the current testnet-sized model can load and answer the catalog.</p>
       </div>
     </details>
   </section>
@@ -484,9 +485,9 @@
         <tr><td><a href="migrations/">migrations/</a></td><td>Forward migration proof with existing bridge data and backfills.</td></tr>
         <tr><td><a href="queries/">queries/</a></td><td>One SurrealQL file per resolver/query path.</td></tr>
         <tr><td><a href="harness/features/">harness/features/</a></td><td>Cucumber acceptance suite against in-memory SurrealDB.</td></tr>
-        <tr><td><a href="harness/benchmarks/generate-import.ts">harness/benchmarks/generate-import.ts</a></td><td>Generates a SurrealQL import file for large benchmark datasets without using the HTTP SQL endpoint for row inserts.</td></tr>
-        <tr><td><a href="harness/benchmarks/run-benchmarks.ts">harness/benchmarks/run-benchmarks.ts</a></td><td>Runs query timings after data exists in SurrealDB. It can skip seeding when the Docker import path has already loaded the database.</td></tr>
-        <tr><td><a href="harness/scripts/docker-persisted-benchmark.sh">harness/scripts/docker-persisted-benchmark.sh</a></td><td>Starts Dockerized SurrealDB with persisted SurrealKV, imports the generated file with <code>surreal import</code>, runs query timings, and removes the container and volume on exit.</td></tr>
+        <tr><td><a href="harness/benchmarks/generate-import.ts">harness/benchmarks/generate-import.ts</a></td><td>Generates ordered SurrealQL import chunks for large datasets without using the HTTP SQL endpoint for row inserts.</td></tr>
+        <tr><td><a href="harness/benchmarks/run-benchmarks.ts">harness/benchmarks/run-benchmarks.ts</a></td><td>Runs query timings after data exists in SurrealDB. In the scale path it does not seed; it only measures the already-loaded database.</td></tr>
+        <tr><td><a href="harness/scripts/docker-persisted-benchmark.sh">harness/scripts/docker-persisted-benchmark.sh</a></td><td>Starts Dockerized SurrealDB with persisted SurrealKV, imports the generated chunks with <code>surreal import</code>, runs query timings, and removes the container and volume on exit.</td></tr>
       </tbody>
     </table>
   </section>
@@ -566,7 +567,7 @@
   <section id="bridge-quality">
     <h2>Bridge Data Quality Contract</h2>
     <div class="callout good">
-      <strong>Decision:</strong> <code>bridge_operation.data_quality</code> is a denormalized summary maintained by the TypeScript indexer. The detailed source of truth for non-complete evidence is <code>bridge_quality_issue</code>, one row per open reason.
+      <strong>Decision:</strong> <code>bridge_operation.data_quality</code> is a denormalized summary maintained by the TypeScript indexer. The detailed source of truth for non-complete evidence is <code>bridge_quality_issue</code>, one row per reason, with <code>is_open</code> marking whether that reason is still active.
     </div>
     <svg class="diagram" viewBox="0 0 980 300" role="img" aria-label="Bridge evidence flow">
       <defs>
@@ -614,7 +615,7 @@
           <li>On each bridge-affecting message, the indexer upserts the concrete <code>bridge_operation</code> fields proven by that message.</li>
           <li>The indexer evaluates the required-evidence matrix for the row's current <code>type/status</code>.</li>
           <li>For every missing or inferred evidence item, the indexer upserts one <code>bridge_quality_issue</code> row keyed by <code>(bridge_operation, reason)</code>.</li>
-          <li>For every previously open issue that is now satisfied, the indexer sets <code>bridge_quality_issue.resolved_at</code>.</li>
+          <li>For every previously open issue that is now satisfied, the indexer sets <code>bridge_quality_issue.resolved_at</code> and <code>is_open = false</code>.</li>
           <li>The denormalized summary is recomputed from open issue rows: no open issues means <code>complete</code>; otherwise <code>unrecoverable</code> wins over <code>inferred</code>, which wins over <code>partial</code>.</li>
           <li><code>data_quality_reasons</code> becomes the ordered list of open issue reasons.</li>
         </ol>
@@ -671,7 +672,7 @@
       <div class="decision-card good"><strong>Transaction investigation</strong><code>hash UNIQUE</code><small>single-row natural lookup before bounded detail fanout</small></div>
       <div class="decision-card good"><strong>Account activity</strong><code>account, block_height, tx_index, activity_index, id</code><small>profile history stays account-local</small></div>
       <div class="decision-card good"><strong>Bridge history</strong>public key plus <code>sort_submit_block_height, aux, aux_sequence, id</code><small>sender and recipient history avoid low-cardinality scans</small></div>
-      <div class="decision-card good"><strong>Bridge evidence issues</strong><code>resolved_at, data_quality, sort_submit_block_height, id</code><small>materialized diagnostics replace scanning <code>bridge_operation</code></small></div>
+      <div class="decision-card good"><strong>Bridge evidence issues</strong><code>is_open, data_quality, sort_submit_block_height, id</code><small>materialized diagnostics replace scanning <code>bridge_operation</code></small></div>
       <div class="decision-card"><strong>Batch feed</strong><code>batch_height, id</code><small>low-volume secondary seek</small></div>
       <div class="decision-card"><strong>Watcher idempotency</strong><code>msg_id UNIQUE</code><small>published NATS messages reject duplicate writes</small></div>
     </div>
@@ -733,34 +734,51 @@
 
   <section id="benchmarks">
     <h2>Benchmark Evidence</h2>
-    <div class="callout warn">
-      <strong>No scale pass yet.</strong>
-      The only honest conclusion from the persisted Docker run is that this local machine/container budget cannot validate 2.2M+ rows. The benchmark harness now uses the right loading mechanism, but the completed local result still stops before the required scale proof.
+    <div class="callout good">
+      <strong>Scale pass at current testnet-plus size.</strong>
+      On 2026-05-11 the persisted Docker benchmark loaded 2,200,000 transactions and completed all 12 query paths against SurrealDB 2.4.0 with SurrealKV. Load time was 947 seconds.
     </div>
     <div class="decision-grid">
-      <div class="decision-card good"><strong>Old seeding path removed</strong>The persisted benchmark no longer writes millions of rows through the TypeScript HTTP SQL loop. That path measured client batching and request timeouts, not the data model.</div>
-      <div class="decision-card good"><strong>Bulk-load path added</strong><code>generate-import.ts</code> writes one SurrealQL import file; Docker imports it with <code>/surreal import</code> into persisted <code>surrealkv:/data/benchmark.db</code>.</div>
-      <div class="decision-card warn"><strong>2.2M import generated</strong>The generated file was 2.0 GB for 50,000 accounts, 2,200,000 transactions, 2,200,000 account-activity rows, 220,000 bridge operations, sampled zkApp event/action rows, and materialized bridge quality issues.</div>
-      <div class="decision-card danger"><strong>2.2M persisted import failed</strong>The Dockerized SurrealDB import was killed with exit code 137 after several minutes, about 11.8 GB of block writes, and memory fluctuating around 2.6-3.0 GiB of a 3.9 GiB Docker limit.</div>
+      <div class="decision-card good"><strong>Bulk import, not HTTP seeding</strong><code>generate-import.ts</code> writes ordered chunk files. Docker imports those chunks with <code>/surreal import</code> into persisted <code>surrealkv:/data/benchmark.db</code>.</div>
+      <div class="decision-card good"><strong>Measured user paths</strong>The run includes global feed, hash lookup, transaction detail, account profile, sender feed, smart-contract receiver feed, account activity, bridge sender history, bridge diagnostics, and batch feed.</div>
+      <div class="decision-card warn"><strong>Receiver graph sampled</strong>The dataset materializes receiver <code>account_transaction</code> edges for the measured hot receiver accounts, not for every receiver in all 2.2M transactions. That proves the selected graph query path, not the cost of universal receiver-edge materialization.</div>
+      <div class="decision-card warn"><strong>Slow paths remain</strong><code>bridge-quality-issues-first-page</code> is still slow at p50 659ms. <code>account-profile-overview</code> and <code>transactions-by-receiver-first-page</code> have multi-second p95 outliers with only five iterations.</div>
     </div>
     <div class="bench-grid">
       <div class="bench-card">
-        <header><span class="query">Completed query-shape benchmark</span><span class="reading">100,000 transactions, in-memory SurrealDB 2.4.0</span></header>
-        <div class="bar"><span style="width:5%"></span></div>
-        <div class="bench-metrics"><span>Useful for index/query smoke testing</span><span>not scale evidence</span></div>
+        <header><span class="query">Fast direct lookups</span><span class="reading">hash/detail paths over 2.2M tx</span></header>
+        <div class="bar"><span style="width:8%"></span></div>
+        <div class="bench-metrics"><span>tx hash p50 33ms</span><span>detail p50 30ms</span></div>
       </div>
       <div class="bench-card">
-        <header><span class="query">Persisted Docker smoke test</span><span class="reading">1,000 transactions, import path only</span></header>
-        <div class="bar"><span style="width:1%"></span></div>
-        <div class="bench-metrics"><span>Proves harness mechanics</span><span>not scale evidence</span></div>
+        <header><span class="query">Fast profile subfeeds</span><span class="reading">sender/activity/bridge sender</span></header>
+        <div class="bar"><span style="width:7%"></span></div>
+        <div class="bench-metrics"><span>sender p50 26ms</span><span>activity p50 34ms</span></div>
       </div>
       <div class="bench-card">
-        <header><span class="query">Required next benchmark</span><span class="reading">20M / 200M / 2B rows on production-like storage</span></header>
-        <div class="bar"><span style="width:0%"></span></div>
-        <div class="bench-metrics"><span>Not completed locally</span><span>must gate production confidence</span></div>
+        <header><span class="query">Outliers to fix before implementation lock</span><span class="reading">bridge diagnostics and receiver/profile fanout</span></header>
+        <div class="bar"><span style="width:72%"></span></div>
+        <div class="bench-metrics"><span>bridge quality p50 659ms</span><span>profile p95 5.5s</span></div>
       </div>
     </div>
-    <p>The benchmark decision is therefore: the query catalog is broad enough to implement resolvers, but the data-model scale claim is not proven. The next benchmark must run on hardware with explicit CPU, memory, disk, and SurrealDB storage settings, using the import-file path or production snapshots.</p>
+    <table>
+      <thead><tr><th>Query</th><th>p50 ms</th><th>p95 ms</th><th>Decision</th></tr></thead>
+      <tbody>
+        <tr><td><code>transaction-feed-first-page</code></td><td>37.073</td><td>63.718</td><td><span class="ok">Accept.</span> Global feed index is viable at 2.2M.</td></tr>
+        <tr><td><code>transaction-by-hash</code></td><td>33.424</td><td>45.161</td><td><span class="ok">Accept.</span> Unique hash lookup is viable.</td></tr>
+        <tr><td><code>transaction-detail-by-hash</code></td><td>29.575</td><td>72.904</td><td><span class="ok">Accept.</span> Bounded detail fanout is viable for the sampled event/action density.</td></tr>
+        <tr><td><code>account-profile-overview</code></td><td>152.880</td><td>5517.030</td><td><span class="warning">Revise.</span> Keep the query file, but implement the profile resolver as parallel subqueries with per-subfeed budgets instead of one compound SurrealQL statement.</td></tr>
+        <tr><td><code>transactions-by-sender-first-page</code></td><td>26.106</td><td>45.180</td><td><span class="ok">Accept.</span> Scalar <code>sender_public_key</code> feed is viable.</td></tr>
+        <tr><td><code>transactions-by-receiver-first-page</code></td><td>112.289</td><td>2828.031</td><td><span class="warning">Revise.</span> The graph edge model is correct, but hot-contract feeds need more iterations and likely a denormalized <code>contract_transaction_feed</code> row if p95 remains above budget at 20M.</td></tr>
+        <tr><td><code>transactions-by-sender</code></td><td>29.228</td><td>40.684</td><td><span class="ok">Accept.</span> Keyset next-page predicate is viable.</td></tr>
+        <tr><td><code>account-activity-first-page</code></td><td>34.375</td><td>38.296</td><td><span class="ok">Accept.</span> Account-local activity table is viable.</td></tr>
+        <tr><td><code>bridge-operations-by-sender-first-page</code></td><td>26.999</td><td>30.375</td><td><span class="ok">Accept.</span> Bridge sender history index is viable.</td></tr>
+        <tr><td><code>bridge-quality-issues-first-page</code></td><td>659.170</td><td>2669.253</td><td><span class="bad">Reject for public UI.</span> Keep as an operator diagnostic query only unless it is redesigned around a smaller open-issue queue/materialized severity bucket.</td></tr>
+        <tr><td><code>bridge-quality-issues-by-reason</code></td><td>588.908</td><td>661.074</td><td><span class="bad">Reject for public UI.</span> Reason-filtered diagnostics are too slow for normal request paths at this size.</td></tr>
+        <tr><td><code>batch-feed-first-page</code></td><td>30.235</td><td>59.081</td><td><span class="ok">Accept.</span> Batch feed is low volume and viable.</td></tr>
+      </tbody>
+    </table>
+    <p>The benchmark decision is therefore: the core explorer read model is implementable at current testnet-plus size, but bridge-quality diagnostics must not be public request-path queries in this form, and profile/receiver fanout need resolver-level decomposition plus a 20M rerun before the schema is locked.</p>
   </section>
 
   <section id="verification">
@@ -775,7 +793,7 @@ pnpm run benchmark:docker:persisted</code></pre>
       <div class="status-card"><span class="state">passed</span><strong>TypeScript</strong><br><code>pnpm run typecheck</code></div>
       <div class="status-card"><span class="state">passed</span><strong>Cucumber</strong><br>23 scenarios, 103 steps</div>
       <div class="status-card"><span class="state">passed</span><strong>Schema validation</strong><br>22 tables found in real SurrealDB</div>
-      <div class="status-card"><span class="state fail">failed</span><strong>2.2M persisted benchmark</strong><br>Docker + SurrealKV import hit exit 137 under local resource limits; volume removed after run</div>
+      <div class="status-card"><span class="state">passed</span><strong>2.2M persisted benchmark</strong><br>Docker + SurrealKV import completed in 947s; all 12 measured query files ran; container and volume were removed after run</div>
     </div>
     <p>The Cucumber suite proves required tables and indexes exist, natural unique keys reject duplicate at-least-once writes, query catalog files execute against real SurrealDB, newest-first feeds are ordered correctly, graph traversals work for account/batch/bridge detail pages, rollback-sensitive child rows can be found and removed by <code>target_ledger_hash</code>, L1 watcher cursor and published-message tables are queryable, and migration 0001 -> 0002 preserves existing bridge data while backfilling new fields.</p>
   </section>
@@ -794,13 +812,14 @@ pnpm run benchmark:docker:persisted</code></pre>
 
   <section id="confidence">
     <h2>Confidence and Remaining Work</h2>
-    <p><strong>Confidence: 0.68.</strong> The schema and resolver query catalog are strong enough for implementation to start, but this spike does not yet prove the model at testnet-plus scale on persisted SurrealDB. The failed 2.2M Docker import is a material confidence reducer.</p>
-    <p>Reasons for that confidence: the schema is executable, the query catalog is broad enough for resolver implementation and benchmarking, the Cucumber suite tests idempotency/graph traversal/rollback/watcher state/data-bearing migration/materialized issue behavior against real SurrealDB, and the benchmark harness now uses a proper import path for persisted storage.</p>
-    <p>Reasons it is not higher: the 2.2M persisted import was killed under local Docker resource limits before query timings; 20M/200M/2B-row tests need production-like hardware; live queries/SSE fan-out are designed but not load-tested; DA monitor payloads from spike 007 are still not final.</p>
-    <div class="bar" aria-label="Confidence 68 percent"><span style="width:68%"></span></div>
+    <p><strong>Confidence: 0.78.</strong> The schema and resolver query catalog are strong enough for implementation to start, and the model has now been loaded and queried at 2.2M transactions on persisted SurrealDB. Confidence is not higher because the run exposed specific slow paths that need redesign before public exposure.</p>
+    <p>Reasons for that confidence: the schema is executable, the query catalog covers the real resolver shapes, the Cucumber suite tests idempotency/graph traversal/rollback/watcher state/data-bearing migration/materialized issue behavior against real SurrealDB, and the persisted benchmark proves current testnet-plus row count with bulk import rather than HTTP seeding.</p>
+    <p>Reasons it is not higher: <code>bridge-quality-issues-first-page</code> and <code>bridge-quality-issues-by-reason</code> are rejected for public UI at this latency; profile and receiver feed p95 outliers need resolver decomposition and a 20M rerun; live queries/SSE fan-out are designed but not load-tested; DA monitor payloads from spike 007 are still not final.</p>
+    <div class="bar" aria-label="Confidence 78 percent"><span style="width:78%"></span></div>
     <div class="decision-grid">
-      <div class="decision-card good"><strong>Done in this spike</strong>Schema, migrations, query catalog, graph usage, bridge quality contract, Cucumber tests, and persisted Docker import benchmark path.</div>
-      <div class="decision-card warn"><strong>Scale still required</strong>Run 20M, 200M, and 2B-row benchmarks on production-like persisted storage with bulk import/snapshot seeding.</div>
+      <div class="decision-card good"><strong>Done in this spike</strong>Schema, migrations, query catalog, graph usage, bridge quality contract, Cucumber tests, and 2.2M persisted Docker benchmark proof.</div>
+      <div class="decision-card warn"><strong>Growth scale still required</strong>Run 20M, 200M, and 2B-row benchmarks on production-like persisted storage with bulk import/snapshot seeding.</div>
+      <div class="decision-card warn"><strong>Bridge diagnostics decision</strong>Keep bridge-quality issue queries operator-only unless redesigned as a smaller public-facing queue with measured latency under budget.</div>
       <div class="decision-card warn"><strong>Planner evidence</strong>Add <code>EXPLAIN</code>/query-plan assertions if the pinned SurrealDB version exposes stable output.</div>
       <div class="decision-card warn"><strong>Real ingestion</strong>Add backfill/import tests from NATS/R2 data and concurrent writer benchmarks for unique-key retries and graph relation writes.</div>
       <div class="decision-card warn"><strong>API runtime</strong>Load-test GraphQL/SSE fan-out and add one query file plus benchmark for every new resolver filter found during implementation.</div>

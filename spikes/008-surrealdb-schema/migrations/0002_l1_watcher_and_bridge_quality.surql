@@ -25,9 +25,12 @@ WHERE data_quality = NONE OR sort_submit_block_height = NONE;
 
 DEFINE INDEX OVERWRITE idx_bo_data_quality ON TABLE bridge_operation FIELDS data_quality, sort_submit_block_height, id;
 
--- Materialized issue table. This is the scale decision for browsing incomplete
--- bridge evidence: do not scan all bridge_operation rows by low-cardinality
--- `data_quality`; write one compact issue row per reason instead.
+-- Materialized issue table. This is the scale decision for incomplete bridge
+-- evidence: do not scan all bridge_operation rows by low-cardinality
+-- `data_quality`; write one compact operator diagnostic row per reason instead.
+-- Public bridge history must read bridge_operation and treat non-complete
+-- quality as row metadata, not a public issue feed, until a smaller public queue
+-- is designed and benchmarked.
 DEFINE TABLE OVERWRITE bridge_quality_issue SCHEMAFULL;
 DEFINE FIELD OVERWRITE id ON TABLE bridge_quality_issue TYPE string;
 DEFINE FIELD OVERWRITE bridge_operation ON TABLE bridge_quality_issue TYPE record<bridge_operation>;
@@ -46,8 +49,9 @@ DEFINE FIELD OVERWRITE sort_submit_block_height ON TABLE bridge_quality_issue TY
 DEFINE FIELD OVERWRITE submit_timestamp ON TABLE bridge_quality_issue TYPE datetime;
 DEFINE FIELD OVERWRITE detected_at ON TABLE bridge_quality_issue TYPE datetime DEFAULT time::now() READONLY;
 DEFINE FIELD OVERWRITE resolved_at ON TABLE bridge_quality_issue TYPE option<datetime>;
+DEFINE FIELD OVERWRITE is_open ON TABLE bridge_quality_issue TYPE bool DEFAULT true;
 DEFINE INDEX OVERWRITE idx_bqi_unique ON TABLE bridge_quality_issue FIELDS bridge_operation, reason UNIQUE;
-DEFINE INDEX OVERWRITE idx_bqi_open_feed ON TABLE bridge_quality_issue FIELDS resolved_at, data_quality, sort_submit_block_height, id;
+DEFINE INDEX OVERWRITE idx_bqi_open_feed ON TABLE bridge_quality_issue FIELDS is_open, data_quality, sort_submit_block_height, id;
 DEFINE INDEX OVERWRITE idx_bqi_reason_feed ON TABLE bridge_quality_issue FIELDS reason, sort_submit_block_height, id;
 DEFINE INDEX OVERWRITE idx_bqi_bridge ON TABLE bridge_quality_issue FIELDS bridge_operation;
 

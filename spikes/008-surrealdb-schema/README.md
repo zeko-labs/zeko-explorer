@@ -27,7 +27,24 @@ pnpm run validate:schema
 pnpm run benchmark:docker:persisted
 ```
 
-`benchmark:docker:persisted` generates a SurrealQL import file, starts `surrealdb/surrealdb:v2.4.0` with a mounted SurrealKV Docker volume, imports the file with `surreal import` inside the container, points the TypeScript query-timing harness at the loaded database, and removes both the container and volume when the run exits.
+`benchmark:docker:persisted` generates ordered SurrealQL import chunks, starts `surrealdb/surrealdb:v2.4.0` with a mounted SurrealKV Docker volume, imports each chunk with `surreal import` inside the container, points the TypeScript query-timing harness at the loaded database, and removes both the container and volume when the run exits.
+
+`pnpm run benchmark` is only a small local query-shape smoke test. It refuses large self-seeded datasets; scale evidence must use `benchmark:docker:persisted` so row loading goes through `surreal import`.
+
+The current evidence run used:
+
+```sh
+BENCH_TX_COUNT=2200000 \
+BENCH_ACCOUNT_COUNT=50000 \
+BENCH_CONTRACT_ACCOUNT_COUNT=500 \
+BENCH_BRIDGE_COUNT=220000 \
+BENCH_ITERATIONS=5 \
+BENCH_IMPORT_CHUNK_ROWS=50000 \
+BENCH_ACTIVITY_STRIDE=10 \
+pnpm run benchmark:docker:persisted
+```
+
+That run loaded 2,200,000 transaction rows into persisted SurrealKV in 947s and completed the 12-query benchmark catalog. The generated import directory under `harness/reports/` is disposable and ignored by git; `harness/benchmarks/latest-results.html` keeps the measured output.
 
 ---
 

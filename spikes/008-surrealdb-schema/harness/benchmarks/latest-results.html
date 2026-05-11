@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 008 Benchmark Results</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #f6f8fb; color: #17202a; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1080px; margin: 0 auto; }
+    header, section { background: #fff; border: 1px solid #d9dee5; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 14px 38px rgba(31, 41, 55, .08); }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .stat { border: 1px solid #d9dee5; border-radius: 8px; padding: 12px; }
+    .stat b { display: block; color: #2563eb; font-size: 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #d9dee5; padding: 9px 10px; text-align: left; }
+    th { color: #5c6670; text-transform: uppercase; font-size: 12px; }
+    code { background: #eef2f7; border-radius: 5px; padding: 1px 4px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Spike 008 Benchmark Results</h1>
+    <p>Generated: 2026-05-11T18:56:28.496Z</p>
+    <div class="stats">
+      <div class="stat"><b>2,200,000</b>transactions</div>
+      <div class="stat"><b>220,000</b>account activity rows</div>
+      <div class="stat"><b>50,000</b>accounts</div>
+      <div class="stat"><b>220,000</b>bridge operations</div>
+      <div class="stat"><b>947.00s</b>load time</div>
+    </div>
+    <p>SurrealDB: Docker surrealdb/surrealdb:v2.4.0 with persisted surrealkv volume spike-008-surrealdb-benchmark-data. Query runner: Node.js over SurrealDB HTTP SQL API after data is already loaded.</p>
+  </header>
+  <section>
+    <table>
+      <thead><tr><th>Query</th><th>Iterations</th><th>min ms</th><th>p50 ms</th><th>p95 ms</th><th>max ms</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>transaction-feed-first-page</code></td>
+          <td>5</td>
+          <td>30.484</td>
+          <td>37.073</td>
+          <td>63.718</td>
+          <td>63.718</td>
+        </tr>
+        <tr>
+          <td><code>transaction-by-hash</code></td>
+          <td>5</td>
+          <td>27.594</td>
+          <td>33.424</td>
+          <td>45.161</td>
+          <td>45.161</td>
+        </tr>
+        <tr>
+          <td><code>transaction-detail-by-hash</code></td>
+          <td>5</td>
+          <td>28.215</td>
+          <td>29.575</td>
+          <td>72.904</td>
+          <td>72.904</td>
+        </tr>
+        <tr>
+          <td><code>account-profile-overview</code></td>
+          <td>5</td>
+          <td>118.929</td>
+          <td>152.880</td>
+          <td>5517.030</td>
+          <td>5517.030</td>
+        </tr>
+        <tr>
+          <td><code>transactions-by-sender-first-page</code></td>
+          <td>5</td>
+          <td>23.855</td>
+          <td>26.106</td>
+          <td>45.180</td>
+          <td>45.180</td>
+        </tr>
+        <tr>
+          <td><code>transactions-by-receiver-first-page</code></td>
+          <td>5</td>
+          <td>103.418</td>
+          <td>112.289</td>
+          <td>2828.031</td>
+          <td>2828.031</td>
+        </tr>
+        <tr>
+          <td><code>transactions-by-sender</code></td>
+          <td>5</td>
+          <td>26.380</td>
+          <td>29.228</td>
+          <td>40.684</td>
+          <td>40.684</td>
+        </tr>
+        <tr>
+          <td><code>account-activity-first-page</code></td>
+          <td>5</td>
+          <td>28.061</td>
+          <td>34.375</td>
+          <td>38.296</td>
+          <td>38.296</td>
+        </tr>
+        <tr>
+          <td><code>bridge-operations-by-sender-first-page</code></td>
+          <td>5</td>
+          <td>24.098</td>
+          <td>26.999</td>
+          <td>30.375</td>
+          <td>30.375</td>
+        </tr>
+        <tr>
+          <td><code>bridge-quality-issues-first-page</code></td>
+          <td>5</td>
+          <td>590.681</td>
+          <td>659.170</td>
+          <td>2669.253</td>
+          <td>2669.253</td>
+        </tr>
+        <tr>
+          <td><code>bridge-quality-issues-by-reason</code></td>
+          <td>5</td>
+          <td>498.057</td>
+          <td>588.908</td>
+          <td>661.074</td>
+          <td>661.074</td>
+        </tr>
+        <tr>
+          <td><code>batch-feed-first-page</code></td>
+          <td>5</td>
+          <td>22.850</td>
+          <td>30.235</td>
+          <td>59.081</td>
+          <td>59.081</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>
