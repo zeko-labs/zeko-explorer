@@ -7,27 +7,37 @@
 
 ## Implementer Summary
 
-Build `packages/l1-watcher` as the TypeScript component that reads L1 settlement-chain data through a provider adapter and publishes normalized L1 facts to NATS. Each network stack runs its own explorer backend stack; within that stack, the L1 Watcher uses the adapter for that network's L1.
+Build `packages/l1-watcher` as the TypeScript component that runs inside one network's explorer stack and publishes normalized L1 facts to that stack's NATS instance. The watcher does not encode a single settlement-chain implementation. It delegates provider-specific L1 reads and decoding to the adapter selected for that network.
 
-The L1 Watcher publishes:
+The shared L1 Watcher owns:
 
-- `zeko.l1.settlements`: Zeko batch settlement commits and finalized updates.
-- `zeko.l1.outer-actions`: raw and parsed commit/witness actions from `OUTER_PK`.
-- `zeko.l1.bridge-events`: deposit submissions, withdrawal finalizations, and deposit cancellations with user keys and bridge params.
-- `zeko.l1.rollbacks`: L1 reorgs that orphan already-published L1 facts.
-- `zeko.health`: watcher freshness, lag, and dependency status.
+- process lifecycle, config loading, health, retry/backoff, and graceful degradation;
+- NATS publication and JetStream acknowledgement handling;
+- SurrealDB durable state for cursors, canonical block windows, published fact IDs, and `sync_status`;
+- common `zeko.l1.*` event contracts;
+- rollback fact publication after an adapter reports canonical-chain divergence.
 
-The component has shared responsibilities and provider-specific adapters:
+The provider adapters own:
 
-| Area | Owner |
-|---|---|
-| Process lifecycle, config, health, NATS publication, durable cursor/state writes, retry/backoff | L1 Watcher |
-| Mina daemon and Archive-Node-API queries, Mina action/account-update decoding, Zeko-M finality and reorg interpretation | Zeko-M / Mina adapter |
-| Ethereum JSON-RPC/archive queries, Ethereum event/log decoding, Zeko-E finality model | Zeko-E / Ethereum adapter |
+| Network family | Adapter | Milestone | Adapter owns |
+|---|---|---:|---|
+| Zeko-M | Mina adapter | 1 | Mina daemon and Archive-Node-API reads, Mina action/account-update/event decoding, Zeko-M finality and rollback interpretation. |
+| Zeko-E | Ethereum adapter | 4 | Ethereum JSON-RPC/archive reads, Ethereum log/transaction decoding, Zeko-E finality and reorg interpretation. |
 
-This spike specifies the L1 Watcher component boundary, fully details the Zeko-M / Mina adapter needed for Milestone 1, and records the Zeko-E / Ethereum adapter shape required by the PRD for Milestone 4.
+Common output subjects:
 
-The implementation spec, message schemas, adapter types, fault-tolerance behavior, and archive-reader requirement are split out:
+- `zeko.l1.settlements`: settlement detections and finality updates.
+- `zeko.l1.rollbacks`: L1 reorg facts that reference affected published L1 facts.
+- `zeko.l1.bridge-events`: bridge operation facts with user keys, params, and L1 identity.
+- `zeko.health`: watcher freshness, lag, dependency status, and source limitations.
+
+Provider-specific output subjects:
+
+- `zeko.l1.outer-actions`: Zeko-M / Mina Commit and Witness actions from `OUTER_PK`. The Ethereum adapter should only emit this subject if Milestone 4 defines an equivalent outer-action domain fact.
+
+This spike fully specifies the Zeko-M / Mina adapter needed for Milestone 1. It defines only the shared adapter boundary and required design inputs for the future Zeko-E / Ethereum adapter in Milestone 4.
+
+Supporting artifacts:
 
 - [Implementation spec](addendums/implementation-spec.md)
 - [NATS event schemas](addendums/nats-event-schemas.md)
@@ -38,16 +48,11 @@ The implementation spec, message schemas, adapter types, fault-tolerance behavio
 
 ---
 
-## Final Design
+## L1 Watcher Component
 
-### L1 Watcher Component
+The L1 Watcher consumes provider facts through the active adapter and publishes normalized events. It should not contain Mina-specific or Ethereum-specific chain logic outside the adapter boundary.
 
-The L1 Watcher consumes two L1 data sources through its active adapter:
-
-- **L1 live node:** canonical tip, block orphaning/reorg detection, live settlement and bridge transactions.
-- **L1 archive:** historical action/event data and catch-up after downtime.
-
-The watcher normalizes adapter output into the common `zeko.l1.*` subjects, records durable cursor state in SurrealDB, and exposes `/healthz`.
+Shared package shape:
 
 ```
 packages/l1-watcher
@@ -76,49 +81,26 @@ packages/l1-watcher
       heartbeat.ts
 ```
 
-The system API reads freshness from `sync_status`.
+### Shared Runtime Contract
 
-### Zeko-M / Mina Adapter
+Each network stack runs its own watcher instance. The active adapter supplies:
 
-Milestone: 1.
+- a live L1 endpoint for canonical-chain hints and near-tip observations;
+- an archive L1 endpoint for historical catch-up;
+- provider-specific decoders for settlements, bridge events, and rollback inputs;
+- provider-specific finality semantics.
 
-Inputs:
+The shared watcher code handles:
 
-1. Hosted Mina daemon GraphQL for live best-chain blocks, recent account updates, and reorg detection.
-2. Public Archive-Node-API GraphQL for historical catch-up.
+- one `/healthz` endpoint;
+- periodic `zeko.health` publication;
+- JetStream publish acknowledgement handling;
+- durable cursor advancement only after publish acknowledgement and state write;
+- independent retry/backoff per dependency and loop;
+- bounded in-memory buffering only for short publish interruptions;
+- process survival during transient dependency outages.
 
-Adapter responsibilities:
-
-- Query `bestChain(290)` and reconcile canonical block windows.
-- Use daemon subscriptions as wake-up signals for live processing.
-- Read `OUTER_PK` actions through Archive-Node-API `actions`.
-- Decode Mina account updates, actions, events, app state, and preconditions.
-- Detect Zeko-M settlement commits, outer actions, bridge events, and L1 rollbacks.
-- Apply Mina finality semantics: `finalized` at `confirmationDepth >= 290`.
-- Verify helper-account cancel counter progress for cancelled deposits.
-
-Current Archive-Node-API supports `OUTER_PK` actions. Historical bridge-event detection also needs full zkApp command account updates by block range, so Milestone 1 needs an upstream Archive-Node-API change. The proposed upstream PR shape is documented in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
-
-### Zeko-E / Ethereum Adapter
-
-Milestone: 4.
-
-Inputs:
-
-1. Ethereum JSON-RPC live/head access for canonical chain tracking, settlement transactions, bridge events, and reorg/finality signals.
-2. Ethereum archive access for historical logs/transactions and catch-up after downtime.
-
-Adapter responsibilities:
-
-- Implement the same L1 Watcher adapter boundary as the Mina adapter.
-- Publish the same common `zeko.l1.*` event families where they apply.
-- Map Ethereum settlement transactions and bridge events into the shared domain model.
-- Define the Zeko-E finality model using Ethereum-specific confirmation/finality semantics.
-- Provide rollback/reorg facts in the `zeko.l1.rollbacks` contract consumed by the indexer.
-
-Milestone 4 design inputs: Ethereum contract addresses, event ABI mappings, archive provider choice, and finality thresholds.
-
-### Durable State
+### Shared Durable State
 
 Use SurrealDB for watcher state and heartbeat state.
 
@@ -126,27 +108,76 @@ Required state records:
 
 | Record | Purpose |
 |---|---|
-| `l1_watcher_cursor:outer_actions:{network}` | Last archive height fully published to `zeko.l1.outer-actions`. |
-| `l1_watcher_cursor:bridge_events:{network}` | Last archive height fully scanned for bridge events through Archive-Node-API. |
-| `l1_watcher_block:{network}:{block_hash}` | Rolling canonical block window used for reorg detection. Mina uses state hash as `block_hash`. |
-| `l1_watcher_published:{network}:{event_id}` | Published L1 fact IDs with block hash, type, and NATS subject. |
+| `l1_watcher_cursor:{network}:{cursor_name}` | Adapter-owned archive/live progress cursors. Zeko-M uses at least `outer_actions` and `bridge_events`. |
+| `l1_watcher_block:{network}:{block_hash}` | Rolling canonical block window used for reorg detection. Mina stores the Mina state hash as `block_hash`; Ethereum stores the Ethereum block hash. |
+| `l1_watcher_published:{network}:{event_id}` | Published L1 fact IDs with subject, provider, block hash, tx hash, and publish timestamp. |
 | `sync_status:l1-watcher:{network}` | Health/freshness row consumed by APIs and status UI. |
 
-Cursor rule: publish to NATS, wait for JetStream ack, then advance cursor. If SurrealDB is unavailable, the watcher must publish degraded health and stop advancing data streams.
+Shared cursor rule: publish to NATS, wait for JetStream ack, persist published IDs/cursor state, then advance the cursor. If SurrealDB is unavailable, data publication pauses and health degrades while the process remains alive.
 
-### L1 Watcher Runtime Loops
+### Shared Runtime Loops
 
-Each network stack runs its own watcher instance. Inside that instance, the loops use independent retry/backoff so one failed dependency degrades only the work that needs it. NATS or SurrealDB outages pause data publication and cursor advancement while health remains available.
+The shared watcher schedules loops, but adapter-specific work stays in the adapter.
 
-| Loop | Interval/source | Responsibility |
+| Loop | Shared responsibility | Adapter responsibility |
 |---|---|---|
-| Tip reconciler | Adapter wake-ups plus 15s poll | Query the adapter canonical chain window, detect reorgs, process new live blocks/logs, update settlement confirmation depth. |
-| Outer action poller | 15s archive poll | Zeko-M: query Archive-Node-API `actions(OUTER_PK)`, parse commit/witness actions, publish `zeko.l1.outer-actions`, backfill missed settlement commits. Zeko-E: implement the equivalent settlement/log archive scan in Milestone 4. |
-| Bridge event backfill poller | 15s archive poll | Zeko-M: query Archive-Node-API `zkappCommands`, detect deposits/withdrawals/cancels historically, publish `zeko.l1.bridge-events`. Zeko-E: query archive logs/events for the configured bridge contracts in Milestone 4. |
-| Helper counter verifier | Every 10 Mina daemon blocks | Zeko-M only: read `helperAccountL1.zkappState[0]`; if it advanced without a matching cancel event, mark degraded and rescan recent blocks. |
-| Health loop | 30s | Write `sync_status` and publish `zeko.health`. |
+| Tip reconciler | Wake on adapter hint or poll, call adapter canonical-chain read, compare persisted block window, publish rollback facts for orphaned published IDs. | Read canonical chain window, provide provider block hashes, interpret provider finality/reorg data. |
+| Archive catch-up | Resume from durable cursor, publish facts in deterministic order, advance cursor after ack/state write. | Read historical provider data and decode provider facts. |
+| Bridge event backfill | Resume from durable bridge cursor, publish bridge facts in deterministic order. | Provide enough historical bridge data for that provider. |
+| Provider consistency checks | Record adapter health and limitations. | Run provider-specific checks such as Mina helper counter verification. |
+| Health loop | Write `sync_status` and publish `zeko.health`. | Report live/archive source health, lag, and provider limitations. |
 
-### Zeko-M Stack Configuration
+### Shared Fault Tolerance Requirements
+
+All L1 inputs are unreliable. The watcher and downstream explorer must handle failures without hard process crashes and without blocking unrelated UI.
+
+Required behavior:
+
+- Live L1 endpoint down: live finality/reorg processing pauses; archive catch-up continues if archive is reachable.
+- Archive L1 endpoint down: historical catch-up pauses; live processing continues if the live endpoint is reachable.
+- NATS down: data publication and cursor advancement pause.
+- SurrealDB down: data publication pauses because durable state cannot be updated.
+- Watcher restart: reload cursors and canonical block window before resuming.
+- Indexer/API/UI downtime: watcher continues publishing when NATS/SurrealDB are available; UI renders stale or partial data instead of blocking.
+- Missing bridge-related data must surface through API data-quality metadata and inline UI warnings.
+
+The full failure matrix and UI/API degradation contract are in [Fault tolerance and recovery](addendums/fault-tolerance.md).
+
+---
+
+## Zeko-M / Mina Adapter
+
+Milestone: 1.
+
+This section is the implementer handoff for the Milestone 1 adapter. Statements in this section are specific to Zeko-M / Mina unless explicitly called out as shared watcher behavior.
+
+### Inputs
+
+1. Hosted Mina daemon GraphQL for live best-chain blocks, recent account updates, account state, and reorg wake-up signals.
+2. Public Archive-Node-API GraphQL for historical catch-up.
+
+### Responsibilities
+
+- Query `bestChain(290)` and reconcile canonical block windows.
+- Use Mina daemon subscriptions as wake-up signals for live processing.
+- Read `OUTER_PK` actions through Archive-Node-API `actions`.
+- Decode Mina account updates, actions, events, app state, and preconditions.
+- Detect Zeko-M settlement commits, outer actions, bridge events, and L1 rollbacks.
+- Apply Mina finality semantics: `finalized` at `confirmationDepth >= 290`.
+- Verify helper-account cancel counter progress for cancelled deposits.
+
+Current Archive-Node-API supports `OUTER_PK` actions. Historical Zeko-M bridge-event detection also needs full zkApp command account updates by block range, so Milestone 1 needs an upstream Archive-Node-API change. The proposed upstream PR shape is documented in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
+
+### Runtime Loops
+
+| Loop | Interval/source | Zeko-M / Mina behavior |
+|---|---|---|
+| Tip reconciler | `newBlock` / `chainReorganization` wake-ups plus 15s poll | Query `bestChain(290)`, detect reorgs, process new daemon blocks, update settlement confirmation depth. |
+| Outer action poller | 15s Archive-Node-API poll | Query `actions(OUTER_PK)`, parse commit/witness actions, publish `zeko.l1.outer-actions`, backfill missed settlement commits. |
+| Bridge event backfill poller | 15s Archive-Node-API poll | Query `zkappCommands`, detect deposits/withdrawals/cancels historically, publish `zeko.l1.bridge-events`. |
+| Helper counter verifier | Every 10 Mina daemon blocks | Read `helperAccountL1.zkappState[0]`; if it advanced without a matching cancel event, mark degraded and rescan recent blocks. |
+
+### Stack Configuration
 
 For Milestone 1, the Zeko-M stack provides Mina endpoints and Zeko-M contract keys:
 
@@ -165,53 +196,43 @@ For Milestone 1, the Zeko-M stack provides Mina endpoints and Zeko-M contract ke
 | `HEARTBEAT_INTERVAL_MS` | default `30000` | Health heartbeat interval. |
 | `ARCHIVE_CHUNK_SIZE` | default `10000` | Must not exceed Archive-Node-API block range cap. |
 
-### Zeko-E Stack Configuration
-
-For Milestone 4, the Zeko-E stack supplies Ethereum live and archive access plus the contract/event configuration for settlement and bridge detection. Exact env var names should be selected when the Ethereum adapter is implemented, but they map to the same categories as Zeko-M: NATS, SurrealDB, live L1 endpoint, archive L1 endpoint, settlement contract config, bridge contract config, finality threshold, poll interval, heartbeat interval, and archive chunk size.
-
 Container readiness:
 
-- Ready after static config is valid and the process can serve `/healthz`. Dependency outages are reported as degraded/down health while the process remains alive.
-- Healthy if all dependencies are reachable and both archive cursors are near archive tip.
-- Degraded if the live L1 endpoint or archive L1 endpoint is down, archive lag exceeds threshold, helper cancel counter mismatch exists, or bridge backfill cannot run.
+- Ready after static config is valid and the process can serve `/healthz`.
+- Healthy if all required dependencies are reachable and archive cursors are near archive tip.
+- Degraded if the Mina daemon or Archive-Node-API is down, archive lag exceeds threshold, helper cancel counter mismatch exists, or bridge backfill cannot run.
 
----
+### Implementation Order
 
-## Required Implementation Order
-
-1. Create `packages/l1-watcher` with config, NATS publisher, SurrealDB state store, health endpoint, and the shared `L1Adapter` boundary.
+1. Create `packages/l1-watcher` with config, NATS publisher, SurrealDB state store, health endpoint, and shared `L1Adapter` boundary.
 2. Implement Mina daemon client:
    - `bestChain(maxLength: 290)`
    - `account(publicKey)`
    - `newBlock` subscription
    - `chainReorganization` subscription
-3. Implement reorg detector over persisted canonical block window.
-4. Implement settlement detection from daemon account updates on `OUTER_PK`.
+3. Implement Mina reorg detector over the persisted canonical block window.
+4. Implement settlement detection from Mina daemon account updates on `OUTER_PK`.
 5. Implement Archive-Node-API outer action poller for `actions(OUTER_PK)`.
 6. Implement Archive-Node-API `zkappCommands` client. This requires the upstream API change described in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
-7. Implement bridge decoders:
-   - deposit submission from signed user account update action shape
-   - withdrawal finalization from outer witness plus finalize-withdrawal event
-   - cancel deposit from helper counter advancement and cancel transaction pattern
+7. Implement Mina bridge decoders:
+   - deposit submission from signed user account update action shape;
+   - withdrawal finalization from outer witness plus finalize-withdrawal event;
+   - cancel deposit from helper counter advancement and cancel transaction pattern.
 8. Implement helper counter verifier.
-9. Keep an `adapters/ethereum` package boundary for the Milestone 4 Zeko-E adapter so the shared watcher lifecycle, publication, state, and health code do not embed Mina-specific assumptions.
-10. Implement the Cucumber scenarios in [test-scenarios](test-scenarios) using recorded daemon/archive fixtures and fault-injection doubles:
-   - [settlements-and-outer-actions.feature](test-scenarios/settlements-and-outer-actions.feature)
-   - [bridge-event-detection.feature](test-scenarios/bridge-event-detection.feature)
-   - [dependency-startup.feature](test-scenarios/dependency-startup.feature)
-   - [daemon-and-archive-recovery.feature](test-scenarios/daemon-and-archive-recovery.feature)
-   - [durable-publication-failures.feature](test-scenarios/durable-publication-failures.feature)
-   - [watcher-restart-and-reorg.feature](test-scenarios/watcher-restart-and-reorg.feature)
-   - [downstream-service-downtime.feature](test-scenarios/downstream-service-downtime.feature)
-   - [partial-bridge-data-ui.feature](test-scenarios/partial-bridge-data-ui.feature)
+9. Keep an `adapters/ethereum` package boundary for the Milestone 4 Zeko-E adapter so the shared watcher lifecycle, publication, state, and health code does not embed Mina-specific assumptions.
+10. Implement the Cucumber scenarios in [test-scenarios](test-scenarios) using recorded Mina daemon/archive fixtures and fault-injection doubles:
+    - [settlements-and-outer-actions.feature](test-scenarios/settlements-and-outer-actions.feature)
+    - [bridge-event-detection.feature](test-scenarios/bridge-event-detection.feature)
+    - [dependency-startup.feature](test-scenarios/dependency-startup.feature)
+    - [daemon-and-archive-recovery.feature](test-scenarios/daemon-and-archive-recovery.feature)
+    - [durable-publication-failures.feature](test-scenarios/durable-publication-failures.feature)
+    - [watcher-restart-and-reorg.feature](test-scenarios/watcher-restart-and-reorg.feature)
+    - [downstream-service-downtime.feature](test-scenarios/downstream-service-downtime.feature)
+    - [partial-bridge-data-ui.feature](test-scenarios/partial-bridge-data-ui.feature)
 
----
+### Settlement Detection
 
-## Exact Behavior
-
-### Settlements
-
-A settlement is a commit action on `OUTER_PK`:
+A Zeko-M settlement is a commit action on `OUTER_PK`:
 
 | Action index | Meaning |
 |---:|---|
@@ -226,26 +247,26 @@ A settlement is a commit action on `OUTER_PK`:
 
 Detection:
 
-- Live path: daemon block -> successful zkApp command -> account update where `body.publicKey === OUTER_PK` -> action with `fields[0] === "0"`.
+- Live path: Mina daemon block -> successful zkApp command -> account update where `body.publicKey === OUTER_PK` -> action with `fields[0] === "0"`.
 - Historical path: Archive-Node-API `actions(input: { address: OUTER_PK, status: ALL, from, to })`.
 
-The watcher publishes `zeko.l1.settlements` when a settlement is first seen and when the finality level changes. `finalized` means `confirmationDepth >= 290`. Depths `0..289` remain `settling`.
+The Mina adapter publishes `zeko.l1.settlements` when a settlement is first seen and when the finality level changes. `finalized` means `confirmationDepth >= 290`. Depths `0..289` remain `settling`.
 
-The watcher publishes the commit's `innerActionState` and `innerActionStateLength`. The indexer walks the indexed L2 inner action chain to associate bridge operations and transactions with the batch.
+The adapter publishes the commit's `innerActionState` and `innerActionStateLength`. The indexer walks the indexed L2 inner action chain to associate bridge operations and transactions with the batch.
 
 ### Outer Actions
 
-The outer action poller publishes every action emitted by `OUTER_PK`:
+The Zeko-M outer action poller publishes every action emitted by `OUTER_PK`:
 
 - `fields[0] === "0"` -> `commit`
 - `fields[0] === "1"` -> `witness`
 - anything else -> `unknown`, with degraded health
 
-The poller chunks archive ranges by `ARCHIVE_CHUNK_SIZE`, sorts deterministically, publishes all actions, then advances `outer_actions` cursor only after NATS ack.
+The poller chunks archive ranges by `ARCHIVE_CHUNK_SIZE`, sorts deterministically, publishes all actions, then advances the `outer_actions` cursor only after NATS ack and durable state write.
 
 ### Bridge Events
 
-The watcher publishes bridge facts, not bridge operation lifecycle state. The indexer owns lifecycle transitions and `aux_sequence`.
+The Mina adapter publishes bridge facts, not bridge operation lifecycle state. The indexer owns lifecycle transitions and `aux_sequence`.
 
 Deposit submission:
 
@@ -271,11 +292,11 @@ Cancel deposit:
 
 ### Rollbacks
 
-The watcher owns L1 rollback detection.
+The Mina adapter supplies rollback inputs from Mina canonical-chain reconciliation.
 
 Algorithm:
 
-1. Persist every observed best-chain block in a rolling 290+ block window.
+1. Persist every observed Mina best-chain block in a rolling 290+ block window.
 2. On every tip wake-up, query `bestChain(290)`.
 3. Find the latest common state hash between old and new windows.
 4. Blocks after the common hash in the old window are orphaned.
@@ -283,56 +304,83 @@ Algorithm:
 6. Publish one `zeko.l1.rollbacks` message listing affected settlement, outer-action, and bridge-event IDs.
 7. Process replacement blocks normally.
 
-If no common ancestor exists in the daemon window, the watcher cannot fully prove bridge-event reconciliation from current Archive-Node-API alone. That is why the upstream `zkappCommands` query is a Milestone 1 requirement.
+If no common ancestor exists in the daemon window, the Mina adapter cannot fully prove bridge-event reconciliation from current Archive-Node-API alone. That is why the upstream `zkappCommands` query is a Milestone 1 requirement.
 
----
+### Historical Bridge Event Gap
 
-## Historical Bridge Event Gap
+The current Archive-Node-API `blocks` query returns zkApp command hashes, fee payer, status, and memo. Historical Zeko-M bridge reconstruction also needs account update actions/events/app state/preconditions, because deposit and cancel detection require those details.
 
-The current Archive-Node-API `blocks` query returns zkApp command hashes, fee payer, status, and memo. Historical bridge reconstruction also needs account update actions/events/app state/preconditions, because deposit and cancel detection require those details.
-
-If this is not fixed upstream, the watcher can still run but only with these guarantees:
+If this is not fixed upstream, the Zeko-M / Mina adapter can still run but only with these guarantees:
 
 - `zeko.l1.outer-actions` remains rebuildable from Archive-Node-API `actions(OUTER_PK)`.
 - `zeko.l1.settlements` remains rebuildable from those outer commit actions.
-- `zeko.l1.bridge-events` becomes live-only from the daemon frontier and NATS retention. It cannot be rebuilt from genesis, from periods before the watcher existed, or from watcher downtime after the missed blocks leave the daemon frontier.
-- Any watcher downtime can therefore create an unfillable bridge-event gap unless the missed blocks are still in the hosted daemon frontier or the events had already been published and retained in NATS.
+- Zeko-M `zeko.l1.bridge-events` becomes live-only from the daemon frontier and NATS retention. It cannot be rebuilt from genesis, from periods before the watcher existed, or from watcher downtime after the missed blocks leave the daemon frontier.
+- Any Zeko-M watcher downtime can therefore create an unfillable bridge-event gap unless the missed blocks are still in the hosted daemon frontier or the events had already been published and retained in NATS.
 - Per-user deposit history will be incomplete for pre-watcher deposits and for any downtime gap. The bridge API can only show operations that were observed live or were still visible in retained NATS.
 - Cancel deposit history is the weakest case: cancels do not emit outer witness actions, so archive action scans cannot recover them.
-- A long watcher outage beyond the daemon frontier leaves bridge-event gaps that cannot be repaired from the public APIs.
+- A long Zeko-M watcher outage beyond the daemon frontier leaves bridge-event gaps that cannot be repaired from current public APIs.
 
 Decision for Milestone 1:
 
 Use upstream Archive-Node-API with a `zkappCommands(input)` query that returns full account update actions/events/app state/preconditions. The exact required query shape and PR implementation plan are specified in [Archive-Node-API zkApp command query requirement](addendums/archive-account-update-reader.md).
 
----
+### Zeko-M Fault Findings
 
-## Fault Tolerance Requirements
+- Hosted Mina daemon down: Archive-Node-API pollers continue, finality becomes stale, health degrades, process stays alive.
+- Archive-Node-API down: live daemon processing continues, archive cursors stop advancing, health degrades, process stays alive.
+- Watcher restart: reload cursors, reconcile Mina `bestChain(290)`, then resume archive catch-up.
+- Missing Zeko-M bridge-related data must not block account, bridge operation, batch, or transaction pages.
 
-The watcher and downstream explorer must treat all L1 inputs as unreliable. External service failures must be graceful:
-
-- Hosted Mina daemon down: archive pollers continue, finality becomes stale, health degrades, no crash.
-- Archive-Node-API down: live daemon processing continues, archive cursors stop advancing, health degrades, no crash.
-- NATS down: data publication and cursor advancement pause; process stays alive.
-- SurrealDB down: data publication pauses because cursors cannot be persisted; process stays alive.
-- Watcher restart: reload cursors, reconcile daemon best chain, then resume archive catch-up.
-- Indexer/API/UI downtime: watcher continues publishing; UI renders stale/partial data instead of blocking.
-
-If bridge-related data is missing, the API must expose data quality metadata and the UI must render partial records with clear warnings. Missing `zeko.l1.bridge-events` must never block account, bridge operation, batch, or transaction pages.
-
-The full failure matrix and UI/API degradation contract are in [Fault tolerance and recovery](addendums/fault-tolerance.md).
-
----
-
-## Implementation Notes That Matter
+### Zeko-M Implementation Notes That Matter
 
 - Use `chainReorganization` only as a wake-up signal. The rollback truth comes from comparing `bestChain(290)` state hashes.
 - Subscribe broadly enough to observe user account updates, not only `newBlock(publicKey: OUTER_PK)`, because deposit submissions are user account actions whose payload mentions `OUTER_PK`.
 - Leave `aux_sequence` assignment to the indexer, which derives it from durable bridge operation ordering.
-- Advance cursors only after NATS ack.
-- Pause new data facts while SurrealDB state writes fail. Publishing without durable state creates unbounded duplicate or missing publication risk. The process still stays alive and reports degraded/down health.
+- Advance cursors only after NATS ack and durable state write.
 - Publish raw fields along with parsed fields. This protects the indexer from decoder bugs and supports later reprocessing.
 - Treat unknown outer action discriminants and helper counter mismatches as degraded health, not silent skips.
+
+---
+
+## Zeko-E / Ethereum Adapter
+
+Milestone: 4.
+
+This spike does not specify Ethereum contract details or Ethereum decoding rules. It only preserves the shared watcher boundary so the Milestone 1 implementation does not make Mina assumptions in shared code.
+
+### Inputs
+
+1. Ethereum JSON-RPC live/head access for canonical chain tracking, settlement transactions, bridge events, and reorg/finality signals.
+2. Ethereum archive/log access for historical logs/transactions and catch-up after downtime.
+
+### Responsibilities
+
+- Implement the shared `L1Adapter` boundary without relying on Mina daemon or Archive-Node-API behavior.
+- Publish shared `zeko.l1.*` event families where the Ethereum domain model applies.
+- Map Ethereum settlement transactions into `zeko.l1.settlements`.
+- Map Ethereum bridge contract logs/transactions into `zeko.l1.bridge-events`.
+- Provide rollback/reorg facts through `zeko.l1.rollbacks`.
+- Report Ethereum live/archive health and limitations through `zeko.health`.
+- Define whether `zeko.l1.outer-actions` has an Ethereum equivalent; otherwise leave that subject Mina-only.
+
+### Required Milestone 4 Design Inputs
+
+- Ethereum settlement contract addresses.
+- Ethereum bridge contract addresses.
+- Event ABI mappings.
+- Archive provider choice and historical query guarantees.
+- Finality threshold.
+- Reorg depth policy.
+- Ethereum-specific payload fields needed by APIs and indexers.
+
+### Zeko-E Fault Requirements
+
+The Ethereum adapter must follow the shared fault contract:
+
+- live JSON-RPC outage pauses live head tracking, finality updates, and near-tip reorg detection;
+- archive/log-source outage pauses historical catch-up;
+- reconnection starts with canonical-chain reconciliation before publishing new facts;
+- missed Ethereum bridge facts are recoverable only if the selected archive source can query the required historical logs/transactions for the missed range, or if the facts were already published and retained in NATS.
 
 ---
 
