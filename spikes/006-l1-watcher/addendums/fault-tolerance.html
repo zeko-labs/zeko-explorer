@@ -88,7 +88,7 @@ footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 1
       <div>
         <div class="eyebrow">Spike 006 · L1 Watcher</div>
         <h1>Fault Tolerance and Recovery</h1>
-        <p class="subtitle">HTML conversion of the original spike artifact. The source content is preserved while using layout, color, tables, and diagrams to make the handoff easier to read.</p>
+        <p class="subtitle">Fault-tolerance requirements for dependency outages, restarts, reorgs, partial bridge data, and API/UI degradation.</p>
         <nav class="nav"><a href="../results.html">Results</a><a href="../addendums/index.html">Addenda Index</a><a href="../test-scenarios/">Cucumber Scenarios</a></nav>
       </div>
       <div class="diagram" aria-label="Watcher runtime loop diagram"><svg viewBox="0 0 780 310" role="img"><rect width="780" height="310" fill="#081425"/><circle cx="390" cy="155" r="82" fill="#10233d" stroke="#22d3ee" stroke-width="2"/><text x="390" y="145" text-anchor="middle" fill="#e6edf7" font-size="19" font-weight="700">Watcher Core</text><text x="390" y="174" text-anchor="middle" fill="#9fb0c7" font-size="13">publish after ack + state write</text><g fill="#10233d" stroke-width="2"><rect x="45" y="52" width="180" height="64" rx="12" stroke="#34d399"/><rect x="45" y="194" width="180" height="64" rx="12" stroke="#60a5fa"/><rect x="555" y="52" width="180" height="64" rx="12" stroke="#fbbf24"/><rect x="555" y="194" width="180" height="64" rx="12" stroke="#a78bfa"/></g><g fill="#e6edf7" font-size="15" font-weight="700" text-anchor="middle"><text x="135" y="90">Live L1 Loop</text><text x="135" y="232">Archive Catch-up</text><text x="645" y="90">SurrealDB State</text><text x="645" y="232">NATS JetStream</text></g><g stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M225 84C285 84 286 120 318 130"/><path d="M225 226C285 226 286 190 318 180"/><path d="M462 130C508 110 505 84 555 84"/><path d="M462 180C508 200 505 226 555 226"/></g><defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
@@ -475,7 +475,7 @@ type BridgeOperationDataQuality = {
 </ul>
 <p>These scenarios are the implementation target. They should be backed by recorded daemon/archive fixtures plus controllable doubles for NATS, SurrealDB, Archive-Node-API, the hosted Mina daemon, the indexer, the explorer API, and the frontend.</p></article>
     </section>
-    <footer>Spike 006 · L1 Watcher · HTML artifact converted from the original markdown source.</footer>
+    <footer>Spike 006 · L1 Watcher · Fault Tolerance and Recovery</footer>
   </main>
 </body>
 </html>
