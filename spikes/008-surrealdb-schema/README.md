@@ -1,8 +1,33 @@
 # Spike 008: Full SurrealDB Schema — Tables, Record IDs, Indexes, Edges
 
-**Status:** Not started
+**Status:** Ready for review
 **Blocking:** Milestone 1 (indexer + GraphQL API)
 **Owner:** TBD
+
+---
+
+## Working Artifacts
+
+- [`results.html`](results.html) — consolidated decisions, cross-spike reconciliation, validation, and benchmark evidence.
+- [`schema.surql`](schema.surql) — current schemafull SurrealDB schema.
+- [`queries/`](queries/) — one SurrealQL file per planned query/access path.
+- [`harness/`](harness/) — runnable TypeScript test and benchmark harness managed by pnpm.
+- [`harness/features/`](harness/features/) — Cucumber acceptance suite that runs against in-memory SurrealDB.
+- [`migrations/`](migrations/) — representative forward-only migration with existing data.
+- [`harness/benchmarks/`](harness/benchmarks/) — benchmark runner and latest measured HTML output.
+
+## Running the Evidence
+
+```sh
+cd spikes/008-surrealdb-schema/harness
+pnpm install
+pnpm run typecheck
+pnpm test
+pnpm run validate:schema
+pnpm run benchmark:docker:persisted
+```
+
+`benchmark:docker:persisted` generates a SurrealQL import file, starts `surrealdb/surrealdb:v2.4.0` with a mounted SurrealKV Docker volume, imports the file with `surreal import` inside the container, points the TypeScript query-timing harness at the loaded database, and removes both the container and volume when the run exits.
 
 ---
 
