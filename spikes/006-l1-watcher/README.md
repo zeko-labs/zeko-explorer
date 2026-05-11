@@ -5,7 +5,7 @@
 **Owner:** TBD
 
 **Results:** [results.html](./results.html)
-**Addendum:** [addendums/index.html](./addendums/index.html)
+**Addenda:** [index](./addendums/index.html), [implementation spec](./addendums/implementation-spec.html), [NATS schemas](./addendums/nats-event-schemas.html), [fault tolerance](./addendums/fault-tolerance.html), [Archive-Node-API requirement](./addendums/archive-account-update-reader.html)
 
 ---
 
@@ -131,7 +131,7 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 ## Deliverables
 
 1. **Results document:** `results.html` summarizes the shared watcher boundary, Zeko-M / Mina adapter findings, Zeko-E / Ethereum adapter boundary, and implementation conclusions.
-2. **Addendum document:** `addendums/index.html` captures implementation details: runtime loops, NATS schemas, adapter interface shape, fault tolerance, and the Archive-Node-API upstream requirement.
+2. **Addendum documents:** `addendums/*.html` preserves the original addenda as separate HTML pages for implementation details, NATS schemas, fault tolerance, and the Archive-Node-API upstream requirement.
 3. **Cucumber scenarios:** `test-scenarios/` contains executable acceptance coverage for watcher recovery, bridge event ingestion, outage behavior, rollback handling, and provider boundaries.
 
 ---

@@ -3,552 +3,106 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spike 006 Addendum: L1 Watcher Implementation Handoff</title>
+  <title>Spike 006 Addenda</title>
   <style>
-    :root {
-      --bg: #06111f;
-      --panel: #0f1b2e;
-      --panel-2: #13253f;
-      --ink: #e6edf7;
-      --muted: #9fb0c7;
-      --line: #2c3e57;
-      --green: #34d399;
-      --cyan: #22d3ee;
-      --amber: #fbbf24;
-      --orange: #fb923c;
-      --rose: #fb7185;
-      --violet: #a78bfa;
-      --blue: #60a5fa;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background:
-        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
-        var(--bg);
-      background-size: 40px 40px, 40px 40px, auto;
-      color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.55;
-    }
-
-    a { color: var(--cyan); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
-    code { color: #d8b4fe; }
-    pre {
-      margin: 14px 0 0;
-      padding: 16px;
-      overflow-x: auto;
-      color: #dce7f7;
-      background: #081425;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      font-size: 13px;
-    }
-
-    .page {
-      width: min(1200px, calc(100% - 40px));
-      margin: 0 auto;
-      padding: 36px 0 80px;
-    }
-
-    .hero, .panel {
-      background: linear-gradient(180deg, rgba(15, 27, 46, .97), rgba(9, 20, 35, .97));
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      box-shadow: 0 20px 50px rgba(0,0,0,.22);
-    }
-
-    .hero {
-      padding: 32px;
-      margin-bottom: 22px;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--cyan);
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--green);
-      box-shadow: 0 0 18px var(--green);
-    }
-
-    h1 {
-      margin: 16px 0 12px;
-      font-size: clamp(34px, 5vw, 56px);
-      line-height: 1.02;
-      letter-spacing: 0;
-    }
-
-    h2 {
-      margin: 0 0 14px;
-      font-size: 26px;
-      letter-spacing: 0;
-    }
-
-    h3 {
-      margin: 0 0 10px;
-      font-size: 18px;
-      letter-spacing: 0;
-    }
-
-    p { color: var(--muted); margin: 0 0 14px; }
-
-    .nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 22px;
-    }
-
-    .nav a {
-      padding: 8px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.04);
-      color: var(--ink);
-      font-size: 13px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 20px;
-    }
-
-    .panel {
-      padding: 24px;
-      margin-bottom: 20px;
-    }
-
-    .span-12 { grid-column: span 12; }
-    .span-8 { grid-column: span 8; }
-    .span-6 { grid-column: span 6; }
-    .span-4 { grid-column: span 4; }
-
-    .section-label {
-      color: var(--cyan);
-      font-weight: 800;
-      font-size: 13px;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-
-    .card {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 16px;
-      background: rgba(19, 37, 63, .52);
-    }
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-      margin-top: 16px;
-    }
-
-    .card.green { border-color: rgba(52, 211, 153, .58); }
-    .card.blue { border-color: rgba(96, 165, 250, .58); }
-    .card.amber { border-color: rgba(251, 191, 36, .66); }
-    .card.rose { border-color: rgba(251, 113, 133, .66); }
-
-    ul { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
-    li { margin: 7px 0; }
-
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      margin-top: 14px;
-    }
-
-    .table th,
-    .table td {
-      padding: 12px 13px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }
-
-    .table th {
-      color: var(--ink);
-      background: rgba(96, 165, 250, .12);
-      font-size: 13px;
-    }
-
-    .table td { color: var(--muted); font-size: 14px; }
-    .table tr:last-child td { border-bottom: 0; }
-
-    .callout {
-      border-left: 4px solid var(--amber);
-      background: rgba(251, 191, 36, .08);
-      padding: 15px 17px;
-      border-radius: 10px;
-      margin: 16px 0;
-    }
-
-    .callout strong { color: var(--amber); }
-
-    .diagram {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #081425;
-      overflow: hidden;
-      margin-top: 14px;
-    }
-
-    .diagram svg { display: block; width: 100%; height: auto; }
-
-    .pill {
-      display: inline-flex;
-      padding: 5px 9px;
-      margin: 4px 5px 4px 0;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      color: var(--muted);
-      background: rgba(255,255,255,.04);
-      font-size: 12px;
-    }
-
-    footer {
-      color: var(--muted);
-      text-align: center;
-      margin-top: 26px;
-      font-size: 13px;
-    }
-
-    @media (max-width: 900px) {
-      .cards { grid-template-columns: 1fr; }
-      .span-4, .span-6, .span-8 { grid-column: span 12; }
-      .page { width: min(100% - 24px, 1200px); padding-top: 20px; }
-      .hero, .panel { padding: 20px; }
-    }
-  </style>
+:root {
+  --bg: #07111f;
+  --panel: #0f1b2e;
+  --panel-2: #13253f;
+  --ink: #e6edf7;
+  --muted: #9fb0c7;
+  --line: #2b3d57;
+  --green: #34d399;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --blue: #60a5fa;
+  --violet: #a78bfa;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+    radial-gradient(circle at 16% 0%, rgba(34,211,238,.15), transparent 30rem),
+    radial-gradient(circle at 86% 8%, rgba(167,139,250,.12), transparent 32rem),
+    var(--bg);
+  background-size: 42px 42px, 42px 42px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.58;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 80px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(15,27,46,.97), rgba(9,20,35,.97));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.24);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 24px; padding: 32px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+h1 { margin: 12px 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: 1.03; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 72ch; margin: 0; }
+.diagram { border: 1px solid var(--line); border-radius: 12px; background: #081425; min-height: 260px; display: grid; place-items: center; overflow: hidden; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.nav a { color: var(--ink); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+.toc { position: sticky; top: 18px; padding: 18px; }
+.toc h2 { font-size: 14px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.content-card { padding: 30px; }
+.content-card h1 { font-size: 42px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 28px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+strong { color: var(--ink); }
+code { color: #d8b4fe; background: rgba(216,180,254,.08); border: 1px solid rgba(216,180,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); margin: 16px 0 22px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.12); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 22px; }
+.callout { border: 1px solid var(--line); border-radius: 12px; background: rgba(19,37,63,.52); padding: 16px; }
+.callout strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.callout span { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) { .page { width: min(100% - 24px, 1180px); padding-top: 20px; } .hero, .layout { grid-template-columns: 1fr; } .toc { position: static; } .callouts { grid-template-columns: 1fr; } .content-card { padding: 22px; } }
+</style>
 </head>
 <body>
   <main class="page">
-    <header class="hero">
-      <div class="eyebrow"><span class="dot"></span> Spike 006 Addendum</div>
-      <h1>L1 Watcher Implementation Handoff</h1>
-      <p>
-        This HTML addendum consolidates the implementation spec, event contracts, adapter
-        interface, recovery behavior, and Archive-Node-API change required by the L1 Watcher spike.
-      </p>
-      <nav class="nav" aria-label="Sections">
-        <a href="#implementation">Implementation</a>
-        <a href="#schemas">NATS Schemas</a>
-        <a href="#adapter">Adapter Interface</a>
-        <a href="#recovery">Fault Tolerance</a>
-        <a href="#archive">Archive-Node-API</a>
-      </nav>
-    </header>
-
-    <section id="implementation" class="panel">
-      <div class="section-label">Implementation Spec</div>
-      <h2>Shared Package, Mina Adapter First</h2>
-      <p>
-        The implementation starts with the shared watcher package and the Zeko-M / Mina adapter.
-        The Ethereum adapter remains behind the same boundary and is implemented in Milestone 4.
-      </p>
-      <div class="cards">
-        <div class="card green">
-          <h3>Shared Watcher</h3>
-          <ul>
-            <li>Config validation and process lifecycle.</li>
-            <li>NATS publisher and deterministic message IDs.</li>
-            <li>SurrealDB cursors, canonical block window, published facts.</li>
-            <li>Health endpoint and `zeko.health` publication.</li>
-          </ul>
-        </div>
-        <div class="card amber">
-          <h3>Zeko-M / Mina</h3>
-          <ul>
-            <li>Mina daemon client for `bestChain`, account reads, and subscriptions.</li>
-            <li>Archive-Node-API clients for actions and zkApp commands.</li>
-            <li>Mina settlement, outer action, bridge, and rollback decoders.</li>
-          </ul>
-        </div>
-        <div class="card blue">
-          <h3>Zeko-E / Ethereum</h3>
-          <ul>
-            <li>Adapter shell only in Milestone 1.</li>
-            <li>JSON-RPC/archive/log implementation in Milestone 4.</li>
-            <li>Ethereum finality and ABI mappings are later design inputs.</li>
-          </ul>
-        </div>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Spike 006 · Addenda</div>
+        <h1>L1 Watcher Implementation Handoff</h1>
+        <p class="subtitle">Navigation index for the HTML addenda. Each page is converted from the corresponding original markdown file so implementation detail remains preserved.</p>
+        <nav class="nav"><a href="../results.html">Results</a><a href="implementation-spec.html">Implementation Spec</a><a href="nats-event-schemas.html">NATS Schemas</a><a href="fault-tolerance.html">Fault Tolerance</a><a href="archive-account-update-reader.html">Archive-Node-API</a></nav>
       </div>
-      <div class="diagram" aria-label="Runtime loop diagram">
-        <svg viewBox="0 0 1120 420" role="img">
-          <defs>
-            <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-              <path d="M0,0 L10,4 L0,8 Z" fill="#64748b"></path>
-            </marker>
-          </defs>
-          <rect width="1120" height="420" fill="#07111f"></rect>
-          <g opacity=".25" stroke="#26364d">
-            <path d="M0 70H1120M0 140H1120M0 210H1120M0 280H1120M0 350H1120"></path>
-            <path d="M70 0V420M140 0V420M210 0V420M280 0V420M350 0V420M420 0V420M490 0V420M560 0V420M630 0V420M700 0V420M770 0V420M840 0V420M910 0V420M980 0V420M1050 0V420"></path>
-          </g>
-          <path d="M220 125H420" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"></path>
-          <path d="M220 205H420" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"></path>
-          <path d="M220 285H420" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"></path>
-          <path d="M660 205H880" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"></path>
-          <g>
-            <rect x="50" y="88" width="170" height="60" rx="8" fill="rgba(52,211,153,.14)" stroke="#34d399"></rect>
-            <text x="135" y="123" fill="#e6edf7" font-size="14" font-weight="700" text-anchor="middle">Tip reconciler</text>
-            <rect x="50" y="168" width="170" height="60" rx="8" fill="rgba(251,191,36,.12)" stroke="#fbbf24"></rect>
-            <text x="135" y="203" fill="#e6edf7" font-size="14" font-weight="700" text-anchor="middle">Archive catch-up</text>
-            <rect x="50" y="248" width="170" height="60" rx="8" fill="rgba(96,165,250,.12)" stroke="#60a5fa"></rect>
-            <text x="135" y="283" fill="#e6edf7" font-size="14" font-weight="700" text-anchor="middle">Bridge backfill</text>
-          </g>
-          <g>
-            <rect x="420" y="130" width="240" height="150" rx="12" fill="rgba(167,139,250,.15)" stroke="#a78bfa" stroke-width="2"></rect>
-            <text x="540" y="173" fill="#e6edf7" font-size="18" font-weight="800" text-anchor="middle">L1Adapter</text>
-            <text x="540" y="202" fill="#9fb0c7" font-size="13" text-anchor="middle">provider reads + decoders</text>
-            <text x="540" y="225" fill="#9fb0c7" font-size="13" text-anchor="middle">finality + reorg inputs</text>
-            <text x="540" y="248" fill="#9fb0c7" font-size="13" text-anchor="middle">source health</text>
-          </g>
-          <g>
-            <rect x="880" y="145" width="190" height="120" rx="12" fill="rgba(251,146,60,.13)" stroke="#fb923c" stroke-width="2"></rect>
-            <text x="975" y="184" fill="#e6edf7" font-size="17" font-weight="800" text-anchor="middle">Publish + persist</text>
-            <text x="975" y="213" fill="#9fb0c7" font-size="13" text-anchor="middle">JetStream ack</text>
-            <text x="975" y="235" fill="#9fb0c7" font-size="13" text-anchor="middle">SurrealDB state</text>
-          </g>
-        </svg>
-      </div>
+      <div class="diagram" aria-label="Watcher runtime loop diagram"><svg viewBox="0 0 780 310" role="img"><rect width="780" height="310" fill="#081425"/><circle cx="390" cy="155" r="82" fill="#10233d" stroke="#22d3ee" stroke-width="2"/><text x="390" y="145" text-anchor="middle" fill="#e6edf7" font-size="19" font-weight="700">Watcher Core</text><text x="390" y="174" text-anchor="middle" fill="#9fb0c7" font-size="13">publish after ack + state write</text><g fill="#10233d" stroke-width="2"><rect x="45" y="52" width="180" height="64" rx="12" stroke="#34d399"/><rect x="45" y="194" width="180" height="64" rx="12" stroke="#60a5fa"/><rect x="555" y="52" width="180" height="64" rx="12" stroke="#fbbf24"/><rect x="555" y="194" width="180" height="64" rx="12" stroke="#a78bfa"/></g><g fill="#e6edf7" font-size="15" font-weight="700" text-anchor="middle"><text x="135" y="90">Live L1 Loop</text><text x="135" y="232">Archive Catch-up</text><text x="645" y="90">SurrealDB State</text><text x="645" y="232">NATS JetStream</text></g><g stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M225 84C285 84 286 120 318 130"/><path d="M225 226C285 226 286 190 318 180"/><path d="M462 130C508 110 505 84 555 84"/><path d="M462 180C508 200 505 226 555 226"/></g><defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
     </section>
-
-    <section id="schemas" class="panel">
-      <div class="section-label">NATS Event Schemas</div>
-      <h2>Provider-Aware L1 Envelope</h2>
-      <p>
-        Shared event subjects remain stable. Payloads carry provider and network metadata so
-        consumers can distinguish Zeko-M / Mina facts from Zeko-E / Ethereum facts.
-      </p>
-      <pre><code>type L1Provider = "mina" | "ethereum";
-type L1Network =
-  | "zeko-m-devnet"
-  | "zeko-m-alphanet"
-  | "zeko-m-mainnet"
-  | "zeko-e-testnet-1"
-  | "zeko-e-mainnet";
-
-type L1Envelope = {
-  schemaVersion: 1;
-  provider: L1Provider;
-  network: L1Network;
-  source: "l1-watcher";
-  observedAt: string;
-  block: {
-    height: number;
-    hash: string;
-    parentHash: string;
-    slot?: number;
-    timestamp?: string;
-    confirmationDepth: number;
-    providerFields?: Record&lt;string, unknown&gt;;
-  };
-};</code></pre>
-      <table class="table">
-        <thead>
-          <tr><th>Subject</th><th>Meaning</th><th>Dedup identity</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>zeko.l1.settlements</code></td>
-            <td>Settlement detections and finality transitions.</td>
-            <td><code>l1-settlement:{network}:{settlementId}:{eventType}</code></td>
-          </tr>
-          <tr>
-            <td><code>zeko.l1.outer-actions</code></td>
-            <td>Zeko-M Commit/Witness actions from <code>OUTER_PK</code>.</td>
-            <td><code>l1-outer-action:{network}:{outerActionId}</code></td>
-          </tr>
-          <tr>
-            <td><code>zeko.l1.bridge-events</code></td>
-            <td>Deposit, withdrawal, and cancel facts used by bridge indexing.</td>
-            <td><code>l1-bridge-event:{network}:{bridgeEventId}</code></td>
-          </tr>
-          <tr>
-            <td><code>zeko.l1.rollbacks</code></td>
-            <td>Provider reorg facts listing affected published fact IDs.</td>
-            <td><code>l1-rollback:{network}:{rollbackId}</code></td>
-          </tr>
-        </tbody>
-      </table>
+    <section class="content-card">
+      <h2>Addendum Files</h2>
+      <div class="callouts"><div class="callout"><strong><a href="implementation-spec.html">Implementation Spec</a></strong><span>Package structure, runtime loops, durable state, bridge event decoding, and deployment notes.</span></div>
+<div class="callout"><strong><a href="nats-event-schemas.html">NATS Event Schemas</a></strong><span>Provider-aware event envelopes and schema details for zeko.l1.* subjects.</span></div>
+<div class="callout"><strong><a href="fault-tolerance.html">Fault Tolerance and Recovery</a></strong><span>Dependency failure behavior, restart/reorg handling, partial UI behavior, and recovery matrix.</span></div>
+<div class="callout"><strong><a href="archive-account-update-reader.html">Archive-Node-API Requirement</a></strong><span>Required zkApp command range query for complete Zeko-M historical bridge recovery.</span></div></div>
+      <h2>Code Artifact</h2>
+      <p>The TypeScript adapter interface sketch remains as <a href="l1-adapter-interfaces.ts"><code>l1-adapter-interfaces.ts</code></a>.</p>
     </section>
-
-    <section id="adapter" class="panel">
-      <div class="section-label">Adapter Interfaces</div>
-      <h2>Common Boundary With Provider Extensions</h2>
-      <p>
-        The common interface is intentionally small. Mina and Ethereum add provider-specific
-        historical reads and decoders outside the shared watcher lifecycle.
-      </p>
-      <pre><code>interface L1Adapter {
-  readonly provider: "mina" | "ethereum";
-  readonly network: L1Network;
-
-  getBestChain(depth: number): Promise&lt;L1BlockRef[]&gt;;
-  watchBestChainHints(onHint: () =&gt; Promise&lt;void&gt;): Promise&lt;AbortController&gt;;
-  getSourceHealth(): Promise&lt;L1SourceHealth&gt;;
-}
-
-interface MinaL1Adapter extends L1Adapter {
-  readonly provider: "mina";
-  readonly network: ZekoMNetwork;
-
-  getAccountState(publicKey: string): Promise&lt;string[]&gt;;
-  getOuterActions(input: {
-    contractPublicKey: string;
-    fromHeight: number;
-    toHeight: number;
-  }): Promise&lt;MinaArchiveOuterAction[]&gt;;
-  getHistoricalZkappCommands(input: {
-    fromHeight: number;
-    toHeight: number;
-  }): Promise&lt;MinaArchiveZkappCommandPage&gt;;
-}
-
-interface EthereumL1Adapter extends L1Adapter {
-  readonly provider: "ethereum";
-  readonly network: ZekoENetwork;
-
-  getSettlementLogs(input: {
-    fromBlock: number;
-    toBlock: number;
-  }): Promise&lt;EthereumLog[]&gt;;
-  getBridgeEventLogs(input: {
-    fromBlock: number;
-    toBlock: number;
-  }): Promise&lt;EthereumLog[]&gt;;
-}</code></pre>
-    </section>
-
-    <section id="recovery" class="panel">
-      <div class="section-label">Fault Tolerance</div>
-      <h2>Failures Degrade Freshness, Not Availability</h2>
-      <p>
-        Runtime dependency failures stay isolated. UI and APIs render available data with source
-        quality metadata instead of blocking unrelated workflows.
-      </p>
-      <table class="table">
-        <thead>
-          <tr><th>Failure</th><th>Watcher behavior</th><th>Recovery</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Live L1 endpoint down</td>
-            <td>Pause live tip/finality/reorg work; keep archive catch-up running if possible.</td>
-            <td>Reconnect, reconcile canonical chain window, then resume.</td>
-          </tr>
-          <tr>
-            <td>Archive L1 endpoint down</td>
-            <td>Pause historical catch-up; keep live processing running if possible.</td>
-            <td>Resume from durable archive cursor.</td>
-          </tr>
-          <tr>
-            <td>NATS down</td>
-            <td>Pause data publication and cursor advancement.</td>
-            <td>Reconnect, retry with deterministic <code>Nats-Msg-Id</code>.</td>
-          </tr>
-          <tr>
-            <td>SurrealDB down</td>
-            <td>Pause data facts because cursors/published IDs cannot be persisted.</td>
-            <td>Reload durable state, reconcile, then resume.</td>
-          </tr>
-          <tr>
-            <td>Bridge data incomplete</td>
-            <td>Expose data quality metadata.</td>
-            <td>Render partial records and warnings in APIs/UI.</td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="callout">
-        <strong>Health limitations:</strong>
-        <span class="pill">l1_live_unavailable</span>
-        <span class="pill">l1_archive_unavailable</span>
-        <span class="pill">historical_bridge_events_unavailable</span>
-        <span class="pill">bridge_event_gap_unrecoverable</span>
-        <span class="pill">helper_cancel_counter_unreconciled</span>
-        <span class="pill">nats_unavailable</span>
-        <span class="pill">surrealdb_unavailable</span>
-      </div>
-    </section>
-
-    <section id="archive" class="panel">
-      <div class="section-label">Archive-Node-API Requirement</div>
-      <h2><code>zkappCommands(input)</code> Is Required For Zeko-M Historical Bridge Recovery</h2>
-      <p>
-        The current Archive-Node-API can return <code>OUTER_PK</code> actions. Deposit submissions
-        and cancel deposits need account update details. The Mina adapter needs a range query over
-        successful zkApp commands.
-      </p>
-      <table class="table">
-        <thead>
-          <tr><th>Required field group</th><th>Why it matters</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Block identity</td>
-            <td>Height, Mina state hash, optional block hash, global slot, timestamp.</td>
-          </tr>
-          <tr>
-            <td>Command identity</td>
-            <td>Transaction hash, status, memo, fee payer, deterministic order.</td>
-          </tr>
-          <tr>
-            <td>Account update body</td>
-            <td>Public key, token ID, authorization kind, balance change, call depth.</td>
-          </tr>
-          <tr>
-            <td>Raw Mina fields</td>
-            <td>Actions, events, app state, and preconditions as raw field arrays.</td>
-          </tr>
-          <tr>
-            <td>Range controls</td>
-            <td>Block range, optional account/token filters, chunking compatible with the archive cap.</td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="cards">
-        <div class="card green">
-          <h3>After upstream support</h3>
-          <p>Zeko-M deposit, withdrawal, and cancel facts can be rebuilt from historical ranges.</p>
-        </div>
-        <div class="card rose">
-          <h3>Before upstream support</h3>
-          <p>Watcher downtime outside daemon frontier/NATS retention can leave unrecoverable bridge gaps.</p>
-        </div>
-        <div class="card amber">
-          <h3>Downstream contract</h3>
-          <p>APIs and UI expose incomplete data explicitly through source status and warnings.</p>
-        </div>
-      </div>
-    </section>
-
-    <footer>
-      Spike 006 · L1 Watcher addendum · HTML implementation handoff.
-    </footer>
+    <footer>Spike 006 · L1 Watcher addenda · HTML navigation index.</footer>
   </main>
 </body>
 </html>
