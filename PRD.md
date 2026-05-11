@@ -1,8 +1,8 @@
 # PRD: Zeko Block Explorer & Indexing Substrate
 
 **Author:** Zeko Labs
-**Status:** Draft v9 (post spikes 001, 002, 003, 006)
-**Last Updated:** May 9, 2026
+**Status:** Draft v10 (post spikes 001, 002, 003, 006)
+**Last Updated:** May 11, 2026
 
 ---
 
@@ -250,7 +250,7 @@ The L1 Watcher is the TypeScript component that reads the network's L1 settlemen
 - **Withdrawal finalizations:** `finalizeWithdrawal` emits an outer witness action on `OUTER_PK` and finalize-withdrawal event fields. The Mina adapter verifies the witness `aux` against the decoded withdrawal params and extracts the finalizer user key when available.
 - **Deposit cancellations:** Cancellation advances `helperAccountL1.zkappState[0]`. The Mina adapter detects cancel transactions by scanning account updates/preconditions and uses the helper counter as a consistency check.
 
-**Zeko-M historical bridge recovery requirement:** Archive-Node-API currently supports `actions(OUTER_PK)`, which is enough to rebuild outer actions and settlement commits. Complete historical bridge recovery also requires querying successful zkApp commands by block range with full account update actions, events, app state, and preconditions. Milestone 1 requires an upstream Archive-Node-API `zkappCommands(input)` query matching `spikes/006-l1-watcher/addendums/archive-account-update-reader.md`.
+**Zeko-M historical bridge recovery requirement:** Archive-Node-API currently supports `actions(OUTER_PK)`, which is enough to rebuild outer actions and settlement commits. Complete historical bridge recovery also requires querying successful zkApp commands by block range with full account update actions, events, app state, and preconditions. Milestone 1 requires an upstream Archive-Node-API `zkappCommands(input)` query matching the Spike 006 addendum (`spikes/006-l1-watcher/addendums/index.html#archive`).
 
 If that query is unavailable, `zeko.l1.bridge-events` is live-only except for retained NATS messages and any blocks still visible in the hosted Mina daemon frontier. Watcher or explorer downtime can then create an unrecoverable bridge-event gap once the missed blocks leave the daemon frontier and the relevant NATS messages are unavailable. The UI and APIs must expose this as partial/incomplete data instead of blocking pages or returning authoritative empty results.
 
@@ -619,7 +619,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 3. **zkApp State Display** (`spikes/003-zkapp-state-display/`) — **Complete.** Resolved: the indexer stores raw state / event / action fields only; human-readable labels come from an opt-in community schema registry served via a `contractSchema(network, address)` GraphQL query; decoding runs client-side by default. See §5.2.10 for the display approach and the spike directory for the schema format, submission pipeline, and reference implementation.
 4. **Deployment Topology + Federated Gateway** (`spikes/004-deployment-topology.md`) — single vs. multi host, Nix vs. Docker Compose for production, and the federated Hive gateway that unifies the Explorer, Bridge, and Contract Registry APIs behind one endpoint.
 5. **Pagination Schema** (`spikes/005-relay-pagination.md`) — cursor-based pagination schema, Relay spec tradeoffs.
-6. **L1 Watcher** (`spikes/006-l1-watcher/`) — **Complete.** Resolved: shared L1 Watcher component boundary, Zeko-M / Mina adapter design, future Zeko-E / Ethereum adapter boundary, NATS event schemas for all `zeko.l1.*` subjects, fault-tolerant live/archive recovery, and the Archive-Node-API `zkappCommands` requirement for complete Mina historical bridge recovery.
+6. **L1 Watcher** (`spikes/006-l1-watcher/`) — **Complete.** Resolved: shared L1 Watcher component boundary, Zeko-M / Mina adapter design, future Zeko-E / Ethereum adapter boundary, NATS event schemas for all `zeko.l1.*` subjects, fault-tolerant live/archive recovery, and the Archive-Node-API `zkappCommands` requirement for complete Mina historical bridge recovery. See `results.html` and `addendums/index.html` for the primary spike artifacts.
 7. **DA Monitor** (`spikes/007-da-monitor/`) — DA attestation model, API analysis (Ethermint/Celestia), NATS event schema for `zeko.da.attestations`, migration considerations.
 
 ### Milestone 1: MCP Server + GraphQL API + Indexing Substrate (Foundation)

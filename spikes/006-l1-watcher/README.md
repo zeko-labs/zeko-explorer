@@ -4,6 +4,9 @@
 **Blocking:** Milestone 1 (L1 data ingestion)
 **Owner:** TBD
 
+**Results:** [results.html](./results.html)
+**Addendum:** [addendums/index.html](./addendums/index.html)
+
 ---
 
 ## Context
@@ -127,14 +130,9 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 
 ## Deliverables
 
-1. **Mina L1 API analysis:** Available GraphQL queries/subscriptions on the Mina daemon and archive node relevant to settlement and bridge event detection.
-2. **NATS event schemas:** JSON schemas for all four `zeko.l1.*` subjects with example payloads.
-3. **Settlement detection design:** Concrete mechanism for detecting batch settlements and tracking confirmation depth.
-4. **L1 rollback detection design:** Fork detection algorithm, reconciliation after outages, rollback event format.
-5. **Outer action ingestion design:** How outer actions are queried, paginated, and published to NATS.
-6. **Bridge event detection design:** Concrete mechanisms for detecting deposit submissions (user-level AccountUpdates), withdrawal finalizations, and cancel deposits (no outer action — counter-based detection). Includes Poseidon hash computation approach for `aux`. See Section 4 for spike-002-derived requirements.
-7. **L1 adapter boundary sketch:** Minimal TypeScript interface implemented by the Mina adapter first and by the Ethereum adapter later.
-8. **Failure mode table:** All failure scenarios with detection and recovery strategies.
+1. **Results document:** `results.html` summarizes the shared watcher boundary, Zeko-M / Mina adapter findings, Zeko-E / Ethereum adapter boundary, and implementation conclusions.
+2. **Addendum document:** `addendums/index.html` captures implementation details: runtime loops, NATS schemas, adapter interface shape, fault tolerance, and the Archive-Node-API upstream requirement.
+3. **Cucumber scenarios:** `test-scenarios/` contains executable acceptance coverage for watcher recovery, bridge event ingestion, outage behavior, rollback handling, and provider boundaries.
 
 ---
 
