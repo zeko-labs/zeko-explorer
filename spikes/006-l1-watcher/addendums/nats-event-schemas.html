@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>L1 Watcher NATS Event Schemas</title>
+  <style>
+:root {
+  --bg: #07111f;
+  --panel: #0f1b2e;
+  --panel-2: #13253f;
+  --ink: #e6edf7;
+  --muted: #9fb0c7;
+  --line: #2b3d57;
+  --green: #34d399;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --blue: #60a5fa;
+  --violet: #a78bfa;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+    radial-gradient(circle at 16% 0%, rgba(34,211,238,.15), transparent 30rem),
+    radial-gradient(circle at 86% 8%, rgba(167,139,250,.12), transparent 32rem),
+    var(--bg);
+  background-size: 42px 42px, 42px 42px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.58;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 80px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(15,27,46,.97), rgba(9,20,35,.97));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.24);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 24px; padding: 32px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+h1 { margin: 12px 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: 1.03; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 72ch; margin: 0; }
+.diagram { border: 1px solid var(--line); border-radius: 12px; background: #081425; min-height: 260px; display: grid; place-items: center; overflow: hidden; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.nav a { color: var(--ink); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+.toc { position: sticky; top: 18px; padding: 18px; }
+.toc h2 { font-size: 14px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.content-card { padding: 30px; }
+.content-card h1 { font-size: 42px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 28px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+strong { color: var(--ink); }
+code { color: #d8b4fe; background: rgba(216,180,254,.08); border: 1px solid rgba(216,180,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); margin: 16px 0 22px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.12); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 22px; }
+.callout { border: 1px solid var(--line); border-radius: 12px; background: rgba(19,37,63,.52); padding: 16px; }
+.callout strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.callout span { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) { .page { width: min(100% - 24px, 1180px); padding-top: 20px; } .hero, .layout { grid-template-columns: 1fr; } .toc { position: static; } .callouts { grid-template-columns: 1fr; } .content-card { padding: 22px; } }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Spike 006 · L1 Watcher</div>
+        <h1>L1 Watcher NATS Event Schemas</h1>
+        <p class="subtitle">Provider-aware schema contract for <code>zeko.l1.*</code> events, deterministic message IDs, health limitations, and consumer responsibilities.</p>
+        <nav class="nav"><a href="../results.html">Results</a><a href="../addendums/index.html">Addenda Index</a><a href="../test-scenarios/">Cucumber Scenarios</a></nav>
+      </div>
+      <div class="diagram" aria-label="Watcher runtime loop diagram"><svg viewBox="0 0 780 310" role="img"><rect width="780" height="310" fill="#081425"/><circle cx="390" cy="155" r="82" fill="#10233d" stroke="#22d3ee" stroke-width="2"/><text x="390" y="145" text-anchor="middle" fill="#e6edf7" font-size="19" font-weight="700">Watcher Core</text><text x="390" y="174" text-anchor="middle" fill="#9fb0c7" font-size="13">publish after ack + state write</text><g fill="#10233d" stroke-width="2"><rect x="45" y="52" width="180" height="64" rx="12" stroke="#34d399"/><rect x="45" y="194" width="180" height="64" rx="12" stroke="#60a5fa"/><rect x="555" y="52" width="180" height="64" rx="12" stroke="#fbbf24"/><rect x="555" y="194" width="180" height="64" rx="12" stroke="#a78bfa"/></g><g fill="#e6edf7" font-size="15" font-weight="700" text-anchor="middle"><text x="135" y="90">Live L1 Loop</text><text x="135" y="232">Archive Catch-up</text><text x="645" y="90">SurrealDB State</text><text x="645" y="232">NATS JetStream</text></g><g stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M225 84C285 84 286 120 318 130"/><path d="M225 226C285 226 286 190 318 180"/><path d="M462 130C508 110 505 84 555 84"/><path d="M462 180C508 200 505 226 555 226"/></g><defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
+    </section>
+
+    <section class="layout">
+      <div class="toc"><h2>On This Page</h2><a href="#shared-envelope">Shared Envelope</a><a href="#zeko-l1-settlements">zeko.l1.settlements</a><a href="#zeko-l1-outer-actions">zeko.l1.outer-actions</a><a href="#zeko-l1-bridge-events">zeko.l1.bridge-events</a><a href="#zeko-l1-rollbacks">zeko.l1.rollbacks</a><a href="#zeko-health">zeko.health</a></div>
+      <article class="content-card"><h1 id="l1-watcher-nats-event-schemas">L1 Watcher NATS Event Schemas</h1>
+<p>These are the payload contracts for <code>packages/nats-protocol</code>.</p>
+<h2 id="shared-envelope">Shared Envelope</h2>
+<pre><code>export type L1Provider = &quot;mina&quot; | &quot;ethereum&quot;;
+export type L1Network =
+  | &quot;zeko-m-devnet&quot;
+  | &quot;zeko-m-alphanet&quot;
+  | &quot;zeko-m-mainnet&quot;
+  | &quot;zeko-e-testnet-1&quot;
+  | &quot;zeko-e-mainnet&quot;;
+
+export type L1Envelope = {
+  schemaVersion: 1;
+  provider: L1Provider;
+  network: L1Network;
+  source: &quot;l1-watcher&quot;;
+  observedAt: string;
+  block: {
+    height: number;
+    hash: string;
+    parentHash: string;
+    slot?: number;
+    timestamp?: string;
+    confirmationDepth: number;
+    providerFields?: Record&lt;string, unknown&gt;;
+  };
+};</code></pre>
+<p>For Mina, <code>block.hash</code> is the Mina state hash and <code>block.slot</code> is populated. For Ethereum, <code>block.hash</code> is the Ethereum block hash and Ethereum-specific fields stay under <code>providerFields</code>.</p>
+<h2 id="zeko-l1-settlements"><code>zeko.l1.settlements</code></h2>
+<pre><code>export type L1SettlementEvent = L1Envelope &amp; {
+  subject: &quot;zeko.l1.settlements&quot;;
+  eventType: &quot;detected&quot; | &quot;finalized&quot;;
+  settlementId: string;
+  finalityLevel: &quot;settling&quot; | &quot;finalized&quot;;
+  txHash: string;
+  outerActionId?: string;
+  commit: {
+    ledgerHash: string;
+    innerActionState: string;
+    innerActionStateLength: number;
+    synchronizedOuterActionState: string;
+    synchronizedOuterActionStateLength: number;
+    slotRange: { lower: number; upper: number };
+    rawFields: string[];
+  };
+};</code></pre>
+<p>ID format:</p>
+<ul>
+<li><code>settlementId = ${txHash}:${accountUpdateId}:${actionIndex}</code></li>
+<li><code>Nats-Msg-Id = l1-settlement:${network}:${settlementId}:${eventType}:${block.confirmationDepth}</code></li>
+<li>for <code>eventType: &quot;finalized&quot;</code>, use <code>l1-settlement:${network}:${settlementId}:finalized</code></li>
+</ul>
+<h2 id="zeko-l1-outer-actions"><code>zeko.l1.outer-actions</code></h2>
+<pre><code>export type L1OuterActionEvent = L1Envelope &amp; {
+  subject: &quot;zeko.l1.outer-actions&quot;;
+  outerActionId: string;
+  txHash: string;
+  accountUpdateId: string;
+  actionIndex: number;
+  actionKind: &quot;commit&quot; | &quot;witness&quot; | &quot;unknown&quot;;
+  actionState: {
+    current: string;
+    vector: [string, string, string, string, string];
+    before?: string;
+    after?: string;
+  };
+  rawFields: string[];
+  parsed:
+    | {
+        kind: &quot;commit&quot;;
+        ledgerHash: string;
+        innerActionState: string;
+        innerActionStateLength: number;
+        synchronizedOuterActionState: string;
+        synchronizedOuterActionStateLength: number;
+        slotRange: { lower: number; upper: number };
+      }
+    | {
+        kind: &quot;witness&quot;;
+        aux: string;
+        slotRange: { lower: number; upper: number };
+      }
+    | { kind: &quot;unknown&quot; };
+  archive: {
+    transactionSequenceNumber: number;
+    chainStatus: string;
+    distanceFromMaxBlockHeight: number;
+  };
+};</code></pre>
+<p>ID format:</p>
+<ul>
+<li><code>outerActionId = ${txHash}:${accountUpdateId}:${actionIndex}</code></li>
+<li><code>Nats-Msg-Id = l1-outer-action:${network}:${outerActionId}</code></li>
+</ul>
+<h2 id="zeko-l1-bridge-events"><code>zeko.l1.bridge-events</code></h2>
+<pre><code>export type L1BridgeEvent = L1Envelope &amp; {
+  subject: &quot;zeko.l1.bridge-events&quot;;
+  bridgeEventId: string;
+  type: &quot;deposit_submitted&quot; | &quot;withdrawal_finalized&quot; | &quot;deposit_cancelled&quot;;
+  userPk: string;
+  userPkSource: &quot;account_update&quot; | &quot;fee_payer&quot; | &quot;event_log&quot; | &quot;unknown&quot;;
+  txHash: string;
+  aux?: string;
+  amount?: string;
+  recipient?: string;
+  operationIndex?: number;
+
+  deposit?: {
+    timeoutSlot: number;
+    holderAccountL1: string;
+    outerPk: string;
+    rawActionFields: string[];
+  };
+
+  withdrawal?: {
+    withdrawalIndex?: number;
+    rawEventFields: string[];
+  };
+
+  cancel?: {
+    cancelledDepositIndex?: number;
+    helperAccountL1: string;
+    prevNextCancelledDepositBefore?: string;
+    prevNextCancelledDepositAfter?: string;
+  };
+};</code></pre>
+<p>ID format:</p>
+<ul>
+<li><code>bridgeEventId = ${txHash}:${accountUpdateId}:${actionOrEventIndex}:${type}</code></li>
+<li><code>Nats-Msg-Id = l1-bridge-event:${network}:${bridgeEventId}</code></li>
+</ul>
+<p>The watcher must not include <code>aux_sequence</code>.</p>
+<h2 id="zeko-l1-rollbacks"><code>zeko.l1.rollbacks</code></h2>
+<pre><code>export type L1RollbackEvent = {
+  schemaVersion: 1;
+  provider: L1Provider;
+  network: L1Network;
+  source: &quot;l1-watcher&quot;;
+  subject: &quot;zeko.l1.rollbacks&quot;;
+  rollbackId: string;
+  detectedAt: string;
+  commonAncestor: {
+    height: number;
+    hash: string;
+  };
+  orphanedBlocks: Array&lt;{
+    height: number;
+    hash: string;
+    parentHash: string;
+  }&gt;;
+  replacementBlocks: Array&lt;{
+    height: number;
+    hash: string;
+    parentHash: string;
+  }&gt;;
+  affected: {
+    settlementIds: string[];
+    outerActionIds: string[];
+    bridgeEventIds: string[];
+  };
+};</code></pre>
+<p>ID format:</p>
+<ul>
+<li><code>rollbackId = ${commonAncestor.hash}:${orphanedBlocks[0].hash}:${replacementBlocks[0]?.hash ?? &quot;none&quot;}</code></li>
+<li><code>Nats-Msg-Id = l1-rollback:${network}:${rollbackId}</code></li>
+</ul>
+<h2 id="zeko-health"><code>zeko.health</code></h2>
+<pre><code>export type L1WatcherHealth = {
+  schemaVersion: 1;
+  service: &quot;l1-watcher&quot;;
+  instanceId: string;
+  provider: L1Provider;
+  network: L1Network;
+  status: &quot;healthy&quot; | &quot;degraded&quot; | &quot;down&quot;;
+  observedAt: string;
+  l1LiveNode: {
+    connected: boolean;
+    syncStatus?: string;
+    tipHeight?: number;
+    tipHash?: string;
+    lastBlockAt?: string;
+    lastError?: string;
+  };
+  l1ArchiveApi: {
+    connected: boolean;
+    pendingMaxBlockHeight?: number;
+    canonicalMaxBlockHeight?: number;
+    lastOuterActionHeight?: number;
+    lagBlocks?: number;
+    lastError?: string;
+  };
+  bridgeBackfill: {
+    available: boolean;
+    lastBridgeEventHeight?: number;
+    lagBlocks?: number;
+    lastError?: string;
+  };
+  nats: {
+    connected: boolean;
+    pendingBufferSize: number;
+    lastPublishError?: string;
+  };
+  surrealdb: {
+    connected: boolean;
+    lastWriteAt?: string;
+    lastError?: string;
+  };
+  tracked: {
+    settlements: number;
+    bridgeEvents: number;
+    canonicalWindowBlocks: number;
+  };
+  limitations?: string[];
+};</code></pre>
+<p>Common <code>limitations</code> values:</p>
+<ul>
+<li><code>l1_live_unavailable</code></li>
+<li><code>l1_archive_unavailable</code></li>
+<li><code>historical_bridge_events_unavailable</code></li>
+<li><code>bridge_event_gap_unrecoverable</code></li>
+<li><code>helper_cancel_counter_unreconciled</code></li>
+<li><code>nats_unavailable</code></li>
+<li><code>surrealdb_unavailable</code></li>
+</ul>
+<p>Downstream APIs should expose equivalent data quality metadata on bridge and batch records so the UI can render partial data without blocking.</p></article>
+    </section>
+    <footer>Spike 006 · L1 Watcher · NATS Event Schemas</footer>
+  </main>
+</body>
+</html>
