@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spike 007: DA Attestation Status Tracking</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071014;
+      --panel: #0d171d;
+      --panel-2: #111f27;
+      --ink: #e7edf0;
+      --muted: #9fb0b8;
+      --line: #22343d;
+      --cyan: #22d3ee;
+      --emerald: #34d399;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --orange: #fb923c;
+      --violet: #a78bfa;
+      --blue: #60a5fa;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      --radius: 8px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), transparent 32rem), radial-gradient(circle at 78% 12%, rgba(52, 211, 153, 0.10), transparent 20rem), var(--bg); color: var(--ink); line-height: 1.55; }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .shell { max-width: 1500px; margin: 0 auto; padding: 28px; }
+    .hero { border: 1px solid rgba(34, 211, 238, 0.22); background: linear-gradient(135deg, rgba(13, 23, 29, 0.96), rgba(17, 31, 39, 0.90)); box-shadow: var(--shadow); border-radius: var(--radius); padding: 28px; margin-bottom: 18px; }
+    .eyebrow { color: var(--cyan); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .hero h1 { margin: 10px 0 8px; font-size: clamp(30px, 5vw, 54px); line-height: 1.02; letter-spacing: 0; }
+    .hero p { max-width: 980px; margin: 0; color: var(--muted); font-size: 17px; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .pill { border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--ink); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+    .decision-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+    .decision-card { border: 1px solid var(--line); background: rgba(13, 23, 29, 0.84); border-radius: var(--radius); padding: 16px; }
+    .decision-card strong { display: block; font-size: 15px; margin-bottom: 7px; color: var(--ink); }
+    .decision-card span { color: var(--muted); font-size: 14px; }
+    .layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .toc { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--line); background: rgba(13, 23, 29, 0.92); border-radius: var(--radius); padding: 14px; }
+    .toc-title { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: 800; letter-spacing: .08em; margin-bottom: 8px; }
+    .toc a { display: block; border-radius: 6px; color: var(--muted); padding: 7px 8px; font-size: 13px; text-decoration: none; }
+    .toc a:hover { background: rgba(34, 211, 238, 0.08); color: var(--ink); }
+    .toc .toc-sub { padding-left: 22px; font-size: 12px; }
+    main { min-width: 0; }
+    .diagram-card, article { border: 1px solid var(--line); background: rgba(13, 23, 29, 0.88); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .diagram-card { margin-bottom: 18px; padding: 18px; overflow: hidden; }
+    .diagram-card h2 { margin-top: 0; border: 0; padding: 0; font-size: 18px; }
+    .diagram-card svg { width: 100%; height: auto; display: block; border-radius: 6px; background: #020617; }
+    article { padding: 28px; }
+    article > h1:first-child { display: none; }
+    h2 { margin: 44px 0 14px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 28px; line-height: 1.14; }
+    h2:first-of-type { margin-top: 0; border-top: 0; padding-top: 0; }
+    h3 { margin: 28px 0 10px; font-size: 20px; color: #dff8ff; }
+    h4 { margin: 22px 0 8px; font-size: 16px; color: #c7f9de; }
+    p { color: #cfdbdf; margin: 12px 0; }
+    ul, ol { padding-left: 24px; color: #cfdbdf; }
+    li { margin: 7px 0; }
+    hr { border: 0; border-top: 1px solid var(--line); margin: 30px 0; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; color: #b8f7ff; background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.12); border-radius: 5px; padding: 1px 5px; font-size: .92em; }
+    pre.code-block { position: relative; overflow: auto; margin: 16px 0; padding: 38px 16px 16px; background: #061017; border: 1px solid #1d333d; border-radius: var(--radius); color: #e2edf2; }
+    pre.code-block::before { content: attr(data-lang); position: absolute; top: 10px; left: 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    pre code { display: block; padding: 0; color: inherit; background: transparent; border: 0; white-space: pre; }
+    .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: var(--radius); }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; background: rgba(7, 16, 20, 0.52); }
+    th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+    th { position: sticky; top: 0; z-index: 1; background: #12242c; color: #eafcff; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,0.025); }
+    .section-ref, .milestone-chip { display: inline-block; border-radius: 999px; padding: 0 7px; border: 1px solid rgba(251, 191, 36, 0.20); background: rgba(251, 191, 36, 0.08); color: #fde68a; font-size: .86em; }
+    .section-ref { border-color: rgba(96, 165, 250, 0.20); background: rgba(96, 165, 250, 0.08); color: #bfdbfe; }
+    .note-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0 22px; }
+    .note { border: 1px solid var(--line); border-left: 3px solid var(--cyan); background: rgba(255,255,255,0.03); border-radius: var(--radius); padding: 12px; }
+    .note b { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+    .note span { font-weight: 700; }
+    @media (max-width: 980px) { .shell { padding: 14px; } .layout { grid-template-columns: 1fr; } .toc { position: static; max-height: none; } .decision-grid, .note-strip { grid-template-columns: 1fr; } article, .hero { padding: 18px; } h2 { font-size: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="eyebrow">Spike 007 Report</div>
+      <h1>DA Attestation Status Tracking</h1>
+      <p>Decision record and implementation design for deriving baseline DA status in Milestone 1, then adding direct DA signatures in Milestone 4/5 without introducing a standalone DA monitoring service.</p>
+      <div class="meta-row"><span class="pill">Status: Complete</span><span class="pill">Date: 2026-05-12</span><span class="pill">Milestone 1: baseline derivation</span><span class="pill">Milestone 4/5: direct DA signatures</span></div>
+    </header>
+    <section class="decision-grid" aria-label="Decision summary"><div class="decision-card"><strong>No standalone DA monitor</strong><span>DA nodes publish their own attestations; the explorer remains a NATS consumer.</span></div><div class="decision-card"><strong>Baseline is already correct</strong><span><code>proved</code> and settlement signals imply DA quorum by construction.</span></div><div class="decision-card"><strong>Direct signatures are an upgrade</strong><span>They improve latency and signer detail, not the correctness basis.</span></div></section>
+    <div class="layout"><nav class="toc" aria-label="Table of contents"><div class="toc-title">Contents</div><a class="toc-main" href="#1-decision">1. Decision</a>
+<a class="toc-main" href="#2-user-visible-states">2. User-Visible States</a>
+<a class="toc-main" href="#3-latency-of-each-source-signal">3. Latency of Each Source Signal</a>
+<a class="toc-main" href="#4-architectural-invariant-proved-implies-da-attested-implies-l1-settled-eventually">4. Architectural Invariant: Proved Implies DA-Attested Implies L1-Settled-Eventually</a>
+<a class="toc-main" href="#5-baseline-da-status-derivation">5. Baseline DA Status Derivation</a>
+<a class="toc-sub" href="#5-1-terminology">5.1 Terminology</a>
+<a class="toc-sub" href="#5-2-two-nats-subjects-feed-the-same-surrealdb-column">5.2 Two NATS subjects feed the same SurrealDB column</a>
+<a class="toc-sub" href="#5-3-surrealdb-schema-additions-for-baseline-derivation">5.3 SurrealDB schema additions for baseline derivation</a>
+<a class="toc-sub" href="#5-4-indexer-algorithm-baseline-derivation">5.4 Indexer algorithm — baseline derivation</a>
+<a class="toc-sub" href="#5-5-rollback-handling-baseline-derivation">5.5 Rollback handling — baseline derivation</a>
+<a class="toc-sub" href="#5-6-pruning-stale-pending-entries">5.6 Pruning stale pending entries</a>
+<a class="toc-sub" href="#5-7-baseline-derivation-deliverable-milestone-1">5.7 Baseline derivation deliverable (Milestone 1)</a>
+<a class="toc-main" href="#6-direct-da-signatures-milestone-4-5">6. Direct DA Signatures (Milestone 4/5)</a>
+<a class="toc-sub" href="#6-1-overview">6.1 Overview</a>
+<a class="toc-sub" href="#6-2-what-does-not-change">6.2 What Does Not Change</a>
+<a class="toc-sub" href="#6-3-da-layer-reference">6.3 DA Layer Reference</a>
+<a class="toc-sub" href="#6-4-da-node-nats-publisher">6.4 DA Node NATS Publisher</a>
+<a class="toc-sub" href="#6-5-indexer-aggregation">6.5 Indexer Aggregation</a>
+<a class="toc-sub" href="#6-6-nats-schemas">6.6 NATS Schemas</a>
+<a class="toc-sub" href="#6-7-indexer-integration">6.7 Indexer Integration</a>
+<a class="toc-sub" href="#6-8-failure-modes">6.8 Failure Modes</a>
+<a class="toc-sub" href="#6-9-abstract-da-adapter">6.9 Abstract DA Adapter</a>
+<a class="toc-sub" href="#6-10-celestia-da-target">6.10 Celestia DA Target</a>
+<a class="toc-sub" href="#6-11-cli">6.11 CLI</a>
+<a class="toc-main" href="#7-test-scenarios">7. Test Scenarios</a>
+<a class="toc-sub" href="#7-1-baseline-derivation-milestone-1">7.1 Baseline derivation (Milestone 1)</a>
+<a class="toc-sub" href="#7-2-direct-da-signatures-milestone-4-5">7.2 Direct DA signatures (Milestone 4/5)</a>
+<a class="toc-main" href="#8-references">8. References</a></nav><main>
+      <section class="diagram-card" aria-label="DA status flow visualization">
+        <h2>DA Status Flow</h2><div class="note-strip"><div class="note"><b>Path A</b><span>L1 settlement</span></div><div class="note"><b>Path B</b><span>proved finality</span></div><div class="note"><b>Path C</b><span>direct DA signatures</span></div><div class="note"><b>Invariant</b><span>proof implies quorum</span></div></div>
+        <svg viewBox="0 0 1120 560" role="img" aria-label="NATS and SurrealDB DA attestation flow"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b" /></marker><marker id="arrowhead-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" /></marker></defs><rect width="1120" height="560" fill="#020617"/><rect width="1120" height="560" fill="url(#grid)" opacity="0.65"/><path d="M230 130 C330 130, 340 250, 455 250" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)"/><path d="M230 250 H455" fill="none" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowhead-cyan)"/><path d="M230 370 C330 370, 340 250, 455 250" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)"/><path d="M655 250 H815" fill="none" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowhead-cyan)"/><path d="M655 250 C735 250, 735 390, 815 390" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)"/><path d="M940 180 C980 225, 982 315, 940 360" fill="none" stroke="#fbbf24" stroke-dasharray="8 6" stroke-width="2"/><g><rect x="55" y="90" width="175" height="80" rx="6" fill="#0f172a"/><rect x="55" y="90" width="175" height="80" rx="6" fill="#064e3b" fill-opacity="0.42" stroke="#34d399" stroke-width="1.5"/><text x="142" y="121" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">L1 Watcher</text><text x="142" y="145" fill="#9fb0b8" font-size="11" text-anchor="middle">zeko.l1.settlements</text><rect x="55" y="210" width="175" height="80" rx="6" fill="#0f172a"/><rect x="55" y="210" width="175" height="80" rx="6" fill="#064e3b" fill-opacity="0.42" stroke="#34d399" stroke-width="1.5"/><text x="142" y="241" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">Sequencer</text><text x="142" y="265" fill="#9fb0b8" font-size="11" text-anchor="middle">zeko.l2.finality: proved</text><rect x="55" y="330" width="175" height="80" rx="6" fill="#0f172a"/><rect x="55" y="330" width="175" height="80" rx="6" fill="#fb923c" fill-opacity="0.30" stroke="#fb923c" stroke-width="1.5"/><text x="142" y="361" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">DA Nodes</text><text x="142" y="385" fill="#9fb0b8" font-size="11" text-anchor="middle">zeko.da.signatures</text><rect x="455" y="205" width="200" height="90" rx="6" fill="#0f172a"/><rect x="455" y="205" width="200" height="90" rx="6" fill="#fb923c" fill-opacity="0.30" stroke="#fb923c" stroke-width="1.5"/><text x="555" y="238" fill="#fff" font-size="15" font-weight="700" text-anchor="middle">NATS JetStream</text><text x="555" y="263" fill="#9fb0b8" font-size="11" text-anchor="middle">three DA status sources</text><rect x="815" y="145" width="190" height="90" rx="6" fill="#0f172a"/><rect x="815" y="145" width="190" height="90" rx="6" fill="#083344" fill-opacity="0.45" stroke="#22d3ee" stroke-width="1.5"/><text x="910" y="179" fill="#fff" font-size="15" font-weight="700" text-anchor="middle">TS Indexer</text><text x="910" y="203" fill="#9fb0b8" font-size="11" text-anchor="middle">derive, verify, aggregate</text><rect x="815" y="335" width="190" height="90" rx="6" fill="#0f172a"/><rect x="815" y="335" width="190" height="90" rx="6" fill="#4c1d95" fill-opacity="0.45" stroke="#a78bfa" stroke-width="1.5"/><text x="910" y="369" fill="#fff" font-size="15" font-weight="700" text-anchor="middle">SurrealDB</text><text x="910" y="393" fill="#9fb0b8" font-size="11" text-anchor="middle">batch.da_status</text></g><g font-size="11" fill="#cbd5e1"><text x="300" y="116">Path A: settlement implies proof</text><text x="276" y="237" fill="#67e8f9">Path B: proved implies quorum</text><text x="275" y="398">Path C: quorum signatures</text><text x="968" y="269" fill="#fde68a" text-anchor="middle">source precedence</text><text x="968" y="288" fill="#fde68a" text-anchor="middle">settlement &gt; da-direct &gt; proved</text></g></svg>
+      </section>
+      <article class="report-body"><h1 id="spike-007-da-attestation-status-tracking-results">Spike 007: DA Attestation Status Tracking — Results</h1>
+<p><strong>Status:</strong> Complete <strong>Date:</strong> 2026-05-12</p>
+<hr />
+<h2 id="1-decision">1. Decision</h2>
+<p>This spike investigated how the explorer should track DA-layer attestation status and concluded with two architectural commitments:</p>
+<p><strong>A standalone DA-side monitoring service is not part of the architecture.</strong> Polling each operator's DA node from a centralised explorer-owned service was evaluated and found to be the wrong shape: it imposes a fixed steady-state request rate on every operator, requires each operator to expose and rate-limit a new ingress HTTP shim, duplicates state the DA node already holds locally, and re-asks a question whose answer the DA node already knows the moment it signs. The architecture instead places attestation publishing on the DA-layer side: <strong>each DA node publishes its own Schnorr signatures directly to NATS</strong> on <code>zeko.da.signatures</code> at the moment a signature is persisted to RocksDB. The explorer is a pure NATS consumer that aggregates these self-authenticating messages. This is the same shape as the sequencer→NATS publisher already in production (Spike 001 <span class="section-ref">§5.2</span>).</p>
+<p><strong>Baseline derivation targets <span class="milestone-chip">Milestone 1</span> and ships no DA-attestation publishing at all.</strong> <code>batch.da_status</code> is derived from two NATS subjects the indexer already consumes — <code>zeko.l1.settlements</code> (Spike 006) and <code>zeko.l2.finality</code> at level <code>&quot;proved&quot;</code> (Spike 001 <span class="section-ref">§4</span>). Both signals are by-construction proof of DA quorum (see <span class="section-ref">§4</span>), so the explorer is correct without ever talking to the DA layer. Direct DA-node-to-NATS publishing targets <strong><span class="milestone-chip">Milestone 4 or Milestone 5</span></strong> as a latency-and-detail upgrade: it compresses the DA-attested transition from &quot;up to one commit period&quot; to sub-second, and it adds per-operator signer detail to the batch detail page. It is not a correctness requirement.</p>
+<p>This decision rests on two facts established by this spike:</p>
+<ol>
+<li><strong>The Zeko rollup proof verifies the DA-layer multisig in-circuit.</strong> <code>Committer.prove_commit</code> calls <code>rule_commit</code>, which checks the signature set against the helper account's public-key list as a circuit constraint. A valid proof is unsatisfiable without DA quorum. Therefore <code>batch.da_status = 'attested'</code> follows automatically from any proved-or-later state.</li>
+<li><strong>The sequencer already publishes <code>zeko.l2.finality</code> at level <code>&quot;proved&quot;</code></strong> the moment <code>run_committer</code> produces a <code>Txn_snark.serializable</code> (Spike 001 <span class="section-ref">§4</span>). That event is, by construction, a DA-attestation signal — it is published <em>because</em> a proof was successfully assembled, which is <em>only</em> possible if the multisig was reached.</li>
+</ol>
+<p>The rest of this document specifies the baseline derivation (<span class="section-ref">§5</span>) and the direct DA signatures path (<span class="section-ref">§6</span>).</p>
+<hr />
+<h2 id="2-user-visible-states">2. User-Visible States</h2>
+<p>The explorer surfaces three distinct user-visible states for every batch and every transaction it contains:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>State</th><th>Meaning to the user</th><th>Source signal</th></tr></thead>
+<tbody>
+<tr><td><strong>Sequenced</strong></td><td>The L2 sequencer accepted and applied the transaction. Reversible if the DA layer fails to attest.</td><td><code>zeko.l2.transactions</code></td></tr>
+<tr><td><strong>DA-attested</strong></td><td>The DA layer has signed off on the data being available. The transaction can no longer be silently dropped — a proof exists or can be assembled.</td><td><code>zeko.l2.finality</code> (proved) <strong>or</strong> quorum reached on <code>zeko.da.signatures</code></td></tr>
+<tr><td><strong>L1-settled</strong></td><td>The batch has landed on the Mina L1 chain with the configured confirmation depth. Final, modulo a deep L1 fork.</td><td><code>zeko.l1.settlements</code> (Spike 006)</td></tr>
+</tbody></table></div>
+<p>In the baseline derivation:</p>
+<ul>
+<li>Batch detail page: &quot;Sequenced&quot; → &quot;DA-attested (proved)&quot; → &quot;L1-settled&quot;. The DA-attested transition fires when the proved-level finality event arrives. No per-operator detail; the batch is shown attested as a single boolean fact.</li>
+<li>Transaction detail page: Inherits the parent batch's <code>da_status</code> for the user-visible state badge.</li>
+<li><code>/status</code> operator page: Shows aggregate &quot;proved tip lag&quot; derived from <code>zeko.l2.finality</code>. The DA layer's health is observed indirectly through that lag.</li>
+<li>Bridge operation page: Reaches <code>BRIDGE_DA_ATTESTED</code> when its enclosing batch hits the proved transition.</li>
+</ul>
+<p>With direct DA signatures:</p>
+<ul>
+<li>Batch detail page adds a &quot;DA attestation&quot; section showing each operator's signing public key, the per-signer <code>signedAt</code> timestamp from the published Schnorr message, and a list of operators whose signatures have not yet been observed. The DA-attested transition fires sub-second after each signature arrives on NATS (<span class="section-ref">§3</span>).</li>
+<li><code>/status</code> page distinguishes DA-layer health from sequencer/L1 health, driven by per-DA-node heartbeats on <code>zeko.health</code>. A future Celestia DA target (<span class="section-ref">§6.10</span>) is a publisher swap on the DA-layer side.</li>
+<li>Bridge page surfaces &quot;DA-quorum reached&quot; as a distinct, earlier user-visible state separate from &quot;proved&quot;, which matters for high-value withdrawals where users want the earliest credible signal of irreversibility.</li>
+</ul>
+<p>A row whose <code>da_status</code> is <code>'attested'</code> under baseline derivation is genuinely attested — the proved-level signal is by-construction proof of DA quorum (<span class="section-ref">§4</span>). Direct DA signatures change latency and detail, not correctness.</p>
+<hr />
+<h2 id="3-latency-of-each-source-signal">3. Latency of Each Source Signal</h2>
+<p>Concrete numbers for an operator running the default Zeko configuration (<code>commitment_period_sec = 60</code>, three DA operators with quorum 2, Mina L1 with ~290-block confirmation depth):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Signal</th><th>Marks <code>da_status</code> attested when…</th><th>Typical end-to-end latency from diff publication</th><th>Source path</th><th>Target delivery</th></tr></thead>
+<tbody>
+<tr><td><code>zeko.l2.finality</code> level=<code>proved</code></td><td>The sequencer's committer assembles a proof. The proof is unsatisfiable without DA quorum.</td><td><strong>Up to one commit period</strong> — bounded by <code>commitment_period_sec</code>. Median ~30s; worst case ~60s on default config. Slow proving runs can extend this.</td><td>Baseline derivation</td><td><span class="milestone-chip">Milestone 1</span></td></tr>
+<tr><td><code>zeko.da.signatures</code> published directly by each DA node</td><td>Indexer counts <code>quorum</code> distinct authorised DA signing public keys from per-node publishes for the same DA receipt payload (<code>ledger_hash</code>, <code>acc_set</code>).</td><td><strong>Sub-second.</strong> Bounded by sign-to-NATS-publish latency on each operator plus indexer message handling.</td><td>Direct DA signatures</td><td><span class="milestone-chip">Milestone 4/5</span></td></tr>
+<tr><td><code>zeko.l1.settlements</code> (Spike 006)</td><td>The L1 commit transaction reaches <code>confirmation_depth</code> blocks.</td><td><strong>Several minutes to hours.</strong> One commit period to assemble plus commit inclusion (~3min Mina block time) plus confirmation depth (~290 blocks × ~3min ≈ 14h for full probabilistic finality, or 30–60min at the operational depth most explorers use).</td><td>Baseline derivation</td><td><span class="milestone-chip">Milestone 1</span></td></tr>
+</tbody></table></div>
+<p>In <span class="milestone-chip">Milestone 1</span>, baseline derivation marks a batch DA-attested as soon as either of its two NATS signals arrives (whichever is first). In <span class="milestone-chip">Milestone 4/5</span>, direct DA signatures are added; the same two signals remain, and <code>zeko.da.signatures</code> is added as a faster third source that also carries per-operator detail.</p>
+<hr />
+<h2 id="4-architectural-invariant-proved-implies-da-attested-implies-l1-settled-eventually">4. Architectural Invariant: Proved Implies DA-Attested Implies L1-Settled-Eventually</h2>
+<p><code>Committer.prove_commit</code> calls <code>rule_commit</code>, which checks the multisig signature set against the helper account's public-key list as a <strong>circuit constraint</strong>. The proof is unsatisfiable without quorum signatures. Therefore:</p>
+<ul>
+<li><strong>Existence of a proof</strong> ⇒ DA quorum was reached.</li>
+<li><strong>Existence of an L1 settlement</strong> ⇒ a valid proof landed on L1 ⇒ DA quorum was reached.</li>
+</ul>
+<p>Both implications are by construction, not by observation. The indexer can mark <code>batch.da_status = attested</code> from either signal without consulting the DA layer at all. This collapses the work the explorer needs to do:</p>
+<ul>
+<li><strong>No bootstrap problem.</strong> Historical batches on a long-running chain are L1-settled by definition; the L1 Watcher (Spike 006) emits <code>zeko.l1.settlements</code> for each one and the indexer marks it attested. The sequencer's <code>sync</code> flow on first deploy replays diffs through <code>zeko.l2.transactions</code>; their corresponding proved transitions are emitted as the sequencer reaches them.</li>
+<li><strong>No catastrophic-failure problem.</strong> If anything in the DA-attestation reporting path is broken (or simply not built), <code>zeko.l1.settlements</code> still fills <code>da_status</code> correctly — it just arrives later.</li>
+</ul>
+<p>The correctness story is therefore identical across <span class="milestone-chip">Milestone 1</span> baseline derivation and <span class="milestone-chip">Milestone 4/5</span> direct DA signatures; only latency and detail differ.</p>
+<hr />
+<h2 id="5-baseline-da-status-derivation">5. Baseline DA Status Derivation</h2>
+<h3 id="5-1-terminology">5.1 Terminology</h3>
+<p>Three actors are involved. Keep them straight when reading this document:</p>
+<ul>
+<li><strong>The TS indexer</strong> — a single TypeScript process. It is a <strong>NATS JetStream consumer</strong> (subscribes to <code>zeko.*</code> subjects) and a <strong>SurrealDB writer</strong> (issues upserts on the <code>batch</code>, <code>transaction</code>, <code>pending_da_attestation</code>, etc. tables). It owns no other state.</li>
+<li><strong>NATS JetStream</strong> — the message log the indexer reads from. Subjects relevant to DA status: <code>zeko.l1.settlements</code> (published by the L1 Watcher, Spike 006) and <code>zeko.l2.finality</code> (published by the sequencer, Spike 001 <span class="section-ref">§4</span>).</li>
+<li><strong>SurrealDB</strong> — the read model the explorer's GraphQL APIs query. The relevant table for this spike is <code>batch</code>; relevant column is <code>batch.da_status</code>.</li>
+</ul>
+<p>When the document says <strong>&quot;the indexer consumes message X from NATS subject Y&quot;</strong>, it means the JetStream consumer side. When it says <strong>&quot;the indexer writes column Z on the batch row in SurrealDB&quot;</strong>, it means the database upsert side. These are distinct actions inside the same process.</p>
+<h3 id="5-2-two-nats-subjects-feed-the-same-surrealdb-column">5.2 Two NATS subjects feed the same SurrealDB column</h3>
+<p><code>batch.da_status</code> is set by the indexer in response to <strong>either</strong> of two NATS messages. For an existing <code>batch</code> row, the first attestation source the indexer processes wins; proved messages that arrive before the <code>batch</code> row exists are buffered until settlement creates the row:</p>
+<ul>
+<li><strong>Path A — <code>zeko.l1.settlements</code> arrives.</strong> The settlement event implies the proof landed on L1, which implies DA quorum was reached (<span class="section-ref">§4</span> invariant). The indexer upserts the SurrealDB <code>batch</code> row with <code>da_status = 'attested'</code>, <code>da_source = 'settlement'</code>, <code>da_attested_at = settlement.timestamp</code>. This path never depends on DA-layer connectivity.</li>
+<li><strong>Path B — <code>zeko.l2.finality</code> arrives with <code>level = 'proved'</code>.</strong> The proved-finality event implies the sequencer assembled a valid proof, which implies DA quorum was reached. The indexer upserts the matching SurrealDB <code>batch</code> row with <code>da_status = 'attested'</code>, <code>da_source = 'proved'</code>, <code>da_attested_at = finality.timestamp</code>.</li>
+</ul>
+<p>If the proved-finality NATS message is consumed before the SurrealDB <code>batch</code> row exists (the L1 Watcher hasn't seen the settlement yet), the indexer instead inserts a row in the SurrealDB <code>pending_da_attestation</code> table keyed on <code>ledger_hash</code>. When the corresponding settlement message later arrives and the indexer creates the <code>batch</code> row, the settlement upsert writes <code>da_source = 'settlement'</code> because the row is being created from the L1 settlement path, then deletes the pending row. Existing proved-source batch rows are not overwritten by later settlement messages; only settlement-related fields are added.</p>
+<p>All writes are idempotent upserts; <code>da_status</code> never reverts from <code>'attested'</code> to anything else.</p>
+<h3 id="5-3-surrealdb-schema-additions-for-baseline-derivation">5.3 SurrealDB schema additions for baseline derivation</h3>
+<pre class="code-block" data-lang="surql"><code>-- Columns added to the existing `batch` table.
+DEFINE FIELD da_status      ON batch TYPE option&lt;string&gt;
+  ASSERT $value IN ['attested'];
+DEFINE FIELD da_attested_at ON batch TYPE option&lt;datetime&gt;;
+DEFINE FIELD da_source      ON batch TYPE option&lt;string&gt;
+  ASSERT $value IN ['settlement', 'proved', 'da-direct'];
+
+DEFINE INDEX idx_batch_da_status ON batch FIELDS da_status;
+
+-- Buffer table for proved-finality events that arrive before the
+-- corresponding `batch` row has been created by a settlement event.
+DEFINE TABLE pending_da_attestation SCHEMAFULL;
+DEFINE FIELD ledger_hash  ON pending_da_attestation TYPE string;
+DEFINE FIELD source       ON pending_da_attestation TYPE string
+  ASSERT $value IN ['settlement', 'proved', 'da-direct'];
+DEFINE FIELD attested_at  ON pending_da_attestation TYPE option&lt;datetime&gt;;
+DEFINE FIELD received_at  ON pending_da_attestation TYPE datetime;
+
+DEFINE INDEX idx_pending_da_hash ON pending_da_attestation FIELDS ledger_hash UNIQUE;</code></pre>
+<p>What was deliberately <strong>not</strong> added:</p>
+<ul>
+<li><strong>No <code>da_target_ledger_hash</code> column on <code>batch</code>.</strong> The existing <code>batch.target_ledger_hash</code> (already present and indexed for L2 rollback handling, PRD <span class="section-ref">§5.2.6</span>) is the join key. Adding a duplicate would just go stale.</li>
+<li><strong>No DA-implementation, quorum, or signers columns</strong> in baseline derivation. They are added together with Path C in the direct DA signature schema (<span class="section-ref">§6.7.1</span>) so the migration ships when the data to fill them ships.</li>
+<li><strong>No <code>'missing'</code> enum value on <code>da_status</code>.</strong> Absence of attestation is <code>null</code>, not a terminal state (<span class="section-ref">§6.5.3</span>). Operational visibility for stalled hashes comes from <code>pending_da_attestation</code> rows older than one commit period, not from a column value.</li>
+</ul>
+<p>The <code>'da-direct'</code> enum value is included on <code>da_source</code> in baseline derivation so that the direct DA signature migration is purely additive — no <code>ALTER FIELD ... ASSERT</code> required when Path C ships. <code>pending_da_attestation.source</code> also admits <code>'settlement'</code> because L1 rollback handling can temporarily move a settlement-derived attestation fact out of a reverted <code>batch</code> row and into the pending buffer until the same <code>target_ledger_hash</code> settles again.</p>
+<h3 id="5-4-indexer-algorithm-baseline-derivation">5.4 Indexer algorithm — baseline derivation</h3>
+<pre class="code-block" data-lang="text"><code># On NATS message from subject `zeko.l1.settlements`:
+on settlement(target_ledger_hash, settlement_timestamp, ...):
+    existing = SurrealDB batch row matching target_ledger_hash, if any
+    upsert SurrealDB batch row matching target_ledger_hash
+        set &lt;other settlement-related fields per Spike 006&gt;
+        if existing row is absent or existing.da_status is null:
+            set da_status      = 'attested'
+            set da_source      = 'settlement'
+            set da_attested_at = settlement_timestamp
+        else:
+            leave existing da_status, da_source, and da_attested_at unchanged
+    delete from SurrealDB pending_da_attestation where ledger_hash = target_ledger_hash
+
+# On NATS message from subject `zeko.l2.finality`:
+on finality(level, ledger_hash, finality_timestamp):
+    if level != 'proved':
+        # 'committed' is consumed elsewhere for the `committed_at` column;
+        # not part of the DA-attestation derivation.
+        return
+    if SurrealDB batch row exists where target_ledger_hash = ledger_hash:
+        if that row's da_status is null:
+            update SurrealDB batch row
+                set da_status      = 'attested'
+                set da_source      = 'proved'
+                set da_attested_at = finality_timestamp
+        # else: already attested via settlement (more authoritative); drop
+    else:
+        upsert SurrealDB pending_da_attestation
+            set ledger_hash  = ledger_hash
+            set source       = 'proved'
+            set attested_at  = finality_timestamp
+            set received_at  = now()</code></pre>
+<h3 id="5-5-rollback-handling-baseline-derivation">5.5 Rollback handling — baseline derivation</h3>
+<p>L1 rollback events arrive on the NATS subject <code>zeko.l1.rollbacks</code> (Spike 006). When the indexer consumes one, it reverts the affected <code>batch</code> rows in SurrealDB. Reverting a row does not revert the underlying DA-attestation fact: the diff was attested by the DA layer regardless of what happened on L1. The indexer therefore copies the DA-related fields from the affected <code>batch</code> row into <code>pending_da_attestation</code> before clearing them, so a subsequent re-settlement of the same <code>target_ledger_hash</code> re-binds the attestation.</p>
+<p>The indexer's L2 hash-chain rollback handling on <code>zeko.l2.transactions</code> (Spike 001 <span class="section-ref">§5</span>) does not touch <code>da_status</code> — a hash that was attested remains attested. Only the <code>batch</code> row's settlement lifecycle is reverted, not the DA fact.</p>
+<h3 id="5-6-pruning-stale-pending-entries">5.6 Pruning stale pending entries</h3>
+<p><code>pending_da_attestation</code> is a write-buffer, not durable history. Rows older than 30 days that never matched a <code>batch</code> row are pruned by a daily indexer maintenance task. This bounds storage in pathological cases (e.g., a chain that publishes proved events for batches that ultimately never settle).</p>
+<h3 id="5-7-baseline-derivation-deliverable-milestone-1">5.7 Baseline derivation deliverable (<span class="milestone-chip">Milestone 1</span>)</h3>
+<p>A SurrealDB migration containing the schema in <span class="section-ref">§5.3</span>, plus the indexer NATS-consumer wiring in <span class="section-ref">§5.4</span> and <span class="section-ref">§5.5</span>. <strong>No new service.</strong> <code>zeko.l2.finality</code> is already consumed by the indexer for the <code>committed_at</code> column on <code>batch</code>; this work adds the proved-level branch to that handler. <code>zeko.l1.settlements</code> is already consumed for <code>batch</code> row creation; this work adds <code>da_status</code>, <code>da_attested_at</code>, and <code>da_source</code> to the upsert. Acceptance coverage is the Cucumber feature files in <span class="section-ref">§7.1</span>.</p>
+<hr />
+<h2 id="6-direct-da-signatures-milestone-4-5">6. Direct DA Signatures (<span class="milestone-chip">Milestone 4/5</span>)</h2>
+<p>The direct DA signature path targets <span class="milestone-chip">Milestone 4/5</span>. It is two small pieces of code added to systems that already exist:</p>
+<ol>
+<li>A NATS publisher inside the OCaml <code>zeko-da run-node</code> binary (<span class="section-ref">§6.4</span>). When the DA node persists a Schnorr signature for a <code>ledger_hash</code> to RocksDB, it also publishes a <code>zeko.da.signatures</code> message. Fire-and-forget; if NATS is unreachable the publish is dropped — the signature itself remains durable on RocksDB and the explorer's baseline derivation continues to mark the batch attested via the proved or settlement signals.</li>
+<li>A new NATS subject handler inside the existing TS indexer (<span class="section-ref">§6.5</span>, <span class="section-ref">§6.7</span>). It consumes <code>zeko.da.signatures</code>, verifies each Schnorr signature against the DA receipt payload, accumulates distinct authorised signing public keys per <code>ledger_hash</code> in an in-memory LRU, and flips <code>batch.da_status = 'attested'</code> once the count reaches the configured <code>quorum</code>.</li>
+</ol>
+<p>The same indexer process handles all three DA subjects (<code>zeko.l1.settlements</code>, <code>zeko.l2.finality</code>, <code>zeko.da.signatures</code>). The DA-node side gains one NATS publisher; the indexer side gains one subject handler. Total new infrastructure: zero services.</p>
+<h3 id="6-1-overview">6.1 Overview</h3>
+<ul>
+<li><code>zeko.da.signatures</code> NATS subject — one self-authenticating message per <code>(operator, ledger_hash)</code> pair, published immediately after the DA node persists the signature.</li>
+<li>Per-operator signer detail on the SurrealDB <code>batch</code> row (<code>da_signers</code> array): which operator's public key signed, the timestamp, the operator's reported <code>instanceId</code>.</li>
+<li>A per-operator heartbeat on <code>zeko.health</code> published by each DA node directly. The explorer's <code>/status</code> page already aggregates <code>zeko.health</code> by service.</li>
+<li>A publisher abstraction on the OCaml DA-node side (<span class="section-ref">§6.9</span>) so a future Celestia DA target (<span class="section-ref">§6.10</span>) is a publisher swap, not an explorer rewrite.</li>
+</ul>
+<h3 id="6-2-what-does-not-change">6.2 What Does Not Change</h3>
+<ul>
+<li>The two baseline sources continue to write <code>batch.da_status</code>. <code>zeko.da.signatures</code> adds <strong>Path C — DA-direct</strong> as an additional, faster source. Path C never overrides Path A (settlement); it upgrades Path B (proved) by attaching signer detail (<span class="section-ref">§6.7</span>).</li>
+<li>Schema lifecycle: only <strong>additive</strong> changes to the <code>batch</code> table (<code>da_implementation</code>, <code>da_quorum_threshold</code>, <code>da_signers</code>) and to <code>pending_da_attestation</code> (the same three fields). Existing baseline rows remain valid.</li>
+</ul>
+<h3 id="6-3-da-layer-reference">6.3 DA Layer Reference</h3>
+<p>The Zeko DA layer is a multisig signer ring implemented in OCaml. A future Celestia DA target is planned and is addressed in <span class="section-ref">§6.10</span>.</p>
+<h4 id="6-3-1-components">6.3.1 Components</h4>
+<ul>
+<li><strong><code>zeko-da run-node</code></strong> — one OCaml process per operator. Receives diffs from the sequencer over <code>Async.Rpc</code> (binprot/TCP, default port <code>8080</code>), validates by reconstructing the target ledger, signs the DA receipt payload derived from <code>(target_ledger_hash, acc_set)</code> with a Mina-native Schnorr signature, and persists <code>(ledger_hash → diff)</code> and <code>(ledger_hash → signature)</code> mappings to RocksDB.</li>
+<li><strong><code>zeko-signer</code></strong> — sidecar holding the operator's signing key.</li>
+<li><strong>HTTP healthcheck</strong> — the DA node binds an HTTP server on port <code>8081</code> for <code>GET /healthz</code>.</li>
+</ul>
+<h4 id="6-3-2-native-types-the-publisher-serializes">6.3.2 Native types the publisher serializes</h4>
+<p>The DA node's internal types live in <code>src/app/zeko/da_layer/lib/rpc.ml</code> and the surrounding modules of the <code>zeko-labs/zeko</code> repository (<code>compatible</code> branch):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Type</th><th>Source</th><th>On-wire form (<span class="section-ref">§6.6.2</span>)</th></tr></thead>
+<tbody>
+<tr><td><code>Ledger_hash.t</code></td><td>Mina</td><td>Decimal string, identical to <code>target_ledger_hash</code> on <code>zeko.l2.transactions</code> (Spike 001 <span class="section-ref">§6</span>).</td></tr>
+<tr><td><code>Public_key.Compressed.t</code></td><td>Mina</td><td>Base58check string (e.g. <code>B62q...</code>).</td></tr>
+<tr><td><code>Signature.t</code></td><td>Mina</td><td>Hex-encoded <code>rs</code>-concatenation.</td></tr>
+</tbody></table></div>
+<p>These types change with Mina releases and have no stable JSON form maintained outside the OCaml tree, which is why serialisation belongs in the OCaml node — performing it once in the language where the types are native and emitting JSON to NATS keeps the explorer free of Mina internal coupling. The sequencer's <code>zeko.l2.transactions</code> publisher follows the same pattern (Spike 001 <span class="section-ref">§6</span>).</p>
+<h3 id="6-4-da-node-nats-publisher">6.4 DA Node NATS Publisher</h3>
+<p>The OCaml <code>zeko-da run-node</code> binary gains a NATS publisher built on the same fire-and-forget contract as the sequencer's publisher (Spike 001 <span class="section-ref">§5.2</span>). When the node persists a Schnorr signature for a <code>ledger_hash</code> to RocksDB, it publishes a single self-authenticating message on <code>zeko.da.signatures</code>.</p>
+<p>The publisher has four shape-defining properties:</p>
+<ul>
+<li><strong>Self-authenticating payloads.</strong> Each message carries the Schnorr signature over the DA receipt payload derived from <code>ledgerHash</code> and <code>accSet</code>. Any consumer verifies the message using only on-the-wire crypto and the authorised DA signer set; the publisher's NATS account identity is not load-bearing for correctness.</li>
+<li><strong>Outbound-only network requirement.</strong> The operator needs only outbound NATS connectivity from their network. There is no inbound HTTP shim, no ingress allowlist, no per-source rate limiting to operate.</li>
+<li><strong>Load proportional to signing rate.</strong> Steady-state publish rate equals the rate at which the sequencer asks the DA node to sign. No fixed cadence, no background traffic.</li>
+<li><strong>Opt-in per operator.</strong> Operators who do not configure <code>--nats-url</code> are unaffected by this change and continue to behave exactly as today. The explorer still marks their batches <code>da_status = 'attested'</code> via the baseline sources (<span class="section-ref">§5</span>).</li>
+</ul>
+<h4 id="6-4-1-publish-point">6.4.1 Publish point</h4>
+<p>Inside <code>Da_layer.run_node</code> the flow is:</p>
+<ol>
+<li>Receive diff via <code>Async.Rpc</code> (<code>enqueue_diff</code>).</li>
+<li>Reconstruct target ledger from local RocksDB state plus diff.</li>
+<li><code>Schnorr.sign</code> the resulting <code>target_ledger_hash</code> with the operator's signing key.</li>
+<li>Persist <code>(ledger_hash → diff)</code> and <code>(ledger_hash → signature)</code> to RocksDB.</li>
+<li>Return ack to the sequencer.</li>
+</ol>
+<p>The publisher hooks <strong>between step 4 and step 5</strong>: after the signature is durably persisted (so a publish never claims a signature absent from disk), and before the sequencer ack (so a successful ack is correlated with a published signature on the happy path). The publish itself is non-blocking — the ack does not wait for NATS to confirm.</p>
+<h4 id="6-4-2-fire-and-forget-semantics">6.4.2 Fire-and-forget semantics</h4>
+<ul>
+<li>If <code>--nats-url</code> is not set, the publisher is disabled.</li>
+<li>If NATS is unreachable, the publish call returns an error which is logged at <code>warn</code> and discarded. There is no buffer, no retry, no on-disk publish journal.</li>
+<li>The signature itself remains in RocksDB. If quorum is reached at the L1 contract's signature check, the explorer's <code>batch.da_status</code> is filled by the proved or settlement signal regardless of the missed publish.</li>
+<li>On DA-node restart the publisher does <strong>not</strong> scan RocksDB for unpublished signatures. The two baseline sources cover any gap.</li>
+</ul>
+<h4 id="6-4-3-implementation">6.4.3 Implementation</h4>
+<ul>
+<li>Add <code>--nats-url</code> flag (default unset) to <code>src/app/zeko/da_layer/cli.ml</code>.</li>
+<li>Add <code>--nats-stream</code> flag (default <code>zeko-da</code>).</li>
+<li>Add an <code>Nats_publisher</code> module — roughly 50 lines of OCaml — that holds the JetStream connection and exposes <code>publish_signature : ledger_hash:Ledger_hash.t -&gt; signature:Signature.t -&gt; unit Deferred.t</code>. The connection is established lazily on first publish and reconnects with exponential backoff on disconnect.</li>
+<li>Hook the publish call in <code>run_node</code> after the persist step described in <span class="section-ref">§6.4.1</span>. Use the serialization helpers shared with the sequencer (decimal-encoded <code>Ledger_hash</code>, base58check <code>Public_key.Compressed</code>).</li>
+<li>Set <code>Nats-Msg-Id: da-sig-{publicKey}-{ledgerHash}</code> for JetStream dedup.</li>
+<li>Each DA node publishes a <code>zeko.health</code> heartbeat on a timer (default 30s) with its <code>publicKey</code>, <code>instanceId</code> (UUID generated at process start), <code>last_signed_hash</code>, <code>last_signed_at</code>.</li>
+</ul>
+<p>The whole publisher is roughly 80 lines of OCaml.</p>
+<h4 id="6-4-4-operator-authentication-to-nats">6.4.4 Operator authentication to NATS</h4>
+<p>NATS per-publisher accounts with subject ACLs scope each operator: their account is authorised to publish only to <code>zeko.da.signatures</code> with <code>publicKey = $own_pk</code> and to <code>zeko.health</code> with <code>service = &quot;da-node-$own_pk&quot;</code>. Provisioning is one-time per operator per network.</p>
+<h3 id="6-5-indexer-aggregation">6.5 Indexer Aggregation</h3>
+<p>The TS indexer gains a third JetStream subscription, <code>zeko.da.signatures</code>, alongside the two it already consumes for baseline derivation (<code>zeko.l1.settlements</code> and <code>zeko.l2.finality</code>).</p>
+<h4 id="6-5-1-subscription">6.5.1 Subscription</h4>
+<ul>
+<li>JetStream pull-subscribe to <code>zeko.da.signatures</code> with durable name <code>indexer-da-{network}</code>.</li>
+<li><code>DeliverPolicy = New</code> on first deploy. Historical batches are attested via the baseline sources; the indexer does not retroactively aggregate past signatures.</li>
+<li>On subsequent restarts JetStream resumes from the last ack.</li>
+</ul>
+<h4 id="6-5-2-aggregation-logic">6.5.2 Aggregation logic</h4>
+<p>For each consumed <code>zeko.da.signatures</code> message:</p>
+<ol>
+<li><strong>Verify the Schnorr signature</strong> of <code>publicKey</code> over the DA receipt payload, <code>RandomOracle(ledgerHash, accSet)</code>, using the same salt as the OCaml DA layer and <code>rule_commit</code>. Drop with a <code>warn</code> log on verification failure. The on-the-wire crypto, not the NATS account, is what authenticates the message.</li>
+<li><strong>Authorise the signer.</strong> Check <code>publicKey</code> against the configured/on-chain DA signer set for the network. Unknown keys are logged, acked, and ignored before they can enter quorum accounting.</li>
+<li><strong>Update per-hash signer state.</strong> The indexer maintains an in-memory <code>LRU&lt;ledger_hash, Set&lt;publicKey&gt;&gt;</code> cache (default cap 4096 entries) seeded on startup from any <code>pending_da_attestation</code> rows with <code>source = 'da-direct'</code>. Add <code>publicKey</code> to the set.</li>
+<li><strong>Persist to SurrealDB.</strong> Upsert the <code>pending_da_attestation</code> row for <code>ledger_hash</code> with the appended signer entry. If the corresponding <code>batch</code> row already exists, upsert it directly with the appended <code>da_signers</code> entry instead — same upsert path as <span class="section-ref">§6.7.2</span>.</li>
+<li><strong>Quorum check.</strong> If the authorised signer set's size has just crossed <code>quorum</code>, set <code>batch.da_status = 'attested'</code> (or copy the buffer onto the freshly-created <code>batch</code> row when settlement creates it).</li>
+<li><strong>Ack the NATS message.</strong></li>
+</ol>
+<p><code>quorum</code> and the DA signer public-key list are per-network configuration on the indexer, with the L1 contract's helper-account signer set used as the source of truth when it can be read at startup. The configured threshold and key set must match the L1 contract. If startup validation finds a mismatch, the indexer logs a warning and disables Path C <code>da_status</code> flips until configuration is corrected; Paths A and B continue to fill <code>da_status</code> correctly (failure mode #10, <span class="section-ref">§6.8</span>).</p>
+<h4 id="6-5-3-no-terminal-missing-state">6.5.3 No terminal &quot;missing&quot; state</h4>
+<p>Absence of signatures is the signal that quorum has not been reached. The indexer does not write <code>da_status = 'missing'</code>. A batch whose signers never reach quorum stays <code>da_status = null</code> until one of:</p>
+<ul>
+<li>Path A marks it attested via L1 settlement. (This is impossible if quorum was genuinely never reached, since the proof would be unsatisfiable.)</li>
+<li>It remains null indefinitely and is surfaced on the operator <code>/status</code> page from the count of <code>pending_da_attestation</code> rows older than one commit period.</li>
+</ul>
+<h4 id="6-5-4-lru-eviction">6.5.4 LRU eviction</h4>
+<p>The signer-set LRU bounds memory at 4096 in-flight hashes. If a hash is evicted before quorum is reached, subsequent signatures for it are reseeded from the SurrealDB <code>pending_da_attestation</code> row on the next message arrival. Eviction is therefore correct but slightly slower; under sustained high throughput the LRU cap can be raised via configuration.</p>
+<h3 id="6-6-nats-schemas">6.6 NATS Schemas</h3>
+<h4 id="6-6-1-stream">6.6.1 Stream</h4>
+<p><code>zeko-da</code> (declared in PRD <span class="section-ref">§5.2.4</span>). Subjects: <code>zeko.da.&gt;</code>. Retention: limits, max-age 90d, dedup window 5m.</p>
+<h4 id="6-6-2-zeko-da-signatures-message-body">6.6.2 <code>zeko.da.signatures</code> — message body</h4>
+<p>One message per <code>(operator, ledger_hash)</code> pair, published by the operator's DA node directly.</p>
+<pre class="code-block" data-lang="json"><code>{
+  &quot;schemaVersion&quot;: 1,
+  &quot;implementation&quot;: &quot;zeko-multisig-v1&quot;,
+  &quot;ledgerHash&quot;: &quot;&lt;decimal&gt;&quot;,
+  &quot;accSet&quot;: &quot;&lt;decimal&gt;&quot;,
+  &quot;publicKey&quot;: &quot;B62q...&quot;,
+  &quot;signature&quot;: &quot;&lt;Mina Schnorr signature, hex-encoded (rs concat)&gt;&quot;,
+  &quot;instanceId&quot;: &quot;&lt;uuid generated at DA-node process start&gt;&quot;,
+  &quot;signedAt&quot;: &quot;2026-05-07T12:34:57.012Z&quot;
+}</code></pre>
+<p>The message is <strong>self-authenticating</strong>: any consumer can recompute the DA receipt payload as <code>RandomOracle(ledgerHash, accSet)</code> using <code>Zeko_constants.da_layer_check_salt</code>, then verify <code>signature</code> against that payload and <code>publicKey</code> using Mina Schnorr verification. Identity of the NATS publisher account is unrelated to the truth of the message; the indexer trusts the cryptography and the configured/on-chain DA signer set, not the connection.</p>
+<h4 id="6-6-3-field-semantics">6.6.3 Field semantics</h4>
+<div class="table-wrap"><table>
+<thead><tr><th>Field</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>schemaVersion</code></td><td>Integer. Bumped only on incompatible shape changes.</td></tr>
+<tr><td><code>implementation</code></td><td><code>&quot;zeko-multisig-v1&quot;</code> for the current OCaml multisig; <code>&quot;celestia-v1&quot;</code> after migration. Lets consumers route to the right interpreter.</td></tr>
+<tr><td><code>ledgerHash</code></td><td>Decimal-encoded <code>Ledger_hash</code>, identical to <code>target_ledger_hash</code> in <code>zeko.l2.transactions</code>. Indexer joins on this.</td></tr>
+<tr><td><code>accSet</code></td><td>Decimal-encoded account-set root used by the DA layer receipt. This is the second field in the signed DA receipt payload and matches the <code>acc_set</code> value attached to the corresponding <code>zeko.l2.transactions</code> diff.</td></tr>
+<tr><td><code>publicKey</code></td><td>Base58check-encoded <code>Public_key.Compressed</code>. The signing operator's identity. Must be present in the configured/on-chain helper-account public-key list before it counts toward quorum.</td></tr>
+<tr><td><code>signature</code></td><td>Hex-encoded Mina Schnorr signature over <code>RandomOracle(ledgerHash, accSet)</code> with <code>Zeko_constants.da_layer_check_salt</code>. Verified by the indexer; messages with invalid signatures are dropped with a <code>warn</code> log.</td></tr>
+<tr><td><code>instanceId</code></td><td>UUID regenerated on each DA-node process start. Lets the indexer record which operator process produced the signature; useful for postmortem of operator-side incidents.</td></tr>
+<tr><td><code>signedAt</code></td><td>When the DA node persisted the signature to RocksDB. Used as the per-signer <code>observedAt</code> on the <code>batch.da_signers</code> array.</td></tr>
+</tbody></table></div>
+<h4 id="6-6-4-dedup-key">6.6.4 Dedup key</h4>
+<p><code>Nats-Msg-Id: da-sig-{publicKey}-{ledgerHash}</code></p>
+<p>This is exactly idempotent: repeatedly publishing the same signature (e.g., as a result of operator-side replay tooling) produces at most one persisted NATS message within the dedup window. Across operators, two different <code>publicKey</code> values for the same <code>ledgerHash</code> produce two distinct messages — exactly what the indexer needs for quorum aggregation.</p>
+<h4 id="6-6-5-zeko-health-per-da-node-heartbeat">6.6.5 <code>zeko.health</code> — per-DA-node heartbeat</h4>
+<p>Each DA node publishes its own heartbeat directly. The indexer aggregates them on the <code>/status</code> page.</p>
+<pre class="code-block" data-lang="json"><code>{
+  &quot;service&quot;: &quot;da-node&quot;,
+  &quot;instanceId&quot;: &quot;&lt;uuid&gt;&quot;,
+  &quot;publicKey&quot;: &quot;B62q...&quot;,
+  &quot;implementation&quot;: &quot;zeko-multisig-v1&quot;,
+  &quot;publishedAt&quot;: &quot;2026-05-07T12:35:00.000Z&quot;,
+  &quot;lastSignedHash&quot;: &quot;&lt;decimal&gt;&quot;,
+  &quot;lastSignedAt&quot;: &quot;2026-05-07T12:34:57.012Z&quot;,
+  &quot;natsConnected&quot;: true
+}</code></pre>
+<p>The aggregate &quot;DA layer healthy&quot; condition shown in the explorer's freshness badge (PRD <span class="section-ref">§6.1</span>) is computed by the indexer: count distinct <code>publicKey</code> values whose <code>publishedAt</code> is within the last <code>2 × heartbeat_interval</code>. If that count drops below <code>quorum</code>, the badge shows degraded.</p>
+<h3 id="6-7-indexer-integration">6.7 Indexer Integration</h3>
+<p><code>zeko.da.signatures</code> is <strong>Path C — DA-direct</strong>, the third source the indexer accepts for <code>batch.da_status</code>. It is the fastest source (sub-second from sign-time) and the only source that carries per-operator signer detail. Path A (settlement) and Path B (proved) remain in place and continue to fill the column when the Path C pipeline is unavailable. Rows written by Path C carry <code>da_source = 'da-direct'</code>.</p>
+<h4 id="6-7-1-additive-surrealdb-schema-changes">6.7.1 Additive SurrealDB schema changes</h4>
+<pre class="code-block" data-lang="surql"><code>-- Per-attestation detail accumulated from `zeko.da.signatures`. All optional;
+-- absent on rows whose da_source is 'settlement' or 'proved'.
+DEFINE FIELD da_implementation   ON batch TYPE option&lt;string&gt;;
+DEFINE FIELD da_quorum_threshold ON batch TYPE option&lt;int&gt;;
+DEFINE FIELD da_signers          ON batch TYPE option&lt;array&lt;object&gt;&gt;;
+
+-- Same detail mirrored on the buffer table so signatures arriving before the
+-- batch row exists are accumulated and transferred to the batch row when it
+-- is created.
+DEFINE FIELD implementation   ON pending_da_attestation TYPE option&lt;string&gt;;
+DEFINE FIELD quorum_threshold ON pending_da_attestation TYPE option&lt;int&gt;;
+DEFINE FIELD signers          ON pending_da_attestation TYPE option&lt;array&lt;object&gt;&gt;;</code></pre>
+<p>What was deliberately <strong>not</strong> added:</p>
+<ul>
+<li><strong>No <code>da_quorum_achieved</code> column.</strong> It would always equal <code>len(da_signers)</code> for any row written by Path C, and is undefined for rows written by Paths A or B (which never see signer detail). The GraphQL resolver computes it from <code>len(da_signers)</code> if needed.</li>
+</ul>
+<p>The <code>da_source</code> enum was provisioned in baseline (<span class="section-ref">§5.3</span>) to include <code>'da-direct'</code> so no ASSERT change is needed when the direct DA signature path ships.</p>
+<h4 id="6-7-2-algorithm-extension">6.7.2 Algorithm extension</h4>
+<p>The baseline settlement and proved handlers (<span class="section-ref">§5.4</span>) are unchanged. One handler is added:</p>
+<pre class="code-block" data-lang="text"><code># On NATS message from subject `zeko.da.signatures`:
+on signature(ledger_hash, acc_set, public_key, signature, instance_id,
+             implementation, signed_at):
+    # 1. Verify the Schnorr signature over the same receipt payload that
+    # rule_commit verifies in-circuit: RandomOracle(ledger_hash, acc_set).
+    payload = da_receipt_payload(ledger_hash, acc_set)
+    if not Schnorr.verify(signature, public_key, payload):
+        log_warn(&quot;invalid DA signature&quot;, ledger_hash, public_key)
+        return
+
+    # 2. Only the configured/on-chain DA signer set can contribute to quorum.
+    if public_key not in authorised_da_public_keys:
+        log_warn(&quot;unauthorised DA signer&quot;, ledger_hash, public_key)
+        return
+
+    # 3. Append this signer to the in-memory signer-set LRU.
+    signer_entry = { publicKey, instanceId, signedAt: signed_at }
+    signer_set  = lru.get_or_init(ledger_hash, source=pending_da_attestation)
+    if public_key in signer_set: return            # already counted
+    signer_set.add(public_key)
+
+    # 4. Persist the appended signer detail to SurrealDB.
+    if SurrealDB batch row exists where target_ledger_hash = ledger_hash:
+        if batch.da_source = 'settlement':
+            # Settlement is authoritative; record signer detail but do not
+            # change da_status or da_source.
+            update SurrealDB batch row
+                append da_signers     &lt;&lt; signer_entry
+                set    da_implementation    = implementation if null
+                set    da_quorum_threshold  = quorum if null
+        else:
+            # da_source is null or 'proved' — Path C populates everything.
+            update SurrealDB batch row
+                append da_signers     &lt;&lt; signer_entry
+                set    da_implementation    = implementation
+                set    da_quorum_threshold  = quorum
+                if size(da_signers after append) &gt;= quorum:
+                    set da_status      = 'attested'
+                    set da_source      = 'da-direct'
+                    set da_attested_at = signed_at
+    else:
+        # Batch row not yet created — buffer in pending_da_attestation.
+        upsert SurrealDB pending_da_attestation
+            set ledger_hash      = ledger_hash
+            set source           = 'da-direct'
+            set implementation   = implementation
+            set quorum_threshold = quorum
+            append signers       &lt;&lt; signer_entry
+            set received_at      = now()
+            if size(signers after append) &gt;= quorum:
+                set attested_at  = signed_at
+
+# On settlement (unchanged from §5.4) — additionally transfer detail:
+on settlement(...):
+    upsert batch as before
+    on transfer from pending_da_attestation:
+        if pending.source = 'da-direct':
+            copy implementation, quorum_threshold, signers,
+                 (attested_at if pending reached quorum) → batch
+        delete pending row</code></pre>
+<p>Source precedence on <code>da_source</code> is <strong>settlement &gt; da-direct &gt; proved</strong>:</p>
+<ul>
+<li>Settlement is never overwritten. Signer detail from Path C may still be recorded on the row (<code>da_signers</code>) as supplementary information, but <code>da_status</code>, <code>da_source</code>, and <code>da_attested_at</code> reflect the settlement.</li>
+<li><code>da-direct</code> overwrites <code>proved</code> (same fact, but with signer detail attached).</li>
+<li><code>proved</code> is never written if <code>da-direct</code> or <code>settlement</code> is already there.</li>
+</ul>
+<h4 id="6-7-3-bootstrap">6.7.3 Bootstrap</h4>
+<p>The indexer opens its NATS consumer for <code>zeko.da.signatures</code> with <code>DeliverPolicy = New</code> on first deploy. Historical batches on a long-running chain are already marked attested via Paths A and B; the indexer does not retroactively aggregate past signature messages, even if they are present in the stream.</p>
+<p>On indexer restart the durable consumer resumes from the last ack. Any signature messages published while the indexer was down are redelivered; the in-memory signer-set LRU is reseeded from <code>pending_da_attestation</code> on startup, so signers accumulated across a restart are not double-counted.</p>
+<h3 id="6-8-failure-modes">6.8 Failure Modes</h3>
+<p>The Path C failure surface has two parts: publisher misbehaviour (DA-node-side) and consumer misbehaviour (indexer-side). In every case Paths A and B continue to fill <code>batch.da_status</code> correctly.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Failure</th><th>Detection</th><th>Effect</th><th>Recovery</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Operator runs the DA node without <code>--nats-url</code> (publisher disabled)</td><td>No <code>zeko.da.signatures</code> messages for that <code>publicKey</code>; the operator's <code>zeko.health</code> heartbeat is also absent</td><td>That operator's signatures never reach the indexer. If the remaining publishers ≥ quorum, Path C still flips <code>da_status = 'attested'</code> and the non-participating operator simply never appears in <code>da_signers</code>. If publishers &lt; quorum, Path C is dormant and the row is attested later via Path B (proved) or Path A (settlement).</td><td>Operator action. Paths A and B keep correctness throughout.</td></tr>
+<tr><td>2</td><td>Operator's DA node has NATS unreachable</td><td>Outbound NATS connect/publish fails inside the OCaml node; logged at <code>warn</code></td><td>The publish is silently dropped (<span class="section-ref">§6.4.2</span>). The Schnorr signature is still on RocksDB and the diff still reaches the L1 contract. Same observable outcome as #1: that operator's signature is missing from <code>da_signers</code> for the affected <code>ledger_hash</code>.</td><td>Automatic when NATS reachability returns. No backfill is attempted — Paths A and B cover the lost detail.</td></tr>
+<tr><td>3</td><td>Operator process crashes between persist and NATS publish</td><td>No publish for the affected <code>ledger_hash</code>; signature still durable on RocksDB</td><td>Same as #2: signature is durable on-chain (via the eventual L1 commit) but the per-signer detail for that one hash is lost on Path C.</td><td>None required for correctness. Operator restart resumes publishing for new signatures.</td></tr>
+<tr><td>4</td><td>Indexer NATS-consumer outage (indexer down)</td><td>JetStream consumer lag grows</td><td>All three subscriptions (<code>zeko.l1.settlements</code>, <code>zeko.l2.finality</code>, <code>zeko.da.signatures</code>) stop draining. On restart the durable consumers resume from their last acks and the in-memory signer-set LRU is reseeded from <code>pending_da_attestation</code> (<span class="section-ref">§6.7.3</span>).</td><td>Automatic on indexer restart. No data loss; latency briefly elevated.</td></tr>
+<tr><td>5</td><td>Invalid Schnorr signature received on the wire</td><td><code>Schnorr.verify</code> returns false in <span class="section-ref">§6.7.2</span> step 1</td><td>Message dropped with a <code>warn</code> log; the message is acked so it does not redeliver. The corresponding <code>publicKey</code> does not enter the signer set. This is one protection against a compromised NATS publisher account: identity is established by the on-the-wire crypto, not by the connection.</td><td>None — invalid messages have no persisted effect. Operator-side bug to investigate via the <code>instanceId</code> in the warn log.</td></tr>
+<tr><td>6</td><td>Signature from a public key outside the DA signer set</td><td><code>publicKey</code> is absent from the configured/on-chain helper-account public-key list</td><td>Message dropped with a <code>warn</code> log and acked. The signature may be cryptographically valid for that key, but it does not count toward the contract's DA quorum and is not persisted as a signer entry.</td><td>Operator/config investigation. If the key set changed intentionally, update the indexer configuration or contract-derived signer-set reader before relying on Path C.</td></tr>
+<tr><td>7</td><td>Duplicate-signature replay (operator-side retry tooling republishes a signature)</td><td>Same <code>(publicKey, ledger_hash)</code> pair publishes more than once</td><td>JetStream's dedup window (<span class="section-ref">§6.6.4</span>) drops the duplicate before it reaches the indexer. If a replay happens outside the dedup window, the indexer's signer-set check (<code>if public_key in signer_set: return</code>, <span class="section-ref">§6.7.2</span> step 3) suppresses the double-count.</td><td>Idempotent by construction. No operator action required.</td></tr>
+<tr><td>8</td><td>Signer set never reaches quorum</td><td><code>pending_da_attestation</code> row for a <code>ledger_hash</code> persists with <code>len(signers) &lt; quorum</code> longer than one commit period</td><td><code>batch.da_status</code> stays null (Path C dormant). The corresponding diff cannot have a valid L1 proof either (the proof's circuit constraint requires quorum), so Path A and Path B are also dormant — the chain is genuinely stalled on this hash. <code>/status</code> surfaces the stalled hash via &quot;pending DA attestations older than commit period&quot;.</td><td>Operational investigation — typically one or more operators failing to sign. Independent of the explorer.</td></tr>
+<tr><td>9</td><td>Two indexer instances running simultaneously (rolling deploy overlap)</td><td>Both share the JetStream durable consumer for <code>zeko.da.signatures</code></td><td>JetStream delivers each message to exactly one instance. Both instances upsert the same SurrealDB rows; the per-signer entry is idempotent via SurrealDB's primary-key upsert, and the in-memory LRU may briefly disagree across instances but converges on the next message. No persisted duplicate.</td><td>Tolerated for short rolling-deploy windows.</td></tr>
+<tr><td>10</td><td>Indexer configured <code>quorum</code> or signer set doesn't match the L1 contract</td><td>Logged on indexer startup against the L1 contract's helper-account key list and threshold (read at startup)</td><td>Path C <code>da_status</code> flips are disabled for that process so a bad threshold/key set cannot mark a batch attested early. The indexer may still record signer detail for diagnostics, and Paths A/B fill <code>da_status</code> at the usual latency.</td><td>Operational fix at deploy. The indexer logs the on-chain threshold/key set and configured threshold/key set at startup; mismatch is a startup warning.</td></tr>
+<tr><td>11</td><td><code>schemaVersion</code> mismatch on the wire</td><td>Unknown <code>schemaVersion</code> value</td><td>Message dropped with a <code>warn</code> log; acked so it does not redeliver. Existing-version messages continue to be processed.</td><td>Indexer rollout to support the new schema, then operators upgrade their publishers — or vice versa. The indexer never crashes on an unknown version.</td></tr>
+</tbody></table></div>
+<p><strong>Correctness of <code>batch.da_status</code> does not depend on the Path C pipeline.</strong> Paths A and B are independent and self-healing, so every row above ends with <code>da_status</code> correctly populated — only Path C latency and signer detail are affected.</p>
+<h3 id="6-9-abstract-da-adapter">6.9 Abstract DA Adapter</h3>
+<p>DA-implementation-specific work lives on two surfaces — a <strong>publisher</strong> inside the DA-layer service that emits <code>zeko.da.*</code> messages, and a <strong>consumer dispatch</strong> inside the indexer that routes each message to a handler keyed on its <code>implementation</code> field.</p>
+<h4 id="6-9-1-publisher-side-ocaml-inside-the-da-layer-service">6.9.1 Publisher side (OCaml, inside the DA-layer service)</h4>
+<pre class="code-block" data-lang="ocaml"><code>module type Da_publisher = sig
+  val implementation : string
+  (* Called from inside the DA-layer service at the moment an attestation
+     fact becomes durably true on the underlying layer.  For the multisig
+     this is &quot;Schnorr signature just persisted to RocksDB&quot; (§6.4.1); for a
+     Celestia-style layer it is &quot;blob inclusion proof just observed&quot;. *)
+  val publish_attestation
+    :  ledger_hash:Ledger_hash.t
+    -&gt; attestation:Attestation.t
+    -&gt; unit Deferred.t
+end</code></pre>
+<p><code>Attestation.t</code> is the implementation-specific payload — <code>Schnorr.signature</code> plus the signed <code>accSet</code> receipt field for the multisig, <code>{ height; namespace; commitment; inclusion_proof }</code> for Celestia. The publisher serialises its payload into the JSON shape on <code>zeko.da.signatures</code>.</p>
+<p><code>Multisig_publisher</code> is the implementation that ships with direct DA signatures: it hooks into <code>Da_layer.run_node</code> after the persist step (<span class="section-ref">§6.4.1</span>), produces one message per <code>(operator, ledger_hash)</code> pair, and sets <code>implementation = &quot;zeko-multisig-v1&quot;</code>.</p>
+<h4 id="6-9-2-consumer-side-typescript-inside-the-indexer">6.9.2 Consumer side (TypeScript, inside the indexer)</h4>
+<pre class="code-block" data-lang="typescript"><code>interface DaImplementationHandler {
+  readonly implementation: string;
+
+  // Verify the on-the-wire payload — Schnorr verify of
+  // RandomOracle(ledgerHash, accSet) for multisig,
+  // blob-inclusion-proof verify against a finalized header for Celestia.
+  verify(message: DaMessage): boolean;
+
+  // Compute the contribution of this message to the per-hash attestation
+  // state. For the multisig, this is &quot;add one authorised publicKey to the
+  // signer set&quot;.
+  // For Celestia, a single message is itself sufficient for attestation.
+  apply(state: AttestationState, message: DaMessage): AttestationState;
+
+  // Whether the current state of `state` is sufficient to mark the batch
+  // row da_status = 'attested'. For multisig: authorised signers.size &gt;= quorum.
+  // For Celestia: any verified inclusion proof.
+  isQuorumReached(state: AttestationState): boolean;
+}</code></pre>
+<p>The indexer reads <code>message.implementation</code> from each <code>zeko.da.signatures</code> message and dispatches to the matching <code>DaImplementationHandler</code>. A network running mid-migration — some operators publishing as <code>zeko-multisig-v1</code>, the same network's Celestia bridge publishing as <code>celestia-v1</code> — is supported by registering both handlers. The L1 contract decides which actually counts toward an on-chain proof.</p>
+<p>The abstraction factors only the parts that differ between implementations (verification, &quot;what is a signer&quot;, &quot;when is quorum reached&quot;). It imposes no state machine on implementations that have none.</p>
+<h3 id="6-10-celestia-da-target">6.10 Celestia DA Target</h3>
+<p>A future Celestia DA target is supported as a publisher swap on the DA-layer side. The explorer's NATS schema and SurrealDB schema are unchanged — <code>zeko.da.signatures</code> continues to carry attestation messages; only the <code>implementation</code> value and the per-message payload differ.</p>
+<h4 id="6-10-1-where-the-publisher-lives">6.10.1 Where the publisher lives</h4>
+<p>Celestia has no per-operator multisig. A single bridge process per network — <code>zeko-da-celestia-bridge</code> — subscribes to Celestia's header stream and publishes one <code>zeko.da.signatures</code> message per finalised Zeko-namespace blob. The bridge implements <code>Da_publisher</code> (<span class="section-ref">§6.9.1</span>) with <code>implementation = &quot;celestia-v1&quot;</code>. A celestia-node exposes a single JSON-RPC endpoint (default <code>:26658</code>, WebSocket on the same port, bearer-token auth) that the bridge consumes.</p>
+<h4 id="6-10-2-message-shape-celestia-variant">6.10.2 Message shape (Celestia variant)</h4>
+<pre class="code-block" data-lang="json"><code>{
+  &quot;schemaVersion&quot;: 1,
+  &quot;implementation&quot;: &quot;celestia-v1&quot;,
+  &quot;ledgerHash&quot;: &quot;&lt;decimal&gt;&quot;,
+  &quot;celestia&quot;: {
+    &quot;height&quot;: 1234567,
+    &quot;namespace&quot;: &quot;0x...&quot;,
+    &quot;commitment&quot;: &quot;0x...&quot;,
+    &quot;inclusionProof&quot;: &quot;&lt;base64&gt;&quot;
+  },
+  &quot;publishedAt&quot;: &quot;...&quot;
+}</code></pre>
+<p>The <code>publicKey</code> / <code>signature</code> / <code>instanceId</code> fields are absent. The indexer's <code>DaImplementationHandler</code> for <code>&quot;celestia-v1&quot;</code> (<span class="section-ref">§6.9.2</span>) verifies the inclusion proof against a finalised header it tracks separately and treats one verified message as quorum.</p>
+<h4 id="6-10-3-what-carries-over-unchanged">6.10.3 What carries over unchanged</h4>
+<ul>
+<li><code>batch.da_status</code> enum, source-precedence rules, and Paths A/B.</li>
+<li><code>pending_da_attestation</code> as the pre-batch-row buffer. Each pending row carries one entry rather than a quorum-sized signer list.</li>
+<li>The <code>da_signers</code> column. A single inclusion-proof entry is appended exactly the way a Schnorr signer entry is appended for the multisig.</li>
+</ul>
+<h4 id="6-10-4-sequencer-side-mapping-open">6.10.4 Sequencer-side mapping (open)</h4>
+<p>The mapping from <code>target_ledger_hash</code> to <code>(height, namespace, commitment)</code> is decided by the sequencer-side Celestia migration, not this spike. Once the sequencer's Celestia client publishes that mapping — likely as additional fields on <code>zeko.l2.transactions</code> or on a new <code>zeko.l2.da-submission</code> subject — <code>zeko-da-celestia-bridge</code> reads it and pairs each finalised blob back to its <code>ledgerHash</code>.</p>
+<h3 id="6-11-cli">6.11 CLI</h3>
+<p>Direct DA signatures add two optional flags on the existing <code>zeko-da run-node</code> binary in the <code>zeko-labs/zeko</code> repository, plus one indexer configuration value. No new binary is introduced.</p>
+<h4 id="6-11-1-da-node-addition-zeko-labs-zeko">6.11.1 DA node addition (<code>zeko-labs/zeko</code>)</h4>
+<pre class="code-block" data-lang="bash"><code>zeko-da run-node \
+  --port 8080 \
+  --http-port 8081 \
+  --nats-url nats://nats.zeko-m-mainnet.svc:4222 \
+  --nats-stream zeko-da \
+  [other existing flags]</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Flag</th><th>Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>--nats-url</code></td><td>unset</td><td>Enables the NATS publisher. When set, the node publishes one <code>zeko.da.signatures</code> message per persisted Schnorr signature, plus a periodic <code>zeko.health</code> heartbeat. When unset, the publisher is disabled and the DA node behaviour is unchanged.</td></tr>
+<tr><td><code>--nats-stream</code></td><td><code>zeko-da</code></td><td>JetStream stream name. Matches the stream declared in PRD <span class="section-ref">§5.2.4</span>.</td></tr>
+</tbody></table></div>
+<p>Heartbeat interval (30s), implementation identifier (<code>zeko-multisig-v1</code>, a compile-time constant), and the <code>instanceId</code> UUID (generated at process start) are not user-configurable.</p>
+<h4 id="6-11-2-indexer-addition-this-repository">6.11.2 Indexer addition (this repository)</h4>
+<p>The indexer process gains a <code>da</code> configuration block in its per-network config file:</p>
+<pre class="code-block" data-lang="yaml"><code>da:
+  quorum: 2  # must match the L1 contract's signature-check threshold
+  publicKeys:
+    - B62q...
+    - B62r...
+    - B62s...</code></pre>
+<p>The indexer reads the L1 contract's actual threshold and helper-account public-key list on-chain at startup when available, logs both the configured values and the on-chain values on the first <code>zeko.health</code> heartbeat, and warns at startup on mismatch (failure mode #10, <span class="section-ref">§6.8</span>). A mismatch disables Path C <code>da_status</code> flips for that process; Paths A and B remain active. Path C quorum accounting uses only authorised keys, so a valid Schnorr signature from any other key is ignored.</p>
+<hr />
+<h2 id="7-test-scenarios">7. Test Scenarios</h2>
+<p>Cucumber feature files live under <code>spikes/007-da-monitor/test-scenarios/</code>. Each file groups scenarios for one cohesive area; step definitions are written once and reused across the suite.</p>
+<h3 id="7-1-baseline-derivation-milestone-1">7.1 Baseline derivation (<span class="milestone-chip">Milestone 1</span>)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Coverage</th></tr></thead>
+<tbody>
+<tr><td><a href="./test-scenarios/da-status-derivation.feature"><code>test-scenarios/da-status-derivation.feature</code></a></td><td>Settlement-derived path, proved-derived path, proved-before-batch buffering, settlement-vs-proved race, settlement does not overwrite proved-source rows, committed-level finality is ignored.</td></tr>
+<tr><td><a href="./test-scenarios/da-status-resilience.feature"><code>test-scenarios/da-status-resilience.feature</code></a></td><td>L1 rollback preserves the attestation fact in <code>pending_da_attestation</code>, idempotency under duplicate settlement and proved messages, pruning of stale pending rows.</td></tr>
+</tbody></table></div>
+<h3 id="7-2-direct-da-signatures-milestone-4-5">7.2 Direct DA signatures (<span class="milestone-chip">Milestone 4/5</span>)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Coverage</th></tr></thead>
+<tbody>
+<tr><td><a href="./test-scenarios/da-signatures-publishing.feature"><code>test-scenarios/da-signatures-publishing.feature</code></a></td><td>DA node publishes one <code>zeko.da.signatures</code> message per persisted Schnorr signature, self-authentication against <code>(ledgerHash, accSet)</code> (invalid signatures dropped on the indexer side), <code>--nats-url</code> opt-out leaves DA node behaviour unchanged, JetStream dedup on <code>(publicKey, ledgerHash)</code>, implementation-id propagation, per-DA-node <code>zeko.health</code> heartbeat.</td></tr>
+<tr><td><a href="./test-scenarios/da-signature-aggregation.feature"><code>test-scenarios/da-signature-aggregation.feature</code></a></td><td>Path C flips <code>da_status = 'attested'</code> when distinct authorised signing public keys reach quorum, unauthorised keys are ignored, signer-set LRU reseed from <code>pending_da_attestation</code> on indexer restart, no retroactive aggregation on first deploy (<code>DeliverPolicy = New</code>), two indexer instances during a rolling deploy share the durable consumer, NATS publish loss does not break correctness (Paths A/B fill in).</td></tr>
+<tr><td><a href="./test-scenarios/da-source-precedence.feature"><code>test-scenarios/da-source-precedence.feature</code></a></td><td>Path C upgrades a proved-source batch with signer detail, settlement is never overwritten by Path C, Path C as the first source, signatures arriving before the batch row exists are buffered in <code>pending_da_attestation</code>, signer set never reaches quorum leaves <code>da_status = null</code>.</td></tr>
+<tr><td><a href="./test-scenarios/da-attestation-configuration.feature"><code>test-scenarios/da-attestation-configuration.feature</code></a></td><td>Indexer configured quorum and DA signer key set are logged at startup and on every heartbeat, mismatch against the L1 contract threshold/key set is a startup warning that disables Path C flips, DA node without <code>--nats-url</code> is supported (no publish, no heartbeat), DA node with <code>--nats-url</code> publishes the <code>instanceId</code> on every message and heartbeat, unknown <code>schemaVersion</code> on the wire is dropped with a warn log.</td></tr>
+</tbody></table></div>
+<hr />
+<h2 id="8-references">8. References</h2>
+<ul>
+<li>PRD <span class="section-ref">§5.2.3</span> (DA-layer architecture), <span class="section-ref">§5.2.4</span> (NATS streams), <span class="section-ref">§5.2.5</span> (indexer), <span class="section-ref">§5.2.6</span> (SurrealDB schema), <span class="section-ref">§6.1</span> (freshness badge).</li>
+<li><code>spikes/001-sequencer-connector/results.md</code> — <code>zeko.l2.transactions</code> and <code>zeko.l2.finality</code> schemas, proved-level publish point, fire-and-forget NATS publisher pattern, durable-consumer model, <code>instanceId</code> restart-detection pattern.</li>
+<li><code>spikes/006-l1-watcher/README.md</code> — <code>zeko.l1.settlements</code> schema providing the <code>target_ledger_hash</code> join key for Path A in <span class="section-ref">§5</span> and <span class="section-ref">§6.7</span>.</li>
+<li><code>zeko-labs/zeko</code> repository, <code>compatible</code> branch:
+<ul>
+<li><code>src/app/zeko/da_layer/lib/rpc.ml</code> — native types serialised by the DA-node publisher (<span class="section-ref">§6.3.2</span>).</li>
+<li><code>src/app/zeko/da_layer/lib/client.ml</code> — <code>enqueue_diff</code>, <code>distribute_diff</code> (sequencer-side counterparts to the publish point in <span class="section-ref">§6.4.1</span>).</li>
+<li><code>src/app/zeko/da_layer/cli.ml</code> — DA node CLI surface; receives <code>--nats-url</code> / <code>--nats-stream</code> in <span class="section-ref">§6.11.1</span>.</li>
+<li><code>src/app/zeko/circuits/design/da-layer.md</code> — DA layer design notes.</li>
+<li><code>src/app/zeko/circuits/rule_commit.ml</code> — in-circuit multisig verification (the load-bearing fact behind <span class="section-ref">§4</span>).</li>
+</ul>
+</li>
+<li>Celestia documentation: <code>docs.celestia.org/build/rpc/node-api/</code>, <code>node-rpc-docs.celestia.org</code> — interface for the bridge in <span class="section-ref">§6.10</span>.</li>
+</ul>
+</article>
+    </main></div>
+  </div>
+</body>
+</html>
