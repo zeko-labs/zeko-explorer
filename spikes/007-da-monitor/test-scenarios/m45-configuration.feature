@@ -1,8 +1,9 @@
 Feature: Milestone 4/5 — Configuration of the DA-attestation pipeline
 
-  The configuration surface is two values: (a) the DA node's optional
-  --nats-url flag, and (b) the indexer's per-network "da.quorum" setting.
-  Both are validated at startup and the configured values are surfaced on
+  The configuration surface is three values: (a) the DA node's optional
+  --nats-url flag, (b) the indexer's per-network "da.quorum" setting, and
+  (c) the indexer's authorised DA signer public-key set. They are validated
+  at startup and the configured values are surfaced on
   each heartbeat.
 
   Scenario: DA node started without --nats-url behaves identically to today
@@ -24,16 +25,27 @@ Feature: Milestone 4/5 — Configuration of the DA-attestation pipeline
     When the DA node process exits and restarts
     Then subsequent published messages carry an instanceId different from "U1"
 
-  Scenario: Indexer logs the configured quorum at startup and on every heartbeat
+  Scenario: Indexer logs the configured quorum and signer set at startup and on every heartbeat
     Given the indexer is started with "da.quorum" set to 2
+    And the indexer is configured with DA signer publicKeys "PK_A", "PK_B", and "PK_C"
     Then the startup log records "da.quorum 2"
+    And the startup log records the configured DA signer publicKeys
     When the next "zeko.health" heartbeat is published by the indexer
     Then the heartbeat carries quorum.threshold 2
+    And the heartbeat carries the configured DA signer publicKeys
 
   Scenario: Indexer warns when configured quorum disagrees with the L1 contract threshold
     Given the L1 contract's helper-account signature-check threshold is 3
     And the indexer is started with "da.quorum" set to 2
     Then the startup log records a warning that the configured quorum does not match the L1 contract threshold
+    And Path C da_status flips are disabled
+    And the indexer continues to run and process messages
+
+  Scenario: Indexer warns when configured DA signer set disagrees with the L1 contract
+    Given the L1 contract's helper-account public-key list is "PK_A", "PK_B", and "PK_C"
+    And the indexer is configured with DA signer publicKeys "PK_A", "PK_B", and "PK_X"
+    Then the startup log records a warning that the configured signer set does not match the L1 contract signer set
+    And Path C da_status flips are disabled
     And the indexer continues to run and process messages
 
   Scenario: Indexer rejects an unknown schemaVersion on the wire

@@ -1,15 +1,16 @@
 Feature: Milestone 4/5 — Indexer aggregates DA signatures into Path C attestations
 
   The indexer consumes `zeko.da.signatures`, verifies each Schnorr signature,
-  accumulates distinct signing public keys per ledgerHash in an in-memory
-  LRU, and flips `batch.da_status = 'attested'` once the count reaches the
-  configured quorum. Paths A (settlement) and B (proved) remain
+  accumulates distinct authorised signing public keys per ledgerHash in an
+  in-memory LRU, and flips `batch.da_status = 'attested'` once the count
+  reaches the configured quorum. Paths A (settlement) and B (proved) remain
   authoritative fallbacks.
 
   Background:
     Given the indexer is running with M4/M5 schema additions
     And the indexer is connected to NATS JetStream and SurrealDB
     And the configured quorum is 2
+    And the authorised DA signer set contains publicKeys "PK_A", "PK_B", and "PK_C"
 
   Scenario: Two distinct operators sign — Path C flips da_status to attested
     Given a batch row in SurrealDB exists with target_ledger_hash "L1" and da_status null
@@ -27,6 +28,13 @@ Feature: Milestone 4/5 — Indexer aggregates DA signatures into Path C attestat
     When the indexer consumes another valid signature for "L2" from publicKey "PK_A"
     Then the SurrealDB batch row for "L2" has da_signers containing exactly one entry for "PK_A"
     And the SurrealDB batch row for "L2" still has da_status null
+
+  Scenario: Signature from an unauthorised publicKey does not count toward quorum
+    Given a batch row in SurrealDB exists with target_ledger_hash "L2B" and da_status null
+    When the indexer consumes a cryptographically valid "zeko.da.signatures" message for "L2B" from publicKey "PK_X"
+    Then the indexer drops the message with a warn log
+    And the SurrealDB batch row for "L2B" has no da_signers entry for "PK_X"
+    And the SurrealDB batch row for "L2B" still has da_status null
 
   Scenario: Signatures arriving before the batch row exists are buffered
     Given no batch row exists in SurrealDB for ledger_hash "L3"

@@ -56,7 +56,7 @@ Concrete numbers for an operator running the default Zeko configuration (`commit
 | Signal | Marks `da_status` attested when… | Typical end-to-end latency from diff publication | Milestone |
 |---|---|---|---|
 | `zeko.l2.finality` level=`proved` | The sequencer's committer assembles a proof. The proof is unsatisfiable without DA quorum. | **Up to one commit period** — bounded by `commitment_period_sec`. Median ~30s; worst case ~60s on default config. Slow proving runs can extend this. | M1 |
-| `zeko.da.signatures` published directly by each DA node | Indexer counts `quorum` distinct signing public keys from per-node publishes on the same `ledger_hash`. | **Sub-second.** Bounded by sign-to-NATS-publish latency on each operator plus indexer message handling. | M4/M5 |
+| `zeko.da.signatures` published directly by each DA node | Indexer counts `quorum` distinct authorised DA signing public keys from per-node publishes for the same DA receipt payload (`ledger_hash`, `acc_set`). | **Sub-second.** Bounded by sign-to-NATS-publish latency on each operator plus indexer message handling. | M4/M5 |
 | `zeko.l1.settlements` (Spike 006) | The L1 commit transaction reaches `confirmation_depth` blocks. | **Several minutes to hours.** One commit period to assemble plus commit inclusion (~3min Mina block time) plus confirmation depth (~290 blocks × ~3min ≈ 14h for full probabilistic finality, or 30–60min at the operational depth most explorers use). | M1 |
 
 At M1 the explorer marks a batch DA-attested as soon as either of its two NATS signals arrives (whichever is first). At M4/M5 the same two signals remain, and `zeko.da.signatures` is added as a faster third source that also carries per-operator detail.
@@ -93,12 +93,12 @@ When the document says **"the indexer consumes message X from NATS subject Y"**,
 
 ### 5.2 Two NATS subjects feed the same SurrealDB column
 
-`batch.da_status` is set by the indexer in response to **either** of two NATS messages — whichever message the indexer happens to consume and process first wins:
+`batch.da_status` is set by the indexer in response to **either** of two NATS messages. For an existing `batch` row, the first attestation source the indexer processes wins; proved messages that arrive before the `batch` row exists are buffered until settlement creates the row:
 
 - **Path A — `zeko.l1.settlements` arrives.** The settlement event implies the proof landed on L1, which implies DA quorum was reached (§4 invariant). The indexer upserts the SurrealDB `batch` row with `da_status = 'attested'`, `da_source = 'settlement'`, `da_attested_at = settlement.timestamp`. This path never depends on DA-layer connectivity.
 - **Path B — `zeko.l2.finality` arrives with `level = 'proved'`.** The proved-finality event implies the sequencer assembled a valid proof, which implies DA quorum was reached. The indexer upserts the matching SurrealDB `batch` row with `da_status = 'attested'`, `da_source = 'proved'`, `da_attested_at = finality.timestamp`.
 
-If the proved-finality NATS message is consumed before the SurrealDB `batch` row exists (the L1 Watcher hasn't seen the settlement yet), the indexer instead inserts a row in the SurrealDB `pending_da_attestation` table keyed on `ledger_hash`. When the corresponding settlement message later arrives and the indexer creates the `batch` row, it joins against `pending_da_attestation` on `target_ledger_hash` to copy across the proved-source fields, then deletes the pending row.
+If the proved-finality NATS message is consumed before the SurrealDB `batch` row exists (the L1 Watcher hasn't seen the settlement yet), the indexer instead inserts a row in the SurrealDB `pending_da_attestation` table keyed on `ledger_hash`. When the corresponding settlement message later arrives and the indexer creates the `batch` row, the settlement upsert writes `da_source = 'settlement'` because the row is being created from the L1 settlement path, then deletes the pending row. Existing proved-source batch rows are not overwritten by later settlement messages; only settlement-related fields are added.
 
 All writes are idempotent upserts; `da_status` never reverts from `'attested'` to anything else.
 
@@ -119,7 +119,7 @@ DEFINE INDEX idx_batch_da_status ON batch FIELDS da_status;
 DEFINE TABLE pending_da_attestation SCHEMAFULL;
 DEFINE FIELD ledger_hash  ON pending_da_attestation TYPE string;
 DEFINE FIELD source       ON pending_da_attestation TYPE string
-  ASSERT $value IN ['proved', 'da-direct'];
+  ASSERT $value IN ['settlement', 'proved', 'da-direct'];
 DEFINE FIELD attested_at  ON pending_da_attestation TYPE option<datetime>;
 DEFINE FIELD received_at  ON pending_da_attestation TYPE datetime;
 
@@ -132,18 +132,22 @@ What was deliberately **not** added:
 - **No DA-implementation, quorum, or signers columns** at Milestone 1. They are added together with Path C in Milestone 4/5 (§11.1) so the migration ships when the data to fill them ships.
 - **No `'missing'` enum value on `da_status`.** Absence of attestation is `null`, not a terminal state (§9.3). Operational visibility for stalled hashes comes from `pending_da_attestation` rows older than one commit period, not from a column value.
 
-The `'da-direct'` enum value is included on `da_source` at M1 so that the M4/M5 migration is purely additive — no `ALTER FIELD ... ASSERT` required when Path C ships.
+The `'da-direct'` enum value is included on `da_source` at M1 so that the M4/M5 migration is purely additive — no `ALTER FIELD ... ASSERT` required when Path C ships. `pending_da_attestation.source` also admits `'settlement'` because L1 rollback handling can temporarily move a settlement-derived attestation fact out of a reverted `batch` row and into the pending buffer until the same `target_ledger_hash` settles again.
 
 ### 5.4 Indexer algorithm — Milestone 1
 
 ```
 # On NATS message from subject `zeko.l1.settlements`:
 on settlement(target_ledger_hash, settlement_timestamp, ...):
+    existing = SurrealDB batch row matching target_ledger_hash, if any
     upsert SurrealDB batch row matching target_ledger_hash
-        set da_status      = 'attested'
-        set da_source      = 'settlement'
-        set da_attested_at = settlement_timestamp
         set <other settlement-related fields per Spike 006>
+        if existing row is absent or existing.da_status is null:
+            set da_status      = 'attested'
+            set da_source      = 'settlement'
+            set da_attested_at = settlement_timestamp
+        else:
+            leave existing da_status, da_source, and da_attested_at unchanged
     delete from SurrealDB pending_da_attestation where ledger_hash = target_ledger_hash
 
 # On NATS message from subject `zeko.l2.finality`:
@@ -188,7 +192,7 @@ A SurrealDB migration containing the schema in §5.3, plus the indexer NATS-cons
 The Milestone 4/5 pipeline is two small pieces of code added to systems that already exist:
 
 1. A NATS publisher inside the OCaml `zeko-da run-node` binary (§8). When the DA node persists a Schnorr signature for a `ledger_hash` to RocksDB, it also publishes a `zeko.da.signatures` message. Fire-and-forget; if NATS is unreachable the publish is dropped — the signature itself remains durable on RocksDB and the explorer's M1 derivation continues to mark the batch attested via the proved or settlement signals.
-2. A new NATS subject handler inside the existing TS indexer (§9, §11). It consumes `zeko.da.signatures`, verifies each Schnorr signature, accumulates distinct signing public keys per `ledger_hash` in an in-memory LRU, and flips `batch.da_status = 'attested'` once the count reaches the configured `quorum`.
+2. A new NATS subject handler inside the existing TS indexer (§9, §11). It consumes `zeko.da.signatures`, verifies each Schnorr signature against the DA receipt payload, accumulates distinct authorised signing public keys per `ledger_hash` in an in-memory LRU, and flips `batch.da_status = 'attested'` once the count reaches the configured `quorum`.
 
 The same indexer process handles all three DA subjects (`zeko.l1.settlements`, `zeko.l2.finality`, `zeko.da.signatures`). The DA-node side gains one NATS publisher; the indexer side gains one subject handler. Total new infrastructure: zero services.
 
@@ -212,7 +216,7 @@ The Zeko DA layer is a multisig signer ring implemented in OCaml. A future Celes
 
 ### 7.1 Components
 
-- **`zeko-da run-node`** — one OCaml process per operator. Receives diffs from the sequencer over `Async.Rpc` (binprot/TCP, default port `8080`), validates by reconstructing the target ledger, signs the resulting `target_ledger_hash` with a Mina-native Schnorr signature, and persists `(ledger_hash → diff)` and `(ledger_hash → signature)` mappings to RocksDB.
+- **`zeko-da run-node`** — one OCaml process per operator. Receives diffs from the sequencer over `Async.Rpc` (binprot/TCP, default port `8080`), validates by reconstructing the target ledger, signs the DA receipt payload derived from `(target_ledger_hash, acc_set)` with a Mina-native Schnorr signature, and persists `(ledger_hash → diff)` and `(ledger_hash → signature)` mappings to RocksDB.
 - **`zeko-signer`** — sidecar holding the operator's signing key.
 - **HTTP healthcheck** — the DA node binds an HTTP server on port `8081` for `GET /healthz`.
 
@@ -236,7 +240,7 @@ The OCaml `zeko-da run-node` binary gains a NATS publisher built on the same fir
 
 The publisher has four shape-defining properties:
 
-- **Self-authenticating payloads.** Each message carries the Schnorr signature over its `ledger_hash`. Any consumer verifies the message using only on-the-wire crypto; the publisher's NATS account identity is not load-bearing for correctness.
+- **Self-authenticating payloads.** Each message carries the Schnorr signature over the DA receipt payload derived from `ledgerHash` and `accSet`. Any consumer verifies the message using only on-the-wire crypto and the authorised DA signer set; the publisher's NATS account identity is not load-bearing for correctness.
 - **Outbound-only network requirement.** The operator needs only outbound NATS connectivity from their network. There is no inbound HTTP shim, no ingress allowlist, no per-source rate limiting to operate.
 - **Load proportional to signing rate.** Steady-state publish rate equals the rate at which the sequencer asks the DA node to sign. No fixed cadence, no background traffic.
 - **Opt-in per operator.** Operators who do not configure `--nats-url` are unaffected by this change and continue to behave exactly as today. The explorer still marks their batches `da_status = 'attested'` via the M1 sources (§5).
@@ -291,13 +295,14 @@ The TS indexer gains a third JetStream subscription, `zeko.da.signatures`, along
 
 For each consumed `zeko.da.signatures` message:
 
-1. **Verify the Schnorr signature** of `publicKey` over `ledgerHash`. Drop with a `warn` log on verification failure. The on-the-wire crypto, not the NATS account, is what authenticates the message.
-2. **Update per-hash signer state.** The indexer maintains an in-memory `LRU<ledger_hash, Set<publicKey>>` cache (default cap 4096 entries) seeded on startup from any `pending_da_attestation` rows with `source = 'da-direct'`. Add `publicKey` to the set.
-3. **Persist to SurrealDB.** Upsert the `pending_da_attestation` row for `ledger_hash` with the appended signer entry. If the corresponding `batch` row already exists, upsert it directly with the appended `da_signers` entry instead — same upsert path as §11.2.
-4. **Quorum check.** If the set's size has just crossed `quorum`, set `batch.da_status = 'attested'` (or copy the buffer onto the freshly-created `batch` row when settlement creates it).
-5. **Ack the NATS message.**
+1. **Verify the Schnorr signature** of `publicKey` over the DA receipt payload, `RandomOracle(ledgerHash, accSet)`, using the same salt as the OCaml DA layer and `rule_commit`. Drop with a `warn` log on verification failure. The on-the-wire crypto, not the NATS account, is what authenticates the message.
+2. **Authorise the signer.** Check `publicKey` against the configured/on-chain DA signer set for the network. Unknown keys are logged, acked, and ignored before they can enter quorum accounting.
+3. **Update per-hash signer state.** The indexer maintains an in-memory `LRU<ledger_hash, Set<publicKey>>` cache (default cap 4096 entries) seeded on startup from any `pending_da_attestation` rows with `source = 'da-direct'`. Add `publicKey` to the set.
+4. **Persist to SurrealDB.** Upsert the `pending_da_attestation` row for `ledger_hash` with the appended signer entry. If the corresponding `batch` row already exists, upsert it directly with the appended `da_signers` entry instead — same upsert path as §11.2.
+5. **Quorum check.** If the authorised signer set's size has just crossed `quorum`, set `batch.da_status = 'attested'` (or copy the buffer onto the freshly-created `batch` row when settlement creates it).
+6. **Ack the NATS message.**
 
-`quorum` is per-network configuration on the indexer. It must match the L1 contract's threshold; mismatch is logged on startup (failure mode #9, §12).
+`quorum` and the DA signer public-key list are per-network configuration on the indexer, with the L1 contract's helper-account signer set used as the source of truth when it can be read at startup. The configured threshold and key set must match the L1 contract. If startup validation finds a mismatch, the indexer logs a warning and disables Path C `da_status` flips until configuration is corrected; Paths A and B continue to fill `da_status` correctly (failure mode #10, §12).
 
 ### 9.3 No terminal "missing" state
 
@@ -327,6 +332,7 @@ One message per `(operator, ledger_hash)` pair, published by the operator's DA n
   "schemaVersion": 1,
   "implementation": "zeko-multisig-v1",
   "ledgerHash": "<decimal>",
+  "accSet": "<decimal>",
   "publicKey": "B62q...",
   "signature": "<Mina Schnorr signature, hex-encoded (rs concat)>",
   "instanceId": "<uuid generated at DA-node process start>",
@@ -334,7 +340,7 @@ One message per `(operator, ledger_hash)` pair, published by the operator's DA n
 }
 ```
 
-The message is **self-authenticating**: any consumer can verify `signature` against `(publicKey, ledgerHash)` using Mina Schnorr verification. Identity of the NATS publisher account is unrelated to the truth of the message; the indexer trusts the cryptography, not the connection.
+The message is **self-authenticating**: any consumer can recompute the DA receipt payload as `RandomOracle(ledgerHash, accSet)` using `Zeko_constants.da_layer_check_salt`, then verify `signature` against that payload and `publicKey` using Mina Schnorr verification. Identity of the NATS publisher account is unrelated to the truth of the message; the indexer trusts the cryptography and the configured/on-chain DA signer set, not the connection.
 
 ### 10.3 Field semantics
 
@@ -343,8 +349,9 @@ The message is **self-authenticating**: any consumer can verify `signature` agai
 | `schemaVersion` | Integer. Bumped only on incompatible shape changes. |
 | `implementation` | `"zeko-multisig-v1"` for the current OCaml multisig; `"celestia-v1"` after migration. Lets consumers route to the right interpreter. |
 | `ledgerHash` | Decimal-encoded `Ledger_hash`, identical to `target_ledger_hash` in `zeko.l2.transactions`. Indexer joins on this. |
-| `publicKey` | Base58check-encoded `Public_key.Compressed`. The signing operator's identity. Joined against the L1 contract's helper-account public-key list to determine which operators count toward quorum. |
-| `signature` | Hex-encoded Mina Schnorr signature over `ledgerHash`. Verified by the indexer; messages with invalid signatures are dropped with a `warn` log. |
+| `accSet` | Decimal-encoded account-set root used by the DA layer receipt. This is the second field in the signed DA receipt payload and matches the `acc_set` value attached to the corresponding `zeko.l2.transactions` diff. |
+| `publicKey` | Base58check-encoded `Public_key.Compressed`. The signing operator's identity. Must be present in the configured/on-chain helper-account public-key list before it counts toward quorum. |
+| `signature` | Hex-encoded Mina Schnorr signature over `RandomOracle(ledgerHash, accSet)` with `Zeko_constants.da_layer_check_salt`. Verified by the indexer; messages with invalid signatures are dropped with a `warn` log. |
 | `instanceId` | UUID regenerated on each DA-node process start. Lets the indexer record which operator process produced the signature; useful for postmortem of operator-side incidents. |
 | `signedAt` | When the DA node persisted the signature to RocksDB. Used as the per-signer `observedAt` on the `batch.da_signers` array. |
 
@@ -408,20 +415,27 @@ The M1 settlement and proved handlers (§5.4) are unchanged. One handler is adde
 
 ```
 # On NATS message from subject `zeko.da.signatures`:
-on signature(ledger_hash, public_key, signature, instance_id,
+on signature(ledger_hash, acc_set, public_key, signature, instance_id,
              implementation, signed_at):
-    # 1. Verify the Schnorr signature. Drop with a warn log on failure.
-    if not Schnorr.verify(signature, public_key, ledger_hash):
+    # 1. Verify the Schnorr signature over the same receipt payload that
+    # rule_commit verifies in-circuit: RandomOracle(ledger_hash, acc_set).
+    payload = da_receipt_payload(ledger_hash, acc_set)
+    if not Schnorr.verify(signature, public_key, payload):
         log_warn("invalid DA signature", ledger_hash, public_key)
         return
 
-    # 2. Append this signer to the in-memory signer-set LRU.
+    # 2. Only the configured/on-chain DA signer set can contribute to quorum.
+    if public_key not in authorised_da_public_keys:
+        log_warn("unauthorised DA signer", ledger_hash, public_key)
+        return
+
+    # 3. Append this signer to the in-memory signer-set LRU.
     signer_entry = { publicKey, instanceId, signedAt: signed_at }
     signer_set  = lru.get_or_init(ledger_hash, source=pending_da_attestation)
     if public_key in signer_set: return            # already counted
     signer_set.add(public_key)
 
-    # 3. Persist the appended signer detail to SurrealDB.
+    # 4. Persist the appended signer detail to SurrealDB.
     if SurrealDB batch row exists where target_ledger_hash = ledger_hash:
         if batch.da_source = 'settlement':
             # Settlement is authoritative; record signer detail but do not
@@ -486,12 +500,13 @@ The Path C failure surface has two parts: publisher misbehaviour (DA-node-side) 
 | 2 | Operator's DA node has NATS unreachable | Outbound NATS connect/publish fails inside the OCaml node; logged at `warn` | The publish is silently dropped (§8.2). The Schnorr signature is still on RocksDB and the diff still reaches the L1 contract. Same observable outcome as #1: that operator's signature is missing from `da_signers` for the affected `ledger_hash`. | Automatic when NATS reachability returns. No backfill is attempted — Paths A and B cover the lost detail. |
 | 3 | Operator process crashes between persist and NATS publish | No publish for the affected `ledger_hash`; signature still durable on RocksDB | Same as #2: signature is durable on-chain (via the eventual L1 commit) but the per-signer detail for that one hash is lost on Path C. | None required for correctness. Operator restart resumes publishing for new signatures. |
 | 4 | Indexer NATS-consumer outage (indexer down) | JetStream consumer lag grows | All three subscriptions (`zeko.l1.settlements`, `zeko.l2.finality`, `zeko.da.signatures`) stop draining. On restart the durable consumers resume from their last acks and the in-memory signer-set LRU is reseeded from `pending_da_attestation` (§11.3). | Automatic on indexer restart. No data loss; latency briefly elevated. |
-| 5 | Invalid Schnorr signature received on the wire | `Schnorr.verify` returns false in §11.2 step 1 | Message dropped with a `warn` log; the message is acked so it does not redeliver. The corresponding `publicKey` does not enter the signer set. This is the protection against a compromised NATS publisher account: identity is established by the on-the-wire crypto, not by the connection. | None — invalid messages have no persisted effect. Operator-side bug to investigate via the `instanceId` in the warn log. |
-| 6 | Duplicate-signature replay (operator-side retry tooling republishes a signature) | Same `(publicKey, ledger_hash)` pair publishes more than once | JetStream's dedup window (§10.4) drops the duplicate before it reaches the indexer. If a replay happens outside the dedup window, the indexer's signer-set check (`if public_key in signer_set: return`, §11.2 step 2) suppresses the double-count. | Idempotent by construction. No operator action required. |
-| 7 | Signer set never reaches quorum | `pending_da_attestation` row for a `ledger_hash` persists with `len(signers) < quorum` longer than one commit period | `batch.da_status` stays null (Path C dormant). The corresponding diff cannot have a valid L1 proof either (the proof's circuit constraint requires quorum), so Path A and Path B are also dormant — the chain is genuinely stalled on this hash. `/status` surfaces the stalled hash via "pending DA attestations older than commit period". | Operational investigation — typically one or more operators failing to sign. Independent of the explorer. |
-| 8 | Two indexer instances running simultaneously (rolling deploy overlap) | Both share the JetStream durable consumer for `zeko.da.signatures` | JetStream delivers each message to exactly one instance. Both instances upsert the same SurrealDB rows; the per-signer entry is idempotent via SurrealDB's primary-key upsert, and the in-memory LRU may briefly disagree across instances but converges on the next message. No persisted duplicate. | Tolerated for short rolling-deploy windows. |
-| 9 | Indexer configured `quorum` doesn't match the L1 contract threshold | Logged on indexer startup against the L1 contract's helper-account key list (read at startup) | Too low: Path C flips `da_status = 'attested'` slightly earlier than the L1 contract would actually accept; Path A or Path B (which reflect the L1-accepted truth) correct this implicitly when they arrive. Too high: Path C never flips and everything ends up attested via Paths A/B at the usual latency. | Operational fix at deploy. The indexer logs the read L1 threshold and the configured quorum at startup; mismatch is a startup warning. |
-| 10 | `schemaVersion` mismatch on the wire | Unknown `schemaVersion` value | Message dropped with a `warn` log; acked so it does not redeliver. Existing-version messages continue to be processed. | Indexer rollout to support the new schema, then operators upgrade their publishers — or vice versa. The indexer never crashes on an unknown version. |
+| 5 | Invalid Schnorr signature received on the wire | `Schnorr.verify` returns false in §11.2 step 1 | Message dropped with a `warn` log; the message is acked so it does not redeliver. The corresponding `publicKey` does not enter the signer set. This is one protection against a compromised NATS publisher account: identity is established by the on-the-wire crypto, not by the connection. | None — invalid messages have no persisted effect. Operator-side bug to investigate via the `instanceId` in the warn log. |
+| 6 | Signature from a public key outside the DA signer set | `publicKey` is absent from the configured/on-chain helper-account public-key list | Message dropped with a `warn` log and acked. The signature may be cryptographically valid for that key, but it does not count toward the contract's DA quorum and is not persisted as a signer entry. | Operator/config investigation. If the key set changed intentionally, update the indexer configuration or contract-derived signer-set reader before relying on Path C. |
+| 7 | Duplicate-signature replay (operator-side retry tooling republishes a signature) | Same `(publicKey, ledger_hash)` pair publishes more than once | JetStream's dedup window (§10.4) drops the duplicate before it reaches the indexer. If a replay happens outside the dedup window, the indexer's signer-set check (`if public_key in signer_set: return`, §11.2 step 3) suppresses the double-count. | Idempotent by construction. No operator action required. |
+| 8 | Signer set never reaches quorum | `pending_da_attestation` row for a `ledger_hash` persists with `len(signers) < quorum` longer than one commit period | `batch.da_status` stays null (Path C dormant). The corresponding diff cannot have a valid L1 proof either (the proof's circuit constraint requires quorum), so Path A and Path B are also dormant — the chain is genuinely stalled on this hash. `/status` surfaces the stalled hash via "pending DA attestations older than commit period". | Operational investigation — typically one or more operators failing to sign. Independent of the explorer. |
+| 9 | Two indexer instances running simultaneously (rolling deploy overlap) | Both share the JetStream durable consumer for `zeko.da.signatures` | JetStream delivers each message to exactly one instance. Both instances upsert the same SurrealDB rows; the per-signer entry is idempotent via SurrealDB's primary-key upsert, and the in-memory LRU may briefly disagree across instances but converges on the next message. No persisted duplicate. | Tolerated for short rolling-deploy windows. |
+| 10 | Indexer configured `quorum` or signer set doesn't match the L1 contract | Logged on indexer startup against the L1 contract's helper-account key list and threshold (read at startup) | Path C `da_status` flips are disabled for that process so a bad threshold/key set cannot mark a batch attested early. The indexer may still record signer detail for diagnostics, and Paths A/B fill `da_status` at the usual latency. | Operational fix at deploy. The indexer logs the on-chain threshold/key set and configured threshold/key set at startup; mismatch is a startup warning. |
+| 11 | `schemaVersion` mismatch on the wire | Unknown `schemaVersion` value | Message dropped with a `warn` log; acked so it does not redeliver. Existing-version messages continue to be processed. | Indexer rollout to support the new schema, then operators upgrade their publishers — or vice versa. The indexer never crashes on an unknown version. |
 
 **Correctness of `batch.da_status` does not depend on the Path C pipeline.** Paths A and B are independent and self-healing, so every row above ends with `da_status` correctly populated — only Path C latency and signer detail are affected.
 
@@ -517,7 +532,7 @@ module type Da_publisher = sig
 end
 ```
 
-`Attestation.t` is the implementation-specific payload — `Schnorr.signature` for the multisig, `{ height; namespace; commitment; inclusion_proof }` for Celestia. The publisher serialises its payload into the JSON shape on `zeko.da.signatures`.
+`Attestation.t` is the implementation-specific payload — `Schnorr.signature` plus the signed `accSet` receipt field for the multisig, `{ height; namespace; commitment; inclusion_proof }` for Celestia. The publisher serialises its payload into the JSON shape on `zeko.da.signatures`.
 
 `Multisig_publisher` is the implementation that ships with M4/M5: it hooks into `Da_layer.run_node` after the persist step (§8.1), produces one message per `(operator, ledger_hash)` pair, and sets `implementation = "zeko-multisig-v1"`.
 
@@ -527,17 +542,19 @@ end
 interface DaImplementationHandler {
   readonly implementation: string;
 
-  // Verify the on-the-wire payload — Schnorr verify for multisig,
+  // Verify the on-the-wire payload — Schnorr verify of
+  // RandomOracle(ledgerHash, accSet) for multisig,
   // blob-inclusion-proof verify against a finalized header for Celestia.
   verify(message: DaMessage): boolean;
 
   // Compute the contribution of this message to the per-hash attestation
-  // state. For the multisig, this is "add one publicKey to the signer set".
+  // state. For the multisig, this is "add one authorised publicKey to the
+  // signer set".
   // For Celestia, a single message is itself sufficient for attestation.
   apply(state: AttestationState, message: DaMessage): AttestationState;
 
   // Whether the current state of `state` is sufficient to mark the batch
-  // row da_status = 'attested'. For multisig: signers.size >= quorum.
+  // row da_status = 'attested'. For multisig: authorised signers.size >= quorum.
   // For Celestia: any verified inclusion proof.
   isQuorumReached(state: AttestationState): boolean;
 }
@@ -612,14 +629,18 @@ Heartbeat interval (30s), implementation identifier (`zeko-multisig-v1`, a compi
 
 ### 15.2 Indexer addition (this repository)
 
-The indexer process gains one configuration value in its per-network config file:
+The indexer process gains a `da` configuration block in its per-network config file:
 
 ```yaml
 da:
   quorum: 2  # must match the L1 contract's signature-check threshold
+  publicKeys:
+    - B62q...
+    - B62r...
+    - B62s...
 ```
 
-The indexer reads the L1 contract's actual threshold on-chain at startup, logs both the configured value and the on-chain value on the first `zeko.health` heartbeat, and warns at startup on mismatch (failure mode #9, §12).
+The indexer reads the L1 contract's actual threshold and helper-account public-key list on-chain at startup when available, logs both the configured values and the on-chain values on the first `zeko.health` heartbeat, and warns at startup on mismatch (failure mode #10, §12). A mismatch disables Path C `da_status` flips for that process; Paths A and B remain active. Path C quorum accounting uses only authorised keys, so a valid Schnorr signature from any other key is ignored.
 
 ---
 
@@ -638,10 +659,10 @@ Cucumber feature files live under `spikes/007-da-monitor/test-scenarios/`. Each 
 
 | File | Coverage |
 |---|---|
-| [`test-scenarios/m45-da-signatures-publishing.feature`](./test-scenarios/m45-da-signatures-publishing.feature) | DA node publishes one `zeko.da.signatures` message per persisted Schnorr signature, self-authentication (invalid signatures dropped on the indexer side), `--nats-url` opt-out leaves DA node behaviour unchanged, JetStream dedup on `(publicKey, ledgerHash)`, implementation-id propagation, per-DA-node `zeko.health` heartbeat. |
-| [`test-scenarios/m45-indexer-aggregation.feature`](./test-scenarios/m45-indexer-aggregation.feature) | Path C flips `da_status = 'attested'` when distinct signing public keys reach quorum, signer-set LRU reseed from `pending_da_attestation` on indexer restart, no retroactive aggregation on first deploy (`DeliverPolicy = New`), two indexer instances during a rolling deploy share the durable consumer, NATS publish loss does not break correctness (Paths A/B fill in). |
+| [`test-scenarios/m45-da-signatures-publishing.feature`](./test-scenarios/m45-da-signatures-publishing.feature) | DA node publishes one `zeko.da.signatures` message per persisted Schnorr signature, self-authentication against `(ledgerHash, accSet)` (invalid signatures dropped on the indexer side), `--nats-url` opt-out leaves DA node behaviour unchanged, JetStream dedup on `(publicKey, ledgerHash)`, implementation-id propagation, per-DA-node `zeko.health` heartbeat. |
+| [`test-scenarios/m45-indexer-aggregation.feature`](./test-scenarios/m45-indexer-aggregation.feature) | Path C flips `da_status = 'attested'` when distinct authorised signing public keys reach quorum, unauthorised keys are ignored, signer-set LRU reseed from `pending_da_attestation` on indexer restart, no retroactive aggregation on first deploy (`DeliverPolicy = New`), two indexer instances during a rolling deploy share the durable consumer, NATS publish loss does not break correctness (Paths A/B fill in). |
 | [`test-scenarios/m45-source-precedence.feature`](./test-scenarios/m45-source-precedence.feature) | Path C upgrades a proved-source batch with signer detail, settlement is never overwritten by Path C, Path C as the first source, signatures arriving before the batch row exists are buffered in `pending_da_attestation`, signer set never reaches quorum leaves `da_status = null`. |
-| [`test-scenarios/m45-configuration.feature`](./test-scenarios/m45-configuration.feature) | Indexer configured quorum is logged at startup and on every heartbeat, mismatch against the L1 contract threshold is a startup warning, DA node without `--nats-url` is supported (no publish, no heartbeat), DA node with `--nats-url` publishes the `instanceId` on every message and heartbeat, unknown `schemaVersion` on the wire is dropped with a warn log. |
+| [`test-scenarios/m45-configuration.feature`](./test-scenarios/m45-configuration.feature) | Indexer configured quorum and DA signer key set are logged at startup and on every heartbeat, mismatch against the L1 contract threshold/key set is a startup warning that disables Path C flips, DA node without `--nats-url` is supported (no publish, no heartbeat), DA node with `--nats-url` publishes the `instanceId` on every message and heartbeat, unknown `schemaVersion` on the wire is dropped with a warn log. |
 
 ---
 

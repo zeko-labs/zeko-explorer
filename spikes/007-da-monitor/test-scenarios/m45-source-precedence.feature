@@ -10,6 +10,7 @@ Feature: Milestone 4/5 — Indexer source precedence on the batch row
     Given the indexer is running with M4/M5 schema additions
     And the indexer is connected to NATS JetStream and SurrealDB
     And the configured quorum is 2
+    And the authorised DA signer set contains the publicKeys used in these scenarios
 
   Scenario: Path C upgrades a proved-source attestation with signer detail
     Given a batch row in SurrealDB has da_status "attested" and da_source "proved" for "L1"

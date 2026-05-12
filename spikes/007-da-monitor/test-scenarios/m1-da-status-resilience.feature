@@ -12,7 +12,7 @@ Feature: Milestone 1 — DA status under rollback and replay
     Given a batch row in SurrealDB has da_status "attested" and da_source "settlement" for "L1"
     When the indexer consumes a "zeko.l1.rollbacks" message that affects the batch for "L1"
     Then the SurrealDB batch row for "L1" is reverted
-    And a row in "pending_da_attestation" exists with ledger_hash "L1"
+    And a row in "pending_da_attestation" exists with ledger_hash "L1" and source "settlement"
     When the indexer later consumes a new "zeko.l1.settlements" message for "L1"
     Then the SurrealDB batch row for "L1" has da_status "attested"
     And no row in "pending_da_attestation" remains for ledger_hash "L1"

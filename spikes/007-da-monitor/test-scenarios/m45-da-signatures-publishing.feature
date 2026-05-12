@@ -18,12 +18,13 @@ Feature: Milestone 4/5 — DA node publishes Schnorr signatures to NATS
     Given a DA node is started with --nats-url and is connected to NATS JetStream
     When the sequencer sends a diff that the DA node signs and persists for "L1"
     Then exactly one "zeko.da.signatures" message is published for that signing publicKey and "L1"
-    And the message carries fields publicKey, ledgerHash, signature, instanceId, signedAt, implementation
+    And the message carries fields publicKey, ledgerHash, accSet, signature, instanceId, signedAt, implementation
     And the message implementation field is "zeko-multisig-v1"
 
   Scenario: Published signature is self-authenticating
     Given a DA node has just published a "zeko.da.signatures" message for "L2"
-    When a consumer runs Mina Schnorr verification of the message's signature over its ledgerHash and publicKey
+    When a consumer recomputes the DA receipt payload from ledgerHash and accSet
+    And runs Mina Schnorr verification of the message's signature over that payload and publicKey
     Then the verification succeeds without consulting the publisher's NATS identity
 
   Scenario: Invalid Schnorr signature on the wire is dropped on the consumer side
@@ -42,7 +43,7 @@ Feature: Milestone 4/5 — DA node publishes Schnorr signatures to NATS
     Given three DA nodes each persist a Schnorr signature for "L5"
     When each DA node publishes its own "zeko.da.signatures" message for "L5"
     Then JetStream persists three messages with three distinct Nats-Msg-Id values
-    And all three messages carry the same ledgerHash "L5" and three distinct publicKey values
+    And all three messages carry the same ledgerHash "L5", the same accSet, and three distinct publicKey values
 
   Scenario: DA node publishes a periodic heartbeat carrying its publicKey
     Given a DA node is started with --nats-url
