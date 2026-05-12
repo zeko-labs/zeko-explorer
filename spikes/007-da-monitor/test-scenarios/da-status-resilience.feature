@@ -1,4 +1,4 @@
-Feature: Milestone 1 — DA status under rollback and replay
+Feature: Baseline DA status under rollback and replay
 
   The DA-attestation fact survives L1 rollbacks (the data was made available
   regardless of what happened on L1) and is idempotent under NATS message

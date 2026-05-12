@@ -1,9 +1,10 @@
-Feature: Milestone 1 — DA status derivation from existing NATS subjects
+Feature: Baseline DA status derivation from existing NATS subjects
 
   The indexer derives batch.da_status from two NATS subjects it already consumes:
   zeko.l1.settlements (Path A, settlement-derived) and zeko.l2.finality with
-  level "proved" (Path B, proved-derived). Whichever NATS message the indexer
-  processes first triggers the SurrealDB upsert that sets da_status = "attested".
+  level "proved" (Path B, proved-derived). Existing batch rows keep the first
+  attestation source observed; proved events that arrive before the batch row
+  exists are buffered until settlement creates it.
 
   Background:
     Given the indexer is running and connected to NATS JetStream

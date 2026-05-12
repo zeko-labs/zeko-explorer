@@ -1,4 +1,4 @@
-Feature: Milestone 4/5 — DA node publishes Schnorr signatures to NATS
+Feature: Direct DA signatures — DA node publishes Schnorr signatures to NATS
 
   Each operator's DA node, when started with --nats-url, publishes one
   self-authenticating `zeko.da.signatures` message per persisted Schnorr

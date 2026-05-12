@@ -1,4 +1,4 @@
-Feature: Milestone 4/5 — Configuration of the DA-attestation pipeline
+Feature: Direct DA signatures — Configuration of the DA-attestation pipeline
 
   The configuration surface is three values: (a) the DA node's optional
   --nats-url flag, (b) the indexer's per-network "da.quorum" setting, and

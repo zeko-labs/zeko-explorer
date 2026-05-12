@@ -1,4 +1,4 @@
-Feature: Milestone 4/5 — Indexer aggregates DA signatures into Path C attestations
+Feature: Direct DA signatures — Indexer aggregates DA signatures into Path C attestations
 
   The indexer consumes `zeko.da.signatures`, verifies each Schnorr signature,
   accumulates distinct authorised signing public keys per ledgerHash in an
@@ -7,7 +7,7 @@ Feature: Milestone 4/5 — Indexer aggregates DA signatures into Path C attestat
   authoritative fallbacks.
 
   Background:
-    Given the indexer is running with M4/M5 schema additions
+    Given the indexer is running with DA signature schema additions
     And the indexer is connected to NATS JetStream and SurrealDB
     And the configured quorum is 2
     And the authorised DA signer set contains publicKeys "PK_A", "PK_B", and "PK_C"

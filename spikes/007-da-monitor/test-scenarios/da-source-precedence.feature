@@ -1,4 +1,4 @@
-Feature: Milestone 4/5 — Indexer source precedence on the batch row
+Feature: Direct DA signatures — Indexer source precedence on the batch row
 
   The indexer accepts three sources for batch.da_status: Path A (settlement),
   Path B (proved), and Path C (DA-direct, aggregated from zeko.da.signatures).
@@ -7,7 +7,7 @@ Feature: Milestone 4/5 — Indexer source precedence on the batch row
   is never overwritten (it is the authoritative on-chain record).
 
   Background:
-    Given the indexer is running with M4/M5 schema additions
+    Given the indexer is running with DA signature schema additions
     And the indexer is connected to NATS JetStream and SurrealDB
     And the configured quorum is 2
     And the authorised DA signer set contains the publicKeys used in these scenarios
