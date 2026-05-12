@@ -1,38 +1,16 @@
 # Spike 006: L1 Watcher — Settlement Detection, Rollback Handling, and Bridge Events
 
-**Status:** Complete
+**Status:** Not started
 **Blocking:** Milestone 1 (L1 data ingestion)
 **Owner:** TBD
-
-**Results:** [results.html](./results.html)
-**Addenda:** [index](./addendums/index.html), [implementation spec](./addendums/implementation-spec.html), [NATS schemas](./addendums/nats-event-schemas.html), [fault tolerance](./addendums/fault-tolerance.html), [Archive-Node-API requirement](./addendums/archive-account-update-reader.html)
 
 ---
 
 ## Context
 
-The L1 Watcher is the explorer component that reads L1 settlement-chain data through a provider adapter and publishes normalized L1 facts into NATS.
-
-The watcher has shared responsibilities that are independent of the L1 provider: process lifecycle, health, durable cursors, NATS publication, and the `zeko.l1.*` event contract. Provider-specific adapters supply L1 data and decoding.
-
-### Zeko-M / Mina
-
-Milestone 1 implements the Mina adapter. It reads the Mina daemon and Archive-Node-API, decodes Mina actions/account updates/events, applies the Zeko-M finality model, and emits the shared watcher facts.
-
-### Zeko-E / Ethereum
-
-Milestone 4 implements the Ethereum adapter. It reads Ethereum live/archive endpoints, decodes configured settlement and bridge logs/transactions, applies the Zeko-E finality model, and emits the same shared watcher facts.
-
-The watcher publishes to four NATS subjects: `zeko.l1.settlements`, `zeko.l1.rollbacks`, `zeko.l1.outer-actions`, and `zeko.l1.bridge-events`.
+The L1 Watcher is the single entry point for all L1 settlement chain data into the NATS event log. It monitors both a **live L1 node** (for tip tracking and rollback detection) and an **L1 archive** (for outer actions and historical data). It publishes to four NATS subjects: `zeko.l1.settlements`, `zeko.l1.rollbacks`, `zeko.l1.outer-actions`, and `zeko.l1.bridge-events`.
 
 The PRD defines the L1 Watcher at a high level (Section 5.2.2), but the following design questions are unresolved and must be investigated before implementation.
-
-Nomenclature used by this spike:
-
-- **L1 Watcher**: the explorer component that publishes normalized L1 facts into NATS.
-- **Adapter**: the provider-specific implementation that reads a live L1 source and L1 archive source.
-- **Mina adapter**: the Zeko-M provider implementation specified in detail by this spike.
-- **Ethereum adapter**: the Zeko-E provider implementation planned for Milestone 4.
 
 ---
 
@@ -106,12 +84,11 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 
 **Key design question:** `aux` is NOT unique — identical deposits/withdrawals produce the same `aux` (see `spikes/002-bridge-correlation/results.md` §2). The indexer disambiguates via `(aux, aux_sequence)` using FIFO ordering. Should the L1 Watcher compute `aux_sequence`, or should it publish raw events and let the indexer assign sequence numbers?
 
-### 5. Adapter Boundary
+### 5. Abstract L1 Interface
 
-- What is the minimal interface that an L1 adapter must expose to the rest of the L1 Watcher?
-- Which operations are provider-specific (Mina actions/account updates, Ethereum logs/events) and which are watcher-owned (publication, health, durable cursor state)?
-- Which parts belong in the shared watcher process and which parts belong inside each adapter?
-- What does the Zeko-M / Mina adapter implement in Milestone 1, and what remains for the Zeko-E / Ethereum adapter in Milestone 4?
+- The PRD specifies an abstract L1 interface supporting both Mina and Ethereum. What is the minimal interface that covers both?
+- Which operations are L1-specific (e.g., Mina actions vs. Ethereum events) and which are generic (tip tracking, confirmation depth)?
+- Should the interface be designed now or deferred until Milestone 4 (Ethereum support)?
 
 ### 6. NATS Event Schemas
 
@@ -130,9 +107,14 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 
 ## Deliverables
 
-1. **Results document:** `results.html` summarizes the shared watcher boundary, Zeko-M / Mina adapter findings, Zeko-E / Ethereum adapter boundary, and implementation conclusions.
-2. **Addendum documents:** `addendums/*.html` preserves the original addenda as separate HTML pages for implementation details, NATS schemas, fault tolerance, and the Archive-Node-API upstream requirement.
-3. **Cucumber scenarios:** `test-scenarios/` contains executable acceptance coverage for watcher recovery, bridge event ingestion, outage behavior, rollback handling, and provider boundaries.
+1. **Mina L1 API analysis:** Available GraphQL queries/subscriptions on the Mina daemon and archive node relevant to settlement and bridge event detection.
+2. **NATS event schemas:** JSON schemas for all four `zeko.l1.*` subjects with example payloads.
+3. **Settlement detection design:** Concrete mechanism for detecting batch settlements and tracking confirmation depth.
+4. **L1 rollback detection design:** Fork detection algorithm, reconciliation after outages, rollback event format.
+5. **Outer action ingestion design:** How outer actions are queried, paginated, and published to NATS.
+6. **Bridge event detection design:** Concrete mechanisms for detecting deposit submissions (user-level AccountUpdates), withdrawal finalizations, and cancel deposits (no outer action — counter-based detection). Includes Poseidon hash computation approach for `aux`. See Section 4 for spike-002-derived requirements.
+7. **Abstract L1 interface sketch:** Minimal TypeScript interface that the Mina adapter implements.
+8. **Failure mode table:** All failure scenarios with detection and recovery strategies.
 
 ---
 
