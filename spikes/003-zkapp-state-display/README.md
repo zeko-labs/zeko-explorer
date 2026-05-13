@@ -3,9 +3,9 @@
 **Status:** Complete
 **Blocking:** Milestone 1 (explorer indexer schema + contract registry backend), Milestone 2 (frontend display + verification wizard)
 **Owner:** TBD
-**Results:** [results.md](./results.md)
+**Results:** [results.html](./results.html)
 **Addendums:**
-- [addendum-contract-verification.md](./addendums/addendum-contract-verification.md) — KV-backed contract registry, sandboxed verification service, owner-claim flow
+- [addendum-contract-verification.html](./addendums/addendum-contract-verification.html) — KV-backed contract registry, sandboxed verification service, owner-claim flow
 **Test scenarios:** [test-scenarios/](./test-scenarios/) — Gherkin coverage for ingestion, rollback, registry lookup, verification pipeline, owner claims
 
 ---

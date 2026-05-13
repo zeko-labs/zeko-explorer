@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 001: Sequencer Connector — Results</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/001-sequencer-connector/results.md</div>
+        <h1>Spike 001: Sequencer Connector — Results</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Status</strong>Complete</span><span class="pill"><strong>Date</strong>2026-04-02</span><span class="pill"><strong>Lines</strong>711</span><span class="pill"><strong>Sections</strong>41</span><span class="pill"><strong>Tables</strong>8</span><span class="pill"><strong>Code blocks</strong>15</span></div>
+        <nav class="quick-nav"><a href="./README.md">README</a><a href="./results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">4051 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="275" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 41</text><rect x="327" y="148" width="54" height="18" rx="9" fill="#34d399"/><text x="327" y="188" fill="#9fb0c7" font-size="13">Tables: 8</text><rect x="395" y="148" width="101" height="18" rx="9" fill="#a78bfa"/><text x="395" y="188" fill="#9fb0c7" font-size="13">Code: 15</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#1-archive-relay-analysis">1. Archive Relay Analysis</a>
+<a class="toc-level-3" href="#three-connections">Three Connections</a>
+<a class="toc-level-3" href="#data-flow">Data Flow</a>
+<a class="toc-level-3" href="#crash-recovery">Crash Recovery</a>
+<a class="toc-level-3" href="#known-issues">Known Issues</a>
+<a class="toc-level-3" href="#key-files">Key Files</a>
+<a class="toc-level-2" href="#2-decision-sequencer-publishes-directly-to-nats">2. Decision: Sequencer Publishes Directly to NATS</a>
+<a class="toc-level-3" href="#rationale">Rationale</a>
+<a class="toc-level-3" href="#why-not-a-standalone-connector">Why Not a Standalone Connector</a>
+<a class="toc-level-2" href="#3-nats-publishing-integration-points">3. NATS Publishing Integration Points</a>
+<a class="toc-level-3" href="#31-user-command-processing-primary-transaction-path">3.1 User Command Processing (Primary Transaction Path)</a>
+<a class="toc-level-3" href="#32-fee-transfer-sequencer-fee-collection">3.2 Fee Transfer (Sequencer Fee Collection)</a>
+<a class="toc-level-3" href="#33-genesis-diff-creation-syncstartup">3.3 Genesis Diff Creation (Sync/Startup)</a>
+<a class="toc-level-3" href="#sequencer-t-record-modification">Sequencer t Record Modification</a>
+<a class="toc-level-2" href="#4-finality-event-publishing">4. Finality Event Publishing</a>
+<a class="toc-level-3" href="#graphql-getlateststate-status">GraphQL get_latest_state Status</a>
+<a class="toc-level-3" href="#proving-pipeline-where-proved-state-advances">Proving Pipeline (Where &quot;Proved&quot; State Advances)</a>
+<a class="toc-level-3" href="#commitment-pipeline-where-committed-state-advances">Commitment Pipeline (Where &quot;Committed&quot; State Advances)</a>
+<a class="toc-level-2" href="#5-rollback-handling-consumer-responsibility">5. Rollback Handling — Consumer Responsibility</a>
+<a class="toc-level-3" href="#investigation-finding-no-runtime-rollbacks-in-the-sequencer">Investigation Finding: No Runtime Rollbacks in the Sequencer</a>
+<a class="toc-level-3" href="#design-consumers-detect-and-handle-rollbacks">Design: Consumers Detect and Handle Rollbacks</a>
+<a class="toc-level-2" href="#6-nats-event-schemas">6. NATS Event Schemas</a>
+<a class="toc-level-3" href="#zekol2transactions">zeko.l2.transactions</a>
+<a class="toc-level-3" href="#zekol2finality">zeko.l2.finality</a>
+<a class="toc-level-3" href="#zekohealth">zeko.health</a>
+<a class="toc-level-2" href="#7-catchup-bootstrap-and-replayability-strategy">7. Catchup, Bootstrap, and Replayability Strategy</a>
+<a class="toc-level-3" href="#the-core-problem-non-persistent-sequencer">The Core Problem: Non-Persistent Sequencer</a>
+<a class="toc-level-3" href="#two-data-sources">Two Data Sources</a>
+<a class="toc-level-3" href="#initial-bootstrap">Initial Bootstrap</a>
+<a class="toc-level-3" href="#gap-detection">Gap Detection</a>
+<a class="toc-level-3" href="#backfill-service">Backfill Service</a>
+<a class="toc-level-3" href="#operational-flows">Operational Flows</a>
+<a class="toc-level-3" href="#nats-jetstream-configuration">NATS JetStream Configuration</a>
+<a class="toc-level-3" href="#r2-archival-and-stream-pruning">R2 Archival and Stream Pruning</a>
+<a class="toc-level-2" href="#8-sequencer-cli-changes">8. Sequencer CLI Changes</a>
+<a class="toc-level-3" href="#new-flag">New Flag</a>
+<a class="toc-level-3" href="#behavior">Behavior</a>
+<a class="toc-level-2" href="#9-test-scenarios">9. Test Scenarios</a>
+<a class="toc-level-2" href="#10-open-questions">10. Open Questions</a>
+<a class="toc-level-3" href="#addendum-documents">Addendum Documents</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="spike-001-sequencer-connector-results" tabindex="-1"><a class="header-anchor" href="#spike-001-sequencer-connector-results">Spike 001: Sequencer Connector — Results</a></h1>
+<p><strong>Status:</strong> Complete
+<strong>Date:</strong> 2026-04-02</p>
+<hr>
+<h2 id="1-archive-relay-analysis" tabindex="-1"><a class="header-anchor" href="#1-archive-relay-analysis">1. Archive Relay Analysis</a></h2>
+<p>The existing archive relay at <code>src/app/zeko/sequencer/archive_relay/archive_relay.ml</code> (476 lines) provides context for how L2 data is currently consumed. The new NATS integration replaces its role for the explorer pipeline.</p>
+<h3 id="three-connections" tabindex="-1"><a class="header-anchor" href="#three-connections">Three Connections</a></h3>
+<ol>
+<li><strong>Sequencer GraphQL</strong> — polls <code>stateHashes { unprovedLedgerHash }</code> every 15s (configurable via <code>--sync-period</code>, default 30s). This is how the relay discovers new state.</li>
+<li><strong>DA Layer binary RPC</strong> — streams <code>Da_layer.Diff.V3</code> diffs via <code>Da_layer.Client.iter_diffs</code>. This is the actual data transport — diffs are fetched between the relay's current ledger hash and the target hash from step 1.</li>
+<li><strong>Mina Archive Node RPC</strong> — dispatches <code>Archive_lib.Diff.Transition_frontier</code> breadcrumbs to a Mina archive node (PostgreSQL) via <code>Archive_client.dispatch</code>.</li>
+</ol>
+<h3 id="data-flow" tabindex="-1"><a class="header-anchor" href="#data-flow">Data Flow</a></h3>
+<pre><code>Sequencer GraphQL ──poll──&gt; unprovedLedgerHash
+                                   │
+DA Layer RPC ──iter_diffs──&gt; Da_layer.Diff.V3 stream
+                                   │
+                            Apply to local ledger
+                            Build Transition_frontier breadcrumb
+                                   │
+Archive Node RPC ──dispatch──&gt; PostgreSQL
+</code></pre>
+<h3 id="crash-recovery" tabindex="-1"><a class="header-anchor" href="#crash-recovery">Crash Recovery</a></h3>
+<ul>
+<li>Checkpoints local ledger DB every N transactions (configurable via <code>--checkpoint-periodicity</code>, default 100)</li>
+<li>On <strong>any</strong> error: resets to last checkpoint (<code>reset_ledger</code>), retries the full sync from that point</li>
+<li>Source hash mismatch at line 286-291 triggers <code>failwithf</code> → exception → caught by <code>run</code> loop → <code>reset_ledger</code> → retry</li>
+</ul>
+<h3 id="known-issues" tabindex="-1"><a class="header-anchor" href="#known-issues">Known Issues</a></h3>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No fork detection</strong></td>
+<td>Source hash mismatch = crash → reset → retry from last checkpoint. No graceful handling of forks or rollbacks.</td>
+</tr>
+<tr>
+<td><strong>15-30s polling latency</strong></td>
+<td>Relay polls sequencer GraphQL at <code>sync_period</code> intervals. New transactions are invisible until the next poll.</td>
+</tr>
+<tr>
+<td><strong>No idempotency</strong></td>
+<td>If the relay crashes between applying a diff to its local ledger and dispatching to the archive node, it may re-dispatch on recovery.</td>
+</tr>
+<tr>
+<td><strong>No health reporting</strong></td>
+<td>No heartbeat, no progress metrics, no alerting.</td>
+</tr>
+<tr>
+<td><strong>Checkpoint-based recovery</strong></td>
+<td>Progress is lost back to last checkpoint on crash (potentially 100 transactions).</td>
+</tr>
+<tr>
+<td><strong>Full ledger maintenance</strong></td>
+<td>Maintains a complete local ledger copy, which is expensive and only needed for building Mina archive breadcrumbs.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-files" tabindex="-1"><a class="header-anchor" href="#key-files">Key Files</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/app/zeko/sequencer/archive_relay/archive_relay.ml</code></td>
+<td>Main relay logic (sync, checkpoint, dispatch)</td>
+</tr>
+<tr>
+<td><code>src/app/zeko/sequencer/archive_relay/cli.ml</code></td>
+<td>CLI args: <code>--zeko-uri</code>, <code>--da-node</code>, <code>--archive-host</code>, <code>--archive-port</code>, <code>--sync-period</code>, <code>--checkpoint-periodicity</code></td>
+</tr>
+<tr>
+<td><code>src/app/zeko/da_layer/lib/client.ml</code></td>
+<td>DA layer client (<code>enqueue_diff</code>, <code>iter_diffs</code>, <code>start_posting_diffs_from</code>)</td>
+</tr>
+<tr>
+<td><code>src/app/zeko/da_layer/lib/diff.ml</code></td>
+<td><code>Da_layer.Diff.Stable.V3.t</code> type definition with <code>[@@deriving yojson]</code></td>
+</tr>
+<tr>
+<td><code>src/app/zeko/sequencer/lib/zeko_sequencer.ml</code></td>
+<td>Main sequencer logic (where diffs are created)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="2-decision-sequencer-publishes-directly-to-nats" tabindex="-1"><a class="header-anchor" href="#2-decision-sequencer-publishes-directly-to-nats">2. Decision: Sequencer Publishes Directly to NATS</a></h2>
+<p>The sequencer itself gains the ability to publish diffs to NATS JetStream as a configurable option. No separate connector process, no DA layer in the read path.</p>
+<h3 id="rationale" tabindex="-1"><a class="header-anchor" href="#rationale">Rationale</a></h3>
+<table>
+<thead>
+<tr>
+<th>Factor</th>
+<th>Direct publish</th>
+<th>Standalone connector</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Latency</strong></td>
+<td>Zero — publish at the moment the diff is created</td>
+<td>15-30s polling delay minimum</td>
+</tr>
+<tr>
+<td><strong>Complexity</strong></td>
+<td>~200 lines added to sequencer + NATS client library</td>
+<td>Separate process with checkpoint management, health monitoring, error recovery</td>
+</tr>
+<tr>
+<td><strong>Data access</strong></td>
+<td>Sequencer already has the diff, target hash, and full context</td>
+<td>Must reconstruct context from GraphQL + DA layer binary RPC</td>
+</tr>
+<tr>
+<td><strong>Language</strong></td>
+<td>OCaml (sequencer is OCaml)</td>
+<td>OCaml required regardless — DA layer uses OCaml binary RPC</td>
+</tr>
+<tr>
+<td><strong>Failure mode</strong></td>
+<td>NATS down = skip publish, sequencer continues, DA posting unaffected</td>
+<td>Connector down = silent data gap, no one notices without monitoring</td>
+</tr>
+<tr>
+<td><strong>Fork knowledge</strong></td>
+<td>Sequencer has first-hand knowledge of rollbacks</td>
+<td>Must infer forks from hash chain breaks (archive relay pattern)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="why-not-a-standalone-connector" tabindex="-1"><a class="header-anchor" href="#why-not-a-standalone-connector">Why Not a Standalone Connector</a></h3>
+<p>The DA layer communicates via OCaml binary RPC (<code>Daemon_rpcs</code>), not HTTP/JSON. A TypeScript connector cannot call <code>Da_layer.Client.iter_diffs</code> without either:</p>
+<ol>
+<li>Writing an OCaml binary RPC client in TypeScript (impractical), or</li>
+<li>Adding a JSON API to the DA layer (requires OCaml changes in the zeko repo anyway)</li>
+</ol>
+<p>Publishing directly from the sequencer is simpler, faster, and provides better rollback information.</p>
+<hr>
+<h2 id="3-nats-publishing-integration-points" tabindex="-1"><a class="header-anchor" href="#3-nats-publishing-integration-points">3. NATS Publishing Integration Points</a></h2>
+<p>Three locations in <code>zeko_sequencer.ml</code> where <code>Da_layer.Client.enqueue_diff</code> is called. A NATS publish call should be added immediately after each one.</p>
+<h3 id="31-user-command-processing-primary-transaction-path" tabindex="-1"><a class="header-anchor" href="#31-user-command-processing-primary-transaction-path">3.1 User Command Processing (Primary Transaction Path)</a></h3>
+<p><strong>Function:</strong> <code>apply_user_command</code> (line 332)
+<strong><code>enqueue_diff</code> call:</strong> line 497
+<strong>Context available:</strong></p>
+<ul>
+<li><code>diff</code> — the <code>Da_layer.Diff</code> containing <code>source_ledger_hash</code>, <code>changed_accounts</code>, <code>command_with_action_step_flags</code>, <code>timestamp</code></li>
+<li><code>L.Db.merkle_root t.ledger</code> — the target ledger hash (line 503)</li>
+<li><code>command</code> — the full <code>User_command.t</code> (signed command or zkapp command)</li>
+<li><code>changed_accounts</code> — list of <code>(index, Account.t)</code> pairs</li>
+<li><code>source_ledger</code> — sparse ledger before the transaction</li>
+</ul>
+<p><strong>Publish to:</strong> <code>zeko.l2.transactions</code></p>
+<h3 id="32-fee-transfer-sequencer-fee-collection" tabindex="-1"><a class="header-anchor" href="#32-fee-transfer-sequencer-fee-collection">3.2 Fee Transfer (Sequencer Fee Collection)</a></h3>
+<p><strong>Function:</strong> <code>apply_fee_transfer</code> (line 517)
+<strong><code>enqueue_diff</code> call:</strong> line 573
+<strong>Context available:</strong></p>
+<ul>
+<li><code>diff</code> — contains <code>source_ledger_hash</code>, <code>changed_accounts</code> (sequencer's account only), <code>command_with_action_step_flags: None</code></li>
+<li><code>L.Db.merkle_root t.ledger</code> — the target ledger hash (line 579)</li>
+<li>No user command — this is an internal fee transfer</li>
+</ul>
+<p><strong>Publish to:</strong> <code>zeko.l2.transactions</code></p>
+<p><strong>Note:</strong> Fee transfers have <code>command_with_action_step_flags: None</code> in the diff. The indexer should handle this case (no command, just account balance changes).</p>
+<h3 id="33-genesis-diff-creation-syncstartup" tabindex="-1"><a class="header-anchor" href="#33-genesis-diff-creation-syncstartup">3.3 Genesis Diff Creation (Sync/Startup)</a></h3>
+<p><strong>Function:</strong> <code>sync</code> (line 766)
+<strong><code>enqueue_diff</code> call:</strong> line 804
+<strong>Context available:</strong></p>
+<ul>
+<li><code>diff</code> — genesis diffs created by <code>Da_layer.Client.create_genesis_diffs</code></li>
+<li><code>target_ledger_hash</code> — provided by the function</li>
+<li><code>genesis</code> flag — <code>true</code> for the first diff</li>
+</ul>
+<p><strong>Publish to:</strong> <code>zeko.l2.transactions</code></p>
+<p><strong>Note:</strong> Genesis diffs are created during initial sync when the sequencer starts with an existing L1 committed state. These establish the initial ledger state. The first diff has <code>genesis: true</code>.</p>
+<h3 id="sequencer-t-record-modification" tabindex="-1"><a class="header-anchor" href="#sequencer-t-record-modification">Sequencer <code>t</code> Record Modification</a></h3>
+<p>A <code>nats_client</code> field should be added to the sequencer's <code>t</code> record (line 226):</p>
+<pre><code>type t =
+  { ledger : L.Db.t
+  ; imt : Indexed_merkle_tree.Db.t
+  ; ...
+  ; da_client : Da_layer.Client.t
+  ; nats_client : Nats_client.t option   (* NEW *)
+  ; ...
+  }
+</code></pre>
+<p>The <code>nats_client</code> is <code>option</code> — when <code>None</code>, NATS publishing is disabled (backwards-compatible).</p>
+<hr>
+<h2 id="4-finality-event-publishing" tabindex="-1"><a class="header-anchor" href="#4-finality-event-publishing">4. Finality Event Publishing</a></h2>
+<p>The sequencer tracks three state levels:</p>
+<ul>
+<li><strong>Unproved</strong> (<code>unprovedLedgerHash</code>) — latest applied state, updated on every transaction</li>
+<li><strong>Proved</strong> (<code>provedLedgerHash</code>) — latest state with a completed ZK proof</li>
+<li><strong>Committed</strong> (<code>committedLedgerHash</code>) — latest state committed to L1</li>
+</ul>
+<h3 id="graphql-getlateststate-status" tabindex="-1"><a class="header-anchor" href="#graphql-getlateststate-status">GraphQL <code>get_latest_state</code> Status</a></h3>
+<p>The <code>get_latest_state</code> function (line 273) currently returns <code>Field.zero</code> for <code>proved_ledger_hash</code> and <code>committed_ledger_hash</code> via GraphQL. This is a separate concern from NATS publishing — finality events are published directly at the transition points where the actual hash values are already available (see below). The GraphQL TODO does not block NATS finality event publishing.</p>
+<p>See <a href="./addendums/addendum-finality-todo.html">addendums/addendum-finality-todo.md</a> for how to resolve the GraphQL TODO if needed.</p>
+<h3 id="proving-pipeline-where-proved-state-advances" tabindex="-1"><a class="header-anchor" href="#proving-pipeline-where-proved-state-advances">Proving Pipeline (Where &quot;Proved&quot; State Advances)</a></h3>
+<p>The proving pipeline is a parallel merger tree:</p>
+<ol>
+<li><code>apply_user_command</code> produces witnesses → <code>Merger.P.add_job</code> adds them to the merger tree (line 509)</li>
+<li><code>run_committer</code> (line 744) runs on a timer (<code>commitment_period_sec</code>) → calls <code>commit</code> periodically</li>
+<li><code>commit</code> (line 682) closes the current merger tree and waits for all base proofs to complete</li>
+<li>When all proofs are done, the merger produces a <code>Txn_snark.serializable</code> containing <code>source_ledger</code> and <code>target_ledger</code> hashes</li>
+</ol>
+<p><strong>The &quot;proved&quot; transition</strong> happens when <code>Merger.P.commit_exn</code> returns a <code>Some (stmt, _)</code> at line 751-757:</p>
+<pre><code class="language-ocaml">match%map ledger_applied &gt;&gt;| Or_error.ok_exn with
+| Some (stmt, _) -&gt;
+    [%log info] &quot;Committed: %s -&gt; %s&quot;
+      (Ledger_hash.to_decimal_string stmt.source_ledger)
+      (Ledger_hash.to_decimal_string stmt.target_ledger)
+</code></pre>
+<p>At this point, <code>stmt.target_ledger</code> is the proved ledger hash.</p>
+<p><strong>NATS publish point for <code>zeko.l2.finality</code> (level: &quot;proved&quot;):</strong> After <code>run_committer</code> logs &quot;Committed: %s -&gt; %s&quot; (line 755-757), publish with <code>stmt.target_ledger</code> as the proved hash.</p>
+<h3 id="commitment-pipeline-where-committed-state-advances" tabindex="-1"><a class="header-anchor" href="#commitment-pipeline-where-committed-state-advances">Commitment Pipeline (Where &quot;Committed&quot; State Advances)</a></h3>
+<p>The commit flow continues from the merger output:</p>
+<ol>
+<li><code>Merger.Commit.process</code> (line 135) is called with the merger output and commit witness</li>
+<li><code>Committer.prove_commit</code> (line 174) creates the outer ZK proof</li>
+<li><code>Executor.send_zkapp_command</code> (line 182) sends the proof as a zkApp transaction to L1</li>
+<li>On success, <code>State.Last_committed_ledger.set</code> (line 184) updates the committed ledger state</li>
+</ol>
+<p><strong>The &quot;committed&quot; transition</strong> happens at line 184 in <code>Merger.Commit.process</code>:</p>
+<pre><code class="language-ocaml">let%bind () =
+  Executor.send_zkapp_command ~logger executor command
+in
+State.Last_committed_ledger.set sequencer_state ~data:new_inner_ledger ;
+</code></pre>
+<p>At this point, <code>new_inner_ledger</code>'s merkle root is the committed ledger hash.</p>
+<p><strong>NATS publish point for <code>zeko.l2.finality</code> (level: &quot;committed&quot;):</strong> After <code>State.Last_committed_ledger.set</code> at line 184, publish with <code>Sparse_ledger.merkle_root new_inner_ledger</code> as the committed hash.</p>
+<hr>
+<h2 id="5-rollback-handling-consumer-responsibility" tabindex="-1"><a class="header-anchor" href="#5-rollback-handling-consumer-responsibility">5. Rollback Handling — Consumer Responsibility</a></h2>
+<h3 id="investigation-finding-no-runtime-rollbacks-in-the-sequencer" tabindex="-1"><a class="header-anchor" href="#investigation-finding-no-runtime-rollbacks-in-the-sequencer">Investigation Finding: No Runtime Rollbacks in the Sequencer</a></h3>
+<p>After thorough investigation, the sequencer has <strong>no runtime rollback mechanism</strong>:</p>
+<ol>
+<li><strong>Slot range validation is pre-emptive</strong> (<code>apply_user_command</code>, lines 383-398) — transactions with invalid slot ranges are rejected before application, not rolled back after.</li>
+<li><strong>Startup sync is forward-only</strong> (<code>sync</code>, line 766) — the sequencer replays diffs from DA layer to reach L1-committed state. No reverting.</li>
+<li><strong>L1 forks are not handled at runtime</strong> — the sequencer trusts its L1 connection. If the L1 chain reorganizes, the sequencer does not detect or respond during operation.</li>
+<li><strong>The archive relay's &quot;fork detection&quot;</strong> is crash → <code>reset_ledger</code> → retry from checkpoint. Not a graceful rollback.</li>
+<li><strong>Expired commit slots</strong> (<code>Committer.recommit_all</code>, committer.ml line 237) cause a fatal crash requiring manual intervention.</li>
+</ol>
+<p>Adding rollback events to the sequencer would require building the rollback mechanism itself first — not just publishing an event. See <a href="./addendums/addendum-sequencer-rollbacks.html">addendums/addendum-sequencer-rollbacks.md</a> for the complexity analysis. This is not desirable.</p>
+<h3 id="design-consumers-detect-and-handle-rollbacks" tabindex="-1"><a class="header-anchor" href="#design-consumers-detect-and-handle-rollbacks">Design: Consumers Detect and Handle Rollbacks</a></h3>
+<p><strong>Rollback detection is the consumer's (TS indexer's) responsibility.</strong> The indexer implements hash-chain-continuity checking on the NATS stream to detect both rollbacks and gaps.</p>
+<p><strong>Detection algorithm:</strong></p>
+<pre><code>For each incoming message M[n]:
+  if M[n].source_ledger_hash != M[n-1].target_ledger_hash:
+    # Hash chain break detected — this is a rollback or gap
+    if M[n].source_ledger_hash matches an earlier M[k].target_ledger_hash:
+      # Fork: messages M[k+1]..M[n-1] were rolled back
+      # Revert indexer state to M[k], reprocess from M[n]
+    else:
+      # Gap: missing messages between M[n-1] and M[n]
+      # Trigger backfill from backfill API (see Section 7)
+</code></pre>
+<p><strong>On rollback detection:</strong></p>
+<ol>
+<li>Identify the common ancestor (the last matching hash in the indexer's processed history)</li>
+<li>Revert SurrealDB state for all transactions after the common ancestor</li>
+<li>Continue processing from the new fork point</li>
+</ol>
+<p><strong>On gap detection:</strong></p>
+<ol>
+<li>Pause processing (stop consuming from NATS)</li>
+<li>Call <code>backfill(fromHash: M[n-1].target, toHash: M[n].source)</code> mutation → get job ID</li>
+<li>Subscribe to <code>backfillProgress(id)</code> via SSE. On drop → query <code>backfillJob(id)</code>, check <code>health { instanceId }</code>, re-subscribe or re-submit</li>
+<li>On <code>completed</code> → resume processing. The gap is now filled in the NATS stream</li>
+</ol>
+<p><strong>Data structures the indexer maintains:</strong></p>
+<ul>
+<li><code>ledger_hash → NATS sequence number</code> mapping (in-memory hash map, rebuilt from SurrealDB on indexer restart) — enables O(1) common ancestor lookup</li>
+<li>Each SurrealDB transaction record is tagged with its <code>target_ledger_hash</code> — enables efficient revert by hash</li>
+</ul>
+<p><strong>No <code>zeko.l2.rollbacks</code> subject is used.</strong> The NATS stream contains only <code>zeko.l2.transactions</code>, <code>zeko.l2.finality</code>, and <code>zeko.health</code>. Rollback handling is purely an indexer concern.</p>
+<hr>
+<h2 id="6-nats-event-schemas" tabindex="-1"><a class="header-anchor" href="#6-nats-event-schemas">6. NATS Event Schemas</a></h2>
+<h3 id="zekol2transactions" tabindex="-1"><a class="header-anchor" href="#zekol2transactions"><code>zeko.l2.transactions</code></a></h3>
+<p>One message per diff, published immediately after <code>Da_layer.Client.enqueue_diff</code>.</p>
+<pre><code class="language-json">{
+  &quot;source_ledger_hash&quot;: &quot;&lt;Ledger_hash as decimal string&gt;&quot;,
+  &quot;target_ledger_hash&quot;: &quot;&lt;Ledger_hash as decimal string&gt;&quot;,
+  &quot;timestamp&quot;: &quot;&lt;Block_time as int64 milliseconds&gt;&quot;,
+  &quot;acc_set&quot;: &quot;&lt;Field element as decimal string&gt;&quot;,
+  &quot;command&quot;: {
+    &quot;type&quot;: &quot;signed_command | zkapp_command&quot;,
+    &quot;hash&quot;: &quot;&lt;transaction hash&gt;&quot;,
+    &quot;sender&quot;: &quot;&lt;public_key base58&gt;&quot;,
+    &quot;receiver&quot;: &quot;&lt;public_key base58&gt;&quot;,
+    &quot;amount&quot;: &quot;&lt;nanomina as string&gt;&quot;,
+    &quot;fee&quot;: &quot;&lt;nanomina as string&gt;&quot;,
+    &quot;nonce&quot;: 5,
+    &quot;memo&quot;: &quot;&lt;memo string&gt;&quot;,
+    &quot;account_updates&quot;: [&quot;&lt;account_update objects for zkapp commands&gt;&quot;]
+  },
+  &quot;changed_accounts&quot;: [
+    {
+      &quot;index&quot;: 42,
+      &quot;account&quot;: {
+        &quot;public_key&quot;: &quot;&lt;base58&gt;&quot;,
+        &quot;balance&quot;: &quot;&lt;nanomina as string&gt;&quot;,
+        &quot;nonce&quot;: 6,
+        &quot;delegate&quot;: &quot;&lt;base58&gt;&quot;,
+        &quot;token_id&quot;: &quot;&lt;token_id string&gt;&quot;,
+        &quot;zkapp_state&quot;: [&quot;&lt;field_element&gt;&quot;, &quot;...&quot;],
+        &quot;permissions&quot;: {},
+        &quot;timing&quot;: {}
+      }
+    }
+  ],
+  &quot;genesis&quot;: false
+}
+</code></pre>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>The payload is essentially <code>Da_layer.Diff.Stable.V3.to_yojson</code> output with <code>target_ledger_hash</code> and <code>genesis</code> added</li>
+<li><code>command</code> is <code>null</code> for fee transfers and some genesis diffs (when <code>command_with_action_step_flags</code> is <code>None</code>)</li>
+<li>The <code>changed_accounts</code> array contains the <strong>full post-state</strong> of each affected account (not a delta)</li>
+<li><code>acc_set</code> is a field element used by the Indexed Merkle Tree for account set tracking</li>
+</ul>
+<p><strong>Header:</strong> <code>Nats-Msg-Id: &lt;target_ledger_hash&gt;</code></p>
+<p>The <code>Nats-Msg-Id</code> header enables JetStream message deduplication. If the sequencer publishes the same diff twice (e.g., after a restart), JetStream will deduplicate based on this header within the deduplication window.</p>
+<h3 id="zekol2finality" tabindex="-1"><a class="header-anchor" href="#zekol2finality"><code>zeko.l2.finality</code></a></h3>
+<p>Published when proved or committed state advances.</p>
+<pre><code class="language-json">{
+  &quot;ledger_hash&quot;: &quot;&lt;Ledger_hash as decimal string&gt;&quot;,
+  &quot;level&quot;: &quot;proved | committed&quot;,
+  &quot;source_ledger_hash&quot;: &quot;&lt;Ledger_hash as decimal string&gt;&quot;,
+  &quot;timestamp&quot;: &quot;&lt;ISO 8601&gt;&quot;
+}
+</code></pre>
+<p><strong>Header:</strong> <code>Nats-Msg-Id: finality-&lt;level&gt;-&lt;ledger_hash&gt;</code></p>
+<p><strong>Publish points:</strong></p>
+<ul>
+<li><code>proved</code>: After <code>run_committer</code> gets <code>Some (stmt, _)</code> — <code>stmt.target_ledger</code> is the proved hash, <code>stmt.source_ledger</code> is the source</li>
+<li><code>committed</code>: After <code>State.Last_committed_ledger.set</code> in <code>Merger.Commit.process</code> — <code>Sparse_ledger.merkle_root new_inner_ledger</code> is the committed hash</li>
+</ul>
+<h3 id="zekohealth" tabindex="-1"><a class="header-anchor" href="#zekohealth"><code>zeko.health</code></a></h3>
+<p>Periodic heartbeat from the sequencer's NATS publisher.</p>
+<pre><code class="language-json">{
+  &quot;service&quot;: &quot;sequencer-nats-publisher&quot;,
+  &quot;last_published_hash&quot;: &quot;&lt;Ledger_hash as decimal string&gt;&quot;,
+  &quot;last_published_at&quot;: &quot;&lt;ISO 8601&gt;&quot;,
+  &quot;unproved_hash&quot;: &quot;&lt;Ledger_hash as decimal string&gt;&quot;
+}
+</code></pre>
+<hr>
+<h2 id="7-catchup-bootstrap-and-replayability-strategy" tabindex="-1"><a class="header-anchor" href="#7-catchup-bootstrap-and-replayability-strategy">7. Catchup, Bootstrap, and Replayability Strategy</a></h2>
+<h3 id="the-core-problem-non-persistent-sequencer" tabindex="-1"><a class="header-anchor" href="#the-core-problem-non-persistent-sequencer">The Core Problem: Non-Persistent Sequencer</a></h3>
+<p>The sequencer is <strong>not persistent across restarts</strong>. When it starts, it performs a full bootstrap:</p>
+<ol>
+<li>Fetches the L1-committed ledger hash from the L1 chain (<code>Gql_client.infer_state</code>, line 769)</li>
+<li>Replays <strong>all</strong> diffs from the DA layer to reach that state (<code>Da_layer.Client.map_diffs</code>, line 813)</li>
+<li>Only then begins processing new transactions</li>
+</ol>
+<p>This means:</p>
+<ul>
+<li>The sequencer does not remember what it published to NATS before a restart</li>
+<li>After restart, the sequencer resumes publishing from whatever transaction comes next — it does <strong>not</strong> re-publish historical diffs</li>
+<li>Any diffs that were applied while NATS was down are permanently missing from NATS unless backfilled</li>
+</ul>
+<h3 id="two-data-sources" tabindex="-1"><a class="header-anchor" href="#two-data-sources">Two Data Sources</a></h3>
+<p>The explorer pipeline has two complementary data paths:</p>
+<ol>
+<li><strong>Real-time:</strong> Sequencer → NATS (zero latency, primary path during normal operation)</li>
+<li><strong>Historical/backfill:</strong> DA layer → Backfill API → NATS (on-demand, for bootstrap and gap filling)</li>
+</ol>
+<h3 id="initial-bootstrap" tabindex="-1"><a class="header-anchor" href="#initial-bootstrap">Initial Bootstrap</a></h3>
+<p>On first startup, the sequencer already replays all diffs from DA layer in the <code>sync</code> function (line 813-887, <code>Da_layer.Client.map_diffs</code> callback). When <code>--nats-url</code> is provided, each diff is published to NATS as it is processed during this replay. This means:</p>
+<ul>
+<li>The sequencer's first startup with NATS populates the NATS stream with the full history</li>
+<li>No separate bootstrap step is needed</li>
+<li>The indexer starts consuming from NATS sequence 1 and processes all historical diffs seamlessly</li>
+</ul>
+<p>After bootstrap, the sequencer transitions to real-time publishing for new transactions.</p>
+<h3 id="gap-detection" tabindex="-1"><a class="header-anchor" href="#gap-detection">Gap Detection</a></h3>
+<p>When the indexer detects a hash chain break (Section 5), it distinguishes between rollbacks and gaps:</p>
+<ul>
+<li><strong>Rollback:</strong> <code>M[n].source_ledger_hash</code> matches an earlier known hash → revert (Section 5)</li>
+<li><strong>Gap:</strong> <code>M[n].source_ledger_hash</code> is unknown → missing diffs, trigger backfill</li>
+</ul>
+<p>On gap detection, the indexer:</p>
+<ol>
+<li>Pauses consumption from NATS</li>
+<li>Calls the <code>backfill(fromHash, toHash)</code> mutation → returns a job ID</li>
+<li>Subscribes to <code>backfillProgress(id)</code> via SSE for real-time progress events</li>
+<li>On <code>completed</code> event → resumes NATS consumption. On SSE drop or service restart → re-queries job via <code>backfillJob(id)</code>, re-subscribes or re-submits</li>
+</ol>
+<h3 id="backfill-service" tabindex="-1"><a class="header-anchor" href="#backfill-service">Backfill Service</a></h3>
+<p>A single-file standalone OCaml service that exposes a GraphQL API (mutation + subscription + query) to trigger backfill of missing diffs from the DA layer into NATS.</p>
+<p><strong>File:</strong> <code>src/app/zeko/backfill/backfill.ml</code> (~200 lines)</p>
+<p><strong>Dependencies (all already in the zeko repo):</strong></p>
+<ul>
+<li><code>da_layer</code> — <code>Da_layer.Client.iter_diffs</code>, <code>Da_layer.Diff.Stable.V3.to_yojson</code></li>
+<li><code>graphql</code>, <code>graphql-async</code>, <code>graphql_cohttp_async</code> — GraphQL server (same as sequencer)</li>
+<li><code>cohttp-async</code> — HTTP server + SSE transport for subscriptions</li>
+<li><code>nats_client</code> — NATS publish (same client as sequencer)</li>
+<li><code>async</code>, <code>core_kernel</code>, <code>yojson</code></li>
+</ul>
+<p><strong>GraphQL schema:</strong></p>
+<pre><code class="language-graphql">type BackfillJob {
+  id: String!
+  status: BackfillStatus!
+  fromHash: String!
+  toHash: String!
+  diffsPublished: Int!
+  error: String
+}
+
+enum BackfillStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+type BackfillProgress {
+  id: String!
+  status: BackfillStatus!
+  diffsPublished: Int!
+  error: String
+}
+
+type Query {
+  backfillJob(id: String!): BackfillJob
+  health: Health!
+}
+
+type Health {
+  ok: Boolean!
+  instanceId: String!
+  startedAt: String!
+}
+
+type Mutation {
+  backfill(fromHash: String!, toHash: String!): BackfillJob!
+}
+
+type Subscription {
+  backfillProgress(id: String!): BackfillProgress!
+}
+</code></pre>
+<p><strong>Key design points:</strong></p>
+<ul>
+<li><strong><code>instanceId</code> in <code>health</code> query</strong> — the service generates a random UUID at startup. The indexer stores this on first contact. If a subsequent <code>health</code> query returns a different <code>instanceId</code>, the service restarted and all in-flight jobs are lost. The indexer re-submits.</li>
+<li><strong>Job storage is in-memory</strong> (<code>Hashtbl</code>). Jobs are short-lived. The <code>instanceId</code> mechanism handles restart recovery, so persistence is not needed.</li>
+<li><strong>SSE subscription transport</strong> — <code>backfillProgress(id)</code> is delivered via Server-Sent Events (<code>Content-Type: text/event-stream</code>). The <code>cohttp-async</code> response body streams <code>data: {&quot;status&quot;:&quot;running&quot;,&quot;diffsPublished&quot;:42}\n\n</code> frames as the job progresses. No WebSocket dependency.</li>
+<li><strong>Subscription pushes on every diff published</strong> (or batched every N diffs for high-volume ranges) and a final <code>completed</code> or <code>failed</code> event.</li>
+</ul>
+<p><strong>Robustness — indexer-side failure handling:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Detection</th>
+<th>Recovery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SSE connection drops</strong> (network blip, TCP reset)</td>
+<td><code>EventSource</code> <code>error</code> event or stream ends unexpectedly</td>
+<td>Query <code>backfillJob(id)</code> to get current status. If still <code>RUNNING</code>, re-subscribe. If <code>COMPLETED</code>/<code>FAILED</code>, act on result.</td>
+</tr>
+<tr>
+<td><strong>Backfill service restarts</strong> mid-job</td>
+<td><code>health { instanceId }</code> changes, or <code>backfillJob(id)</code> returns <code>null</code></td>
+<td>Re-submit <code>backfill(fromHash, toHash)</code> mutation. JetStream dedup prevents duplicate messages for any diffs already published before the restart.</td>
+</tr>
+<tr>
+<td><strong>Backfill job fails</strong> (DA layer error, NATS error)</td>
+<td><code>BackfillProgress</code> event with <code>status: FAILED</code> and <code>error</code> message</td>
+<td>Log the error. Retry the <code>backfill</code> mutation with the same hash range (up to N retries with backoff).</td>
+</tr>
+<tr>
+<td><strong>Backfill service unreachable</strong></td>
+<td>HTTP connection refused / timeout</td>
+<td>Retry with exponential backoff. The indexer remains paused (not consuming from NATS) until backfill succeeds.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>CLI flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--nats-url</code></td>
+<td><code>string</code></td>
+<td>NATS server URL</td>
+</tr>
+<tr>
+<td><code>--da-node</code></td>
+<td><code>string list</code></td>
+<td>DA layer node URIs (same as archive relay)</td>
+</tr>
+<tr>
+<td><code>-p</code></td>
+<td><code>int</code></td>
+<td>HTTP/GraphQL listen port (default: 8090)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Deployment:</strong> Standalone service, one instance per network. Same isolation as sequencer + NATS.</p>
+<p><strong>How the indexer uses it:</strong></p>
+<pre><code class="language-typescript">// On gap detection: M[n-1].target_hash != M[n].source_hash
+// and M[n].source_hash is unknown (not a rollback)
+
+async function runBackfill(fromHash: string, toHash: string): Promise&lt;void&gt; {
+  // 1. Check service identity (for restart detection later)
+  const { data: { health } } = await gqlClient.query({
+    query: gql`query { health { instanceId } }`
+  });
+  const instanceId = health.instanceId;
+
+  // 2. Start backfill
+  const { data: { backfill: job } } = await gqlClient.mutate({
+    mutation: gql`mutation Backfill($from: String!, $to: String!) {
+      backfill(fromHash: $from, toHash: $to) { id status }
+    }`,
+    variables: { from: fromHash, to: toHash },
+  });
+
+  // 3. Subscribe to progress via SSE
+  await new Promise&lt;void&gt;((resolve, reject) =&gt; {
+    const es = new EventSource(
+      `${BACKFILL_URL}/graphql/stream?query=${encodeURIComponent(
+        `subscription { backfillProgress(id: &quot;${job.id}&quot;) { status diffsPublished error } }`
+      )}`
+    );
+
+    es.onmessage = (event) =&gt; {
+      const progress = JSON.parse(event.data);
+      if (progress.status === &quot;COMPLETED&quot;) { es.close(); resolve(); }
+      if (progress.status === &quot;FAILED&quot;) { es.close(); reject(new Error(progress.error)); }
+    };
+
+    es.onerror = async () =&gt; {
+      es.close();
+      // SSE dropped — check if service restarted or job still running
+      try {
+        const { data: { health: h } } = await gqlClient.query({
+          query: gql`query { health { instanceId } }`
+        });
+        if (h.instanceId !== instanceId) {
+          // Service restarted — re-submit from scratch
+          reject(new BackfillServiceRestarted());
+          return;
+        }
+        const { data: { backfillJob } } = await gqlClient.query({
+          query: gql`query Job($id: String!) {
+            backfillJob(id: $id) { status diffsPublished error }
+          }`,
+          variables: { id: job.id },
+        });
+        if (!backfillJob) { reject(new BackfillServiceRestarted()); return; }
+        if (backfillJob.status === &quot;COMPLETED&quot;) { resolve(); return; }
+        if (backfillJob.status === &quot;FAILED&quot;) { reject(new Error(backfillJob.error)); return; }
+        // Still running — re-subscribe (recursive, with the same job ID)
+        // In practice, wrap this in a retry loop
+        reject(new BackfillSSEDropped());
+      } catch {
+        reject(new BackfillServiceUnreachable());
+      }
+    };
+  });
+}
+
+// Top-level retry loop
+const MAX_RETRIES = 5;
+for (let attempt = 0; attempt &lt; MAX_RETRIES; attempt++) {
+  try {
+    await runBackfill(lastKnownHash, nextMessage.sourceHash);
+    break; // success — resume NATS consumption
+  } catch (e) {
+    if (e instanceof BackfillServiceRestarted || e instanceof BackfillSSEDropped) {
+      await sleep(1000 * 2 ** attempt); // exponential backoff
+      continue; // re-submit
+    }
+    if (e instanceof BackfillServiceUnreachable) {
+      await sleep(5000 * 2 ** attempt);
+      continue;
+    }
+    throw e; // unknown error — surface to operator
+  }
+}
+</code></pre>
+<h3 id="operational-flows" tabindex="-1"><a class="header-anchor" href="#operational-flows">Operational Flows</a></h3>
+<pre><code>First start (empty NATS stream):
+  1. Sequencer starts with --nats-url
+  2. sync() replays all DA diffs → published to NATS during replay
+  3. NATS stream now has full history
+  4. Indexer starts, consumes from sequence 1, builds SurrealDB
+
+Sequencer restart (existing NATS stream):
+  1. Sequencer restarts, sync() replays DA diffs internally
+  2. sync() diffs are also published to NATS (deduplication handles overlaps)
+  3. Gap between pre-restart and post-restart:
+     → Indexer detects via hash chain break
+     → Indexer calls backfill API for the gap range
+     → Backfill service fills the gap from DA layer
+     → Indexer resumes
+
+Indexer restart:
+  1. Indexer resumes from durable NATS consumer position
+  2. No backfill needed — NATS has the history
+  3. SurrealDB state consistent up to last processed message
+
+Full SurrealDB rebuild:
+  1. Delete SurrealDB
+  2. Reset indexer's NATS consumer to sequence 1
+  3. Indexer replays entire NATS stream
+  4. If NATS stream is incomplete, indexer triggers backfill for gaps
+</code></pre>
+<h3 id="nats-jetstream-configuration" tabindex="-1"><a class="header-anchor" href="#nats-jetstream-configuration">NATS JetStream Configuration</a></h3>
+<pre><code>Stream: zeko-l2
+  Subjects: zeko.l2.&gt;
+  Retention: Limits
+  Storage: File
+  Max Messages: -1 (unlimited)
+  Max Bytes: -1 (unlimited)
+  Max Age: 90d (3 months — configurable, 1-6 months depending on network volume)
+  Discard: Old
+  Dedup Window: 2m
+
+Stream: zeko-health
+  Subjects: zeko.health
+  Retention: Limits
+  Storage: File
+  Max Messages: 1000
+  Discard: Old
+</code></pre>
+<h3 id="r2-archival-and-stream-pruning" tabindex="-1"><a class="header-anchor" href="#r2-archival-and-stream-pruning">R2 Archival and Stream Pruning</a></h3>
+<p>JetStream retains a rolling window (default 3 months). Older messages are archived to Cloudflare R2 before pruning.</p>
+<p><strong>Archival flow:</strong></p>
+<pre><code>NATS JetStream (rolling 3 months)
+        │
+        ├── cron job exports messages older than (max_age - 1 week)
+        │   to R2 as NDJSON files, partitioned by day
+        │
+        └── JetStream Max Age auto-prunes expired messages
+</code></pre>
+<p><strong>R2 storage layout:</strong></p>
+<pre><code>r2://zeko-nats-archive/
+  zeko.l2.transactions/
+    2026-01-15.ndjson.zst   # zstd-compressed, one JSON message per line
+    2026-01-16.ndjson.zst
+    ...
+  zeko.l2.finality/
+    2026-01-15.ndjson.zst
+    ...
+</code></pre>
+<p><strong>Archival strategy:</strong></p>
+<ul>
+<li>A cron job (or scheduled task) reads from NATS using an archival consumer, exports messages to R2 as daily NDJSON files compressed with zstd</li>
+<li>Each line includes the original NATS headers (sequence number, timestamp, <code>Nats-Msg-Id</code>) so the archive is replayable</li>
+<li>The archival consumer runs ahead of the <code>Max Age</code> window to ensure no messages are pruned before archival</li>
+<li>R2 lifecycle rules can be used for long-term retention tiers (e.g., move to Infrequent Access after 1 year)</li>
+</ul>
+<p><strong>Full rebuild from archive:</strong></p>
+<ol>
+<li>Replay R2 archive files into NATS (or directly into the backfill service)</li>
+<li>JetStream deduplication prevents duplicates if there's overlap with the live stream</li>
+<li>Indexer replays from sequence 1 as usual</li>
+</ol>
+<p><strong>Configuration:</strong></p>
+<ul>
+<li><code>Max Age</code> on the <code>zeko-l2</code> stream controls the JetStream retention window (default: 90 days)</li>
+<li>Archival frequency: daily</li>
+<li>R2 bucket: one per network (devnet, testnet, mainnet)</li>
+</ul>
+<hr>
+<h2 id="8-sequencer-cli-changes" tabindex="-1"><a class="header-anchor" href="#8-sequencer-cli-changes">8. Sequencer CLI Changes</a></h2>
+<h3 id="new-flag" tabindex="-1"><a class="header-anchor" href="#new-flag">New Flag</a></h3>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--nats-url</code></td>
+<td><code>string option</code></td>
+<td><code>None</code></td>
+<td>NATS server URL. If not provided, NATS publishing is disabled.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example usage:</strong></p>
+<pre><code class="language-bash"># NATS enabled
+zeko-sequencer --nats-url nats://localhost:4222 [other flags...]
+
+# NATS disabled (default, backwards-compatible)
+zeko-sequencer [other flags...]
+</code></pre>
+<h3 id="behavior" tabindex="-1"><a class="header-anchor" href="#behavior">Behavior</a></h3>
+<ul>
+<li>When <code>--nats-url</code> is not provided: NATS client is <code>None</code>, all publish calls are no-ops, sequencer behaves exactly as before</li>
+<li>When <code>--nats-url</code> is provided: NATS client connects at startup, publishes diffs after each <code>enqueue_diff</code> call</li>
+<li>If NATS connection drops during operation: publishes are silently dropped, sequencer continues normally, client reconnects automatically</li>
+<li>The archive relay continues running unchanged — NATS publishing is additive, not a replacement</li>
+</ul>
+<hr>
+<h2 id="9-test-scenarios" tabindex="-1"><a class="header-anchor" href="#9-test-scenarios">9. Test Scenarios</a></h2>
+<p>See <a href="./test-scenarios/">test-scenarios/</a> for all Gherkin acceptance test scenarios:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>transaction-publishing.feature</code></td>
+<td>User commands, zkApp commands, fee transfers, genesis diffs, hash chain continuity</td>
+</tr>
+<tr>
+<td><code>deduplication.feature</code></td>
+<td>JetStream Nats-Msg-Id deduplication</td>
+</tr>
+<tr>
+<td><code>nats-downtime.feature</code></td>
+<td>Sequencer continues when NATS is down, reconnection, disabled mode</td>
+</tr>
+<tr>
+<td><code>finality-events.feature</code></td>
+<td>Proved and committed finality event publishing</td>
+</tr>
+<tr>
+<td><code>health-heartbeat.feature</code></td>
+<td>Periodic health heartbeat messages</td>
+</tr>
+<tr>
+<td><code>consumer-rollback-detection.feature</code></td>
+<td>Indexer hash chain break detection, rollback vs gap disambiguation, revert logic</td>
+</tr>
+<tr>
+<td><code>backfill.feature</code></td>
+<td>Backfill API gap filling, full bootstrap, deduplication, progress tracking, error handling</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="10-open-questions" tabindex="-1"><a class="header-anchor" href="#10-open-questions">10. Open Questions</a></h2>
+<p><strong>None.</strong> All questions from the original spike have been resolved:</p>
+<table>
+<thead>
+<tr>
+<th>Original Question</th>
+<th>Resolution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Module vs. microservice?</td>
+<td>Neither — the sequencer publishes directly to NATS. No separate process.</td>
+</tr>
+<tr>
+<td>Crash recovery and resume?</td>
+<td>Sequencer publishes historical diffs during startup sync. Backfill API service fills gaps on demand. Indexer detects gaps via hash chain continuity. See Section 7.</td>
+</tr>
+<tr>
+<td>Rollback signaling?</td>
+<td>No runtime rollback mechanism exists in the sequencer (and adding one is not desirable). Consumers detect rollbacks via hash-chain-continuity checking. See Section 5.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="addendum-documents" tabindex="-1"><a class="header-anchor" href="#addendum-documents">Addendum Documents</a></h3>
+<ul>
+<li><a href="./addendums/addendum-sync-performance.html">addendums/addendum-sync-performance.md</a> — How the new architecture eliminates the week-long archive sync bottleneck (1M+ transactions), with estimates and further optimizations (parallel DA fetching, pre-seeded NATS streams)</li>
+<li><a href="./addendums/addendum-finality-todo.html">addendums/addendum-finality-todo.md</a> — How to resolve the <code>get_latest_state</code> GraphQL TODO for proved/committed hashes (~20 LOC)</li>
+<li><a href="./addendums/addendum-sequencer-rollbacks.html">addendums/addendum-sequencer-rollbacks.md</a> — Analysis of why adding rollback events to the sequencer is not desirable (complexity vs. benefit)</li>
+</ul>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/001-sequencer-connector/results.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contract Submission Pipeline — Specification</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/003-zkapp-state-display/addendums/addendum-contract-verification.md</div>
+        <h1>Contract Submission Pipeline — Specification</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Lines</strong>280</span><span class="pill"><strong>Sections</strong>15</span><span class="pill"><strong>Tables</strong>3</span><span class="pill"><strong>Code blocks</strong>6</span></div>
+        <nav class="quick-nav"><a href="../README.md">README</a><a href="../results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">1967 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="269" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 15</text><rect x="321" y="148" width="54" height="18" rx="9" fill="#34d399"/><text x="321" y="188" fill="#9fb0c7" font-size="13">Tables: 3</text><rect x="389" y="148" width="108" height="18" rx="9" fill="#a78bfa"/><text x="389" y="188" fill="#9fb0c7" font-size="13">Code: 6</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#1-architecture">1. Architecture</a>
+<a class="toc-level-2" href="#2-the-submission-by-example">2. The submission, by example</a>
+<a class="toc-level-3" href="#21-contractjson">2.1 contract.json</a>
+<a class="toc-level-3" href="#22-fixturesjson">2.2 fixtures.json</a>
+<a class="toc-level-3" href="#23-the-dsl">2.3 The DSL</a>
+<a class="toc-level-2" href="#3-the-verify-pipeline">3. The verify pipeline</a>
+<a class="toc-level-2" href="#4-verification-grades">4. Verification grades</a>
+<a class="toc-level-2" href="#5-owner-signature-scheme">5. Owner signature scheme</a>
+<a class="toc-level-2" href="#6-ci-and-publish">6. CI and publish</a>
+<a class="toc-level-2" href="#7-runtime-read-path-graphql">7. Runtime read path (GraphQL)</a>
+<a class="toc-level-3" href="#71-where-decoding-runs">7.1 Where decoding runs</a>
+<a class="toc-level-2" href="#8-failure-modes-verbatim">8. Failure modes (verbatim)</a>
+<a class="toc-level-2" href="#9-schema-versioning">9. Schema versioning</a>
+<a class="toc-level-2" href="#10-non-goals">10. Non-goals</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="contract-submission-pipeline-specification" tabindex="-1"><a class="header-anchor" href="#contract-submission-pipeline-specification">Contract Submission Pipeline — Specification</a></h1>
+<p>This document specifies how a zkApp on Mina/Zeko is described, submitted, verified, published, and rendered. It defines a single artefact (a JSON submission with a pinned schema version), one validation pipeline (the verify CLI), one runtime store (Cloudflare KV), one decoder (the shared interpreter), and one GraphQL surface. Every claim made here is exercised by the runnable example under <a href="./examples/"><code>examples/</code></a>, which uses Bun.</p>
+<h2 id="1-architecture" tabindex="-1"><a class="header-anchor" href="#1-architecture">1. Architecture</a></h2>
+<pre><code>┌──────────────────────────┐  PR   ┌───────────────────────────────┐
+│ zeko-contract-registry   │──────▶│ .github/workflows/verify.yml  │
+│ contracts/&lt;name&gt;/        │       │   bun run verify &lt;dir&gt;        │
+│   contract.json          │       │   (self-check → JSON Schema   │
+│   fixtures.json          │       │   → semantic → fixtures       │
+│ contract.v1.schema.json  │       │   → owner sig)                │
+└──────────┬───────────────┘       └───────────────────────────────┘
+           │ merge by maintainer     no KV access in this job
+           ▼
+┌──────────────────────────┐       ┌───────────────────────────────┐
+│ main                     │◀──────│ .github/workflows/publish.yml │
+│                          │       │   workflow_dispatch only      │
+│                          │       │   re-verify → bun run upload  │
+└──────────────────────────┘       └──────────────┬────────────────┘
+                                                  │ Cloudflare KV REST
+                                                  ▼
+                                    ┌───────────────────────────┐
+                                    │ Cloudflare KV             │
+                                    │ key = &quot;&lt;network&gt;:&lt;addr&gt;&quot;  │
+                                    │ val = contract.json bytes │
+                                    └──────────────┬────────────┘
+                                                   │ GraphQL resolver
+                                                   ▼
+   ┌──────────────┐               ┌───────────────────────────┐
+   │ zkApp data   │               │ contract-registry-api     │
+   │ (raw fields  │               │   contractSchema(...)     │
+   │  from indexer)│               └───────────────┬───────────┘
+   └──────┬───────┘                               │
+          │                                       │
+          ▼                                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ Unified Hive gateway (see spike 4)                         │
+   │   Explorer API + Bridge API + Contract Registry API        │
+   └──────────────────────────┬─────────────────────────────────┘
+                              │ single GraphQL endpoint
+                              ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ zeko-explorer UI — raw + labeled side by side              │
+   └────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>The indexer never reads schemas. Upload is a maintainer action, never automatic. Decoding is a pure function of <code>(raw_fields, schema)</code> and runs wherever the trade-off is cleaner — see §7.</p>
+<h2 id="2-the-submission-by-example" tabindex="-1"><a class="header-anchor" href="#2-the-submission-by-example">2. The submission, by example</a></h2>
+<p>A submission is a contract directory with two files. The schema-validated file (<code>contract.json</code>) is what lands in KV; the fixtures file (<code>fixtures.json</code>) is a test artefact consumed only by the verify CLI. The example below is the real <strong>LuminaPool</strong> contract (<code>B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV</code>) on <code>zeko-m-devnet</code>.</p>
+<h3 id="21-contractjson" tabindex="-1"><a class="header-anchor" href="#21-contractjson">2.1 <code>contract.json</code></a></h3>
+<pre><code class="language-json">{
+  &quot;$schema&quot;: &quot;https://zeko.io/schema/v1/contract.json&quot;,
+  &quot;version&quot;: 1,
+  &quot;meta&quot;: {
+    &quot;address&quot;: &quot;B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV&quot;,
+    &quot;networks&quot;: [&quot;zeko-m-devnet&quot;],
+    &quot;name&quot;: &quot;LuminaPool&quot;,
+    &quot;description&quot;: &quot;Lumina constant-product pool. Holds reserves for two assets and tracks liquidity supply.&quot;
+  },
+  &quot;state&quot;: {
+    &quot;slots&quot;: [
+      { &quot;at&quot;: 0, &quot;name&quot;: &quot;reserve0&quot;,       &quot;type&quot;: &quot;UInt64&quot; },
+      { &quot;at&quot;: 1, &quot;name&quot;: &quot;reserve1&quot;,       &quot;type&quot;: &quot;UInt64&quot; },
+      { &quot;at&quot;: 2, &quot;name&quot;: &quot;totalLiquidity&quot;, &quot;type&quot;: &quot;UInt64&quot; }
+    ]
+  },
+  &quot;events&quot;: {
+    &quot;discriminator&quot;: { &quot;at&quot;: 0 },
+    &quot;variants&quot;: [
+      { &quot;when&quot;: &quot;0&quot;, &quot;kind&quot;: &quot;AddLiquidity&quot;,
+        &quot;fields&quot;: [
+          { &quot;at&quot;: 1, &quot;name&quot;: &quot;sender&quot;,   &quot;type&quot;: &quot;PublicKey&quot; },
+          { &quot;at&quot;: 3, &quot;name&quot;: &quot;a0In&quot;,     &quot;type&quot;: &quot;UInt64&quot; },
+          { &quot;at&quot;: 4, &quot;name&quot;: &quot;a1In&quot;,     &quot;type&quot;: &quot;UInt64&quot; },
+          { &quot;at&quot;: 5, &quot;name&quot;: &quot;lpOut&quot;,    &quot;type&quot;: &quot;UInt64&quot; }
+        ]
+      },
+      { &quot;when&quot;: &quot;3&quot;, &quot;kind&quot;: &quot;ReceiveMina&quot;,
+        &quot;fields&quot;: [
+          { &quot;at&quot;: 1, &quot;name&quot;: &quot;sender&quot;,   &quot;type&quot;: &quot;PublicKey&quot; },
+          { &quot;at&quot;: 3, &quot;name&quot;: &quot;amountIn&quot;, &quot;type&quot;: &quot;UInt64&quot; }
+        ]
+      },
+      { &quot;when&quot;: &quot;4&quot;, &quot;kind&quot;: &quot;Swap&quot;,
+        &quot;fields&quot;: [
+          { &quot;at&quot;: 1, &quot;name&quot;: &quot;sender&quot;,    &quot;type&quot;: &quot;PublicKey&quot; },
+          { &quot;at&quot;: 3, &quot;name&quot;: &quot;amountIn&quot;,  &quot;type&quot;: &quot;UInt64&quot; },
+          { &quot;at&quot;: 4, &quot;name&quot;: &quot;amountOut&quot;, &quot;type&quot;: &quot;UInt64&quot; }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<h3 id="22-fixturesjson" tabindex="-1"><a class="header-anchor" href="#22-fixturesjson">2.2 <code>fixtures.json</code></a></h3>
+<pre><code class="language-json">{
+  &quot;fixtures&quot;: [
+    { &quot;target&quot;: &quot;state&quot;,
+      &quot;raw&quot;: [&quot;1000000000&quot;, &quot;4056640838&quot;, &quot;9023684&quot;, &quot;0&quot;, &quot;0&quot;, &quot;0&quot;, &quot;0&quot;, &quot;0&quot;],
+      &quot;expected&quot;: { &quot;reserve0&quot;: &quot;1000000000&quot;, &quot;reserve1&quot;: &quot;4056640838&quot;, &quot;totalLiquidity&quot;: &quot;9023684&quot; } },
+
+    { &quot;target&quot;: &quot;event&quot;,
+      &quot;raw&quot;: [&quot;0&quot;, &quot;7994353054957568193498626604873088658666758397914343032172656113958151515402&quot;, &quot;0&quot;,
+              &quot;1000000000&quot;, &quot;4056640838&quot;, &quot;9023684&quot;],
+      &quot;expected&quot;: { &quot;kind&quot;: &quot;AddLiquidity&quot;, &quot;sender&quot;: &quot;B62qipa4xp6pQKqAm5qoviGoHyKaurHvLZiWf3djDNgrzdERm6AowSQ&quot;,
+                    &quot;a0In&quot;: &quot;1000000000&quot;, &quot;a1In&quot;: &quot;4056640838&quot;, &quot;lpOut&quot;: &quot;9023684&quot; } },
+
+    { &quot;target&quot;: &quot;event&quot;,
+      &quot;raw&quot;: [&quot;3&quot;, &quot;7994353054957568193498626604873088658666758397914343032172656113958151515402&quot;, &quot;0&quot;, &quot;1000000000&quot;],
+      &quot;expected&quot;: { &quot;kind&quot;: &quot;ReceiveMina&quot;, &quot;sender&quot;: &quot;B62qipa4xp6pQKqAm5qoviGoHyKaurHvLZiWf3djDNgrzdERm6AowSQ&quot;,
+                    &quot;amountIn&quot;: &quot;1000000000&quot; } },
+
+    { &quot;target&quot;: &quot;event&quot;,
+      &quot;raw&quot;: [&quot;4&quot;, &quot;7994353054957568193498626604873088658666758397914343032172656113958151515402&quot;, &quot;0&quot;,
+              &quot;1000000000&quot;, &quot;240787553&quot;],
+      &quot;expected&quot;: { &quot;kind&quot;: &quot;Swap&quot;, &quot;sender&quot;: &quot;B62qipa4xp6pQKqAm5qoviGoHyKaurHvLZiWf3djDNgrzdERm6AowSQ&quot;,
+                    &quot;amountIn&quot;: &quot;1000000000&quot;, &quot;amountOut&quot;: &quot;240787553&quot; } }
+  ]
+}
+</code></pre>
+<p>Both files live at <a href="./examples/contracts/lumina-pool/"><code>examples/contracts/lumina-pool/</code></a>. Running <code>bun run verify contracts/lumina-pool</code> produces:</p>
+<pre><code>schema:    OK
+semantic:  OK
+fixtures:  OK
+PASS — grade: community-submitted
+</code></pre>
+<h3 id="23-the-dsl" tabindex="-1"><a class="header-anchor" href="#23-the-dsl">2.3 The DSL</a></h3>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Form</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Version</strong></td>
+<td><code>version: 1</code></td>
+<td>Pinned literal. The JSON Schema file is <code>contract.v1.schema.json</code>. New versions ship as new schema files; the verifier dispatches on <code>version</code>.</td>
+</tr>
+<tr>
+<td><strong>Slot</strong></td>
+<td><code>{ at, name, type }</code></td>
+<td><code>at</code> is the index into the raw field array</td>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td><code>Field</code> <code>UInt32</code> <code>UInt64</code> <code>Bool</code> (1 slot) · <code>PublicKey</code> (2 slots) · user-declared <code>Struct</code> (recursive sum of widths)</td>
+<td>Decoded values are JSON: integers as decimal strings, <code>Bool</code> as boolean, <code>PublicKey</code> as Base58</td>
+</tr>
+<tr>
+<td><strong>State</strong></td>
+<td><code>{ slots: Slot[] }</code></td>
+<td>Always 8 raw fields. A slot whose declared type spans past index 8 is rejected</td>
+</tr>
+<tr>
+<td><strong>Events / Actions</strong></td>
+<td><code>null</code> <em>or</em> <code>{ fields: Slot[] }</code> <em>or</em> <code>{ discriminator: { at }, variants: [{ when, kind, fields }] }</code></td>
+<td>Three shapes only</td>
+</tr>
+<tr>
+<td><strong>Struct</strong></td>
+<td><code>{ fields: { name, type }[] }</code> declared under <code>types</code></td>
+<td>Slots laid out contiguously in declaration order</td>
+</tr>
+<tr>
+<td><strong>Networks</strong></td>
+<td><code>meta.networks: Network[]</code></td>
+<td>Non-empty set of networks on which this exact address is the same contract. The upload script writes one KV key per network.</td>
+</tr>
+<tr>
+<td><strong>Fixture</strong></td>
+<td><code>{ target: &quot;state&quot;|&quot;event&quot;|&quot;action&quot;, raw: string[], expected: ... }</code></td>
+<td>Lives in a separate <code>fixtures.json</code>. Typed by <code>FixtureFile</code> in <code>schema.ts</code> and executed by the interpreter. Not part of the JSON Schema and never uploaded to KV.</td>
+</tr>
+<tr>
+<td><strong>Owner</strong></td>
+<td>optional <code>{ address, signature: { r, s } }</code></td>
+<td>Signature over the canonical submission with the <code>owner</code> block stripped</td>
+</tr>
+</tbody>
+</table>
+<p>The full JSON Schema is at <a href="./examples/contract.v1.schema.json"><code>examples/contract.v1.schema.json</code></a>.</p>
+<h2 id="3-the-verify-pipeline" tabindex="-1"><a class="header-anchor" href="#3-the-verify-pipeline">3. The verify pipeline</a></h2>
+<p>The CLI in <a href="./examples/src/verify.ts"><code>examples/src/verify.ts</code></a> executes five stages in order; the first failure short-circuits.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Stage</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><strong>Schema self-check</strong></td>
+<td>At CLI startup, <code>ajv.validateSchema(contract.v1.schema.json)</code> confirms the schema file is itself a valid JSON Schema draft 2020-12 document. Fails fast before any submission is touched.</td>
+</tr>
+<tr>
+<td>1</td>
+<td><strong>JSON Schema</strong></td>
+<td>The submission is validated with an Ajv-compiled validator (never <code>JSON.parse</code> + cast): <code>version === 1</code>, required fields, <code>B62q…</code> address pattern, network enum, integer slot indices, allowed types. The optional <code>$schema</code> property lets editors like VSCode autocomplete and validate the file in place.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Semantic</strong></td>
+<td>Every type resolves; state slots stay within 8 fields; <code>owner.address == meta.address</code> if present</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Fixtures</strong></td>
+<td>Parse <code>fixtures.json</code>; run the interpreter on each <code>fixture.raw</code>; deep-equal against <code>fixture.expected</code>. Reject on mismatch and print both values</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Owner signature</strong></td>
+<td>If <code>owner</code> is present, recompute the canonical digest (which strips <code>owner</code> and <code>$schema</code>) and call <code>Signature.verify</code> against <code>meta.address</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Source linkage</strong> <em>(future)</em></td>
+<td>If <code>meta.source</code> and <code>meta.vkeyHash</code> are present, clone, build, and compare the produced verification-key hash</td>
+</tr>
+</tbody>
+</table>
+<p>The Ajv-compiled validator lives in <a href="./examples/src/validate.ts"><code>examples/src/validate.ts</code></a> and is reused by <code>sign.ts</code> and <code>upload.ts</code> — nothing that reads <code>contract.json</code> ever just parses and casts.</p>
+<h2 id="4-verification-grades" tabindex="-1"><a class="header-anchor" href="#4-verification-grades">4. Verification grades</a></h2>
+<table>
+<thead>
+<tr>
+<th>Grade</th>
+<th>Earned when</th>
+<th>UI badge</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>owner-signed</code></td>
+<td>Stage 4 passes</td>
+<td>green, &quot;Owner-signed by <code>B62q…</code>&quot;</td>
+</tr>
+<tr>
+<td><code>source-linked</code></td>
+<td>Stage 5 passes (no owner block)</td>
+<td>blue, &quot;Source-linked to <code>&lt;repo&gt;@&lt;commit&gt;</code>&quot;</td>
+</tr>
+<tr>
+<td><code>community-submitted</code></td>
+<td>Stages 1–3 pass with neither owner nor source</td>
+<td>grey, &quot;Community-submitted, fixtures verified&quot;</td>
+</tr>
+</tbody>
+</table>
+<p>Grades are mutually exclusive and ordered. Multiple submissions for the same <code>(network, address)</code> are not allowed; resubmission requires a PR that updates the existing file. The grade is recomputed on the fly by the contract-registry-api resolver so it always matches the current submission.</p>
+<h2 id="5-owner-signature-scheme" tabindex="-1"><a class="header-anchor" href="#5-owner-signature-scheme">5. Owner signature scheme</a></h2>
+<p>The signature proves that whoever holds the private key for <code>meta.address</code> authored <em>this exact submission</em>. Mutating any field invalidates it.</p>
+<ol>
+<li>Strip the <code>owner</code> block from the submission.</li>
+<li>Serialize with sorted keys (<code>signature.ts:canonical</code>).</li>
+<li>SHA-256, take the first 31 bytes, interpret big-endian as a <code>Field</code>.</li>
+<li>Sign with <code>Signature.create(privateKey, [digestField])</code>.</li>
+<li>Store <code>{ r, s }</code> as decimal strings under <code>owner.signature</code>.</li>
+</ol>
+<p>The 31-byte truncation keeps the digest below the Pallas field modulus.</p>
+<h2 id="6-ci-and-publish" tabindex="-1"><a class="header-anchor" href="#6-ci-and-publish">6. CI and publish</a></h2>
+<p>Two separate workflow files — one per responsibility, so the publish path has no overlap with the review path:</p>
+<p><strong><a href="./examples/.github/workflows/verify.yml"><code>.github/workflows/verify.yml</code></a></strong> — runs on every PR whose diff touches <code>contracts/**</code>, <code>src/**</code>, the schema file, or <code>package.json</code>. For each changed contract directory it runs <code>bun run verify &lt;dir&gt;</code>. Never writes to KV and never reads Cloudflare secrets. Branch protection on <code>main</code> requires this job to pass.</p>
+<p><strong><a href="./examples/.github/workflows/publish.yml"><code>.github/workflows/publish.yml</code></a></strong> — triggers only via <code>workflow_dispatch</code>. A maintainer provides <code>mode</code> (<code>put</code> or <code>delete</code>) and <code>dir</code> (the contract directory). The job re-runs <code>bun run verify &lt;dir&gt;</code> (in <code>put</code> mode), then runs <code>bun run upload &lt;mode&gt; &lt;dir&gt;</code>. Scoped to a protected <code>contract-registry-publish</code> environment so Cloudflare secrets never leak into PR-triggered runs. It does <strong>not</strong> run on push to main. Merging a PR does not touch KV.</p>
+<p>The upload script (<a href="./examples/src/upload.ts"><code>examples/src/upload.ts</code></a>) re-validates the submission with Ajv before any network call, uses the Cloudflare REST API directly via <code>fetch</code>, and writes one key per network listed in <code>meta.networks</code>. It reads <code>CLOUDFLARE_API_TOKEN</code>, <code>CLOUDFLARE_ACCOUNT_ID</code>, <code>KV_NAMESPACE_ID</code> from the environment. Maintainers can run it locally too — it's the same code the workflow runs.</p>
+<h2 id="7-runtime-read-path-graphql" tabindex="-1"><a class="header-anchor" href="#7-runtime-read-path-graphql">7. Runtime read path (GraphQL)</a></h2>
+<p>A standalone <strong>Contract Registry API</strong> (sibling of the Explorer and Bridge APIs in this monorepo) exposes one query and one type. Everything else — accounts, events, actions — stays on the Explorer API and returns raw fields only. The unified Hive gateway (spike 4) joins the two so a UI page can fetch raw fields and labels in a single round trip.</p>
+<pre><code class="language-graphql">scalar JSON
+
+enum VerificationGrade { OWNER_SIGNED SOURCE_LINKED COMMUNITY_SUBMITTED }
+
+type ContractSource {
+  repo: String!
+  commit: String!
+}
+
+type ContractMeta {
+  address: String!
+  networks: [String!]!
+  name: String!
+  description: String
+  source: ContractSource
+  vkeyHash: String
+}
+
+type ContractSchema {
+  version: Int!
+  meta: ContractMeta!
+  state: JSON!           # { slots: [...] }
+  events: JSON           # null | { fields: [...] } | { discriminator, variants }
+  actions: JSON
+  types: JSON            # user-declared Structs, keyed by name
+  grade: VerificationGrade!
+}
+
+extend type Query {
+  contractSchema(network: String!, address: String!): ContractSchema
+}
+</code></pre>
+<p>The resolver reads <code>${network}:${address}</code> from KV and returns <code>null</code> on miss. The response is cached at the edge for 5 minutes with <code>stale-while-revalidate=86400</code>.</p>
+<h3 id="71-where-decoding-runs" tabindex="-1"><a class="header-anchor" href="#71-where-decoding-runs">7.1 Where decoding runs</a></h3>
+<p>Decoding is a pure function of <code>(raw_fields, schema)</code>. It runs in the UI: the unified Hive gateway (spike 4) joins a single page query into Explorer-API raw fields and Contract-Registry-API schema, and the shared <code>@zeko/contract-schema</code> module decodes in the browser. Server-side decoding (e.g. as a gateway custom resolver, useful for hot multi-contract feeds) is a future option scoped to spike 4 — not in scope here. The indexer stays dumb either way.</p>
+<h2 id="8-failure-modes-verbatim" tabindex="-1"><a class="header-anchor" href="#8-failure-modes-verbatim">8. Failure modes (verbatim)</a></h2>
+<pre><code>$ bun run verify &lt;dir-with-wrong-fixture&gt;
+FAIL: fixture[0] (event): expected {…amountOut:&quot;999999999&quot;} actual {…amountOut:&quot;240787553&quot;}
+FAIL — 1 error(s)
+
+$ bun run verify &lt;dir-without-meta&gt;
+FAIL: schema: / must have required property 'meta'
+FAIL — 1 error(s)
+
+$ bun run verify &lt;signed-then-tampered&gt;
+FAIL: owner: signature does not verify against meta.address
+FAIL — 1 error(s)
+</code></pre>
+<h2 id="9-schema-versioning" tabindex="-1"><a class="header-anchor" href="#9-schema-versioning">9. Schema versioning</a></h2>
+<p><code>version</code> is a required integer pinned to a literal in the current JSON Schema (<code>contract.v1.schema.json</code> accepts only <code>version: 1</code>). Evolving the DSL means:</p>
+<ol>
+<li>Ship <code>contract.v2.schema.json</code> with new or changed fields.</li>
+<li>The verify CLI dispatches on <code>submission.version</code>, loads the matching schema, and runs the matching interpreter path.</li>
+<li>Existing v1 submissions keep validating against v1; no migration is forced.</li>
+<li>The contract-registry-api and UI understand both versions as long as the interpreter supports them.</li>
+</ol>
+<p>This is cheap to add later but expensive to retrofit if omitted, so the field is required from day one.</p>
+<h2 id="10-non-goals" tabindex="-1"><a class="header-anchor" href="#10-non-goals">10. Non-goals</a></h2>
+<ul>
+<li><strong>No on-chain registry.</strong> The registry is a git repo plus a KV namespace.</li>
+<li><strong>No runtime contract code.</strong> Submissions are pure data. The interpreter stays small and shared.</li>
+<li><strong>No automatic KV writes.</strong> Maintainers dispatch the <code>publish</code> job after review.</li>
+<li><strong>No automatic source-build verification today.</strong> The schema reserves <code>meta.source</code> and <code>meta.vkeyHash</code> so stage 5 can be enabled without changing the JSON Schema or the runtime.</li>
+</ul>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/003-zkapp-state-display/addendums/addendum-contract-verification.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

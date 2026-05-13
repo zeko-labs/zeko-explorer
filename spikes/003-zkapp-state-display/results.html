@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 003: zkApp State, Events, and Actions Display — Results</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/003-zkapp-state-display/results.md</div>
+        <h1>Spike 003: zkApp State, Events, and Actions Display — Results</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Status</strong>Complete</span><span class="pill"><strong>Date</strong>2026-04-07</span><span class="pill"><strong>Lines</strong>476</span><span class="pill"><strong>Sections</strong>31</span><span class="pill"><strong>Tables</strong>7</span><span class="pill"><strong>Code blocks</strong>14</span></div>
+        <nav class="quick-nav"><a href="./README.md">README</a><a href="./results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">4000 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="256" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 31</text><rect x="308" y="148" width="58" height="18" rx="9" fill="#34d399"/><text x="308" y="188" fill="#9fb0c7" font-size="13">Tables: 7</text><rect x="380" y="148" width="116" height="18" rx="9" fill="#a78bfa"/><text x="380" y="188" fill="#9fb0c7" font-size="13">Code: 14</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#1-explorer-survey">1. Explorer Survey</a>
+<a class="toc-level-3" href="#minascan-mina-l1-explorer">Minascan (Mina L1 Explorer)</a>
+<a class="toc-level-3" href="#zekoscan-zeko-l2-explorer">Zekoscan (Zeko L2 Explorer)</a>
+<a class="toc-level-2" href="#2-o1js-data-model">2. o1js Data Model</a>
+<a class="toc-level-3" href="#zkapp-state-8-fields">zkApp State (8 Fields)</a>
+<a class="toc-level-3" href="#events">Events</a>
+<a class="toc-level-3" href="#actions">Actions</a>
+<a class="toc-level-2" href="#3-display-strategy-specification">3. Display Strategy — Specification</a>
+<a class="toc-level-3" href="#data-flow">Data flow</a>
+<a class="toc-level-3" href="#milestone-scope">Milestone scope</a>
+<a class="toc-level-2" href="#4-contract-registry-specification">4. Contract Registry — Specification</a>
+<a class="toc-level-3" href="#41-schema-versioning">4.1 Schema versioning</a>
+<a class="toc-level-3" href="#42-kv-layout">4.2 KV layout</a>
+<a class="toc-level-3" href="#43-submission-shape">4.3 Submission shape</a>
+<a class="toc-level-3" href="#44-decoder-runtime">4.4 Decoder runtime</a>
+<a class="toc-level-3" href="#45-verification-grade">4.5 Verification grade</a>
+<a class="toc-level-2" href="#5-surrealdb-schema-impact">5. SurrealDB Schema Impact</a>
+<a class="toc-level-3" href="#key-design-decision">Key Design Decision</a>
+<a class="toc-level-3" href="#account-table-additions">account Table Additions</a>
+<a class="toc-level-3" href="#account-table-actionstate-vector">account Table — action_state vector</a>
+<a class="toc-level-3" href="#zkappevent-table">zkapp_event Table</a>
+<a class="toc-level-3" href="#zkappaction-table">zkapp_action Table</a>
+<a class="toc-level-2" href="#6-indexer-processing">6. Indexer Processing</a>
+<a class="toc-level-3" href="#61-set-keep-semantics-why-the-indexer-ignores-them">6.1 Set / Keep Semantics — Why the Indexer Ignores Them</a>
+<a class="toc-level-3" href="#62-action-state-computation">6.2 Action State Computation</a>
+<a class="toc-level-2" href="#7-api-shape-specification">7. API Shape — Specification</a>
+<a class="toc-level-3" href="#71-graphql-types-and-queries">7.1 GraphQL types and queries</a>
+<a class="toc-level-3" href="#72-ui-join-default-contract-page">7.2 UI join (default contract page)</a>
+<a class="toc-level-2" href="#8-rollback-handling-consumer-side-revert-by-targetledgerhash">8. Rollback Handling — Consumer-Side Revert by target_ledger_hash</a>
+<a class="toc-level-2" href="#9-open-questions-resolved">9. Open Questions — Resolved</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="spike-003-zkapp-state-events-and-actions-display-results" tabindex="-1"><a class="header-anchor" href="#spike-003-zkapp-state-events-and-actions-display-results">Spike 003: zkApp State, Events, and Actions Display — Results</a></h1>
+<p><strong>Status:</strong> Complete
+<strong>Date:</strong> 2026-04-07</p>
+<hr>
+<h2 id="1-explorer-survey" tabindex="-1"><a class="header-anchor" href="#1-explorer-survey">1. Explorer Survey</a></h2>
+<h3 id="minascan-mina-l1-explorer" tabindex="-1"><a class="header-anchor" href="#minascan-mina-l1-explorer">Minascan (Mina L1 Explorer)</a></h3>
+<ul>
+<li><strong>Contract verification</strong> supported — developers submit metadata alongside verified contracts for human-readable display of events/actions.</li>
+<li><strong>Without verification</strong>, state fields are raw field elements with no labels.</li>
+<li><strong>zkApp state</strong> available via GraphQL (<code>zkappState</code>, <code>leafHash</code>, merkle path).</li>
+</ul>
+<p><strong>Key takeaway:</strong> Developer-opt-in. No automatic decoding.</p>
+<h3 id="zekoscan-zeko-l2-explorer" tabindex="-1"><a class="header-anchor" href="#zekoscan-zeko-l2-explorer">Zekoscan (Zeko L2 Explorer)</a></h3>
+<ul>
+<li>Shows zkApp transactions on address pages, but <strong>no decoded state/events/actions display</strong>.</li>
+<li>No contract verification flow.</li>
+</ul>
+<p><strong>Key takeaway:</strong> Low bar. Room to differentiate.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Minascan</th>
+<th>Zekoscan</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw state fields</td>
+<td>Yes (via GraphQL)</td>
+<td>Limited</td>
+</tr>
+<tr>
+<td>Labeled state fields</td>
+<td>Yes (verified contracts only)</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Event display</td>
+<td>Yes (human-readable with metadata)</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Action display</td>
+<td>Yes (human-readable with metadata)</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Contract verification</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="2-o1js-data-model" tabindex="-1"><a class="header-anchor" href="#2-o1js-data-model">2. o1js Data Model</a></h2>
+<h3 id="zkapp-state-8-fields" tabindex="-1"><a class="header-anchor" href="#zkapp-state-8-fields">zkApp State (8 Fields)</a></h3>
+<p>Each zkApp account stores exactly <strong>8 Field elements</strong> (each ~32 bytes / 256 bits) as on-chain state. Declared in o1js:</p>
+<pre><code class="language-typescript">class MyContract extends SmartContract {
+  @state(Field) num = State&lt;Field&gt;();
+  @state(UInt64) balance = State&lt;UInt64&gt;();
+  @state(PublicKey) owner = State&lt;PublicKey&gt;();  // consumes 2 Fields (x, isOdd)
+  // ...up to 8 Fields total
+}
+</code></pre>
+<p><strong>Display implications:</strong></p>
+<ul>
+<li>A single <code>@state</code> may consume 1 or 2 Fields depending on the type (<code>PublicKey</code> uses 2, <code>Field</code>/<code>UInt64</code>/<code>Bool</code> use 1).</li>
+<li>Without metadata, there is no way to know which fields belong to which <code>@state</code> variable or what type they represent.</li>
+<li>The raw representation is always an array of 8 field element strings.</li>
+</ul>
+<h3 id="events" tabindex="-1"><a class="header-anchor" href="#events">Events</a></h3>
+<p>Events are public arbitrary data emitted with transactions:</p>
+<pre><code class="language-typescript">events = {
+  'add-merkle-leaf': Field,
+  'update': MyCustomStruct,
+};
+this.emitEvent('add-merkle-leaf', newLeaf);
+</code></pre>
+<ul>
+<li>Each event has a <strong>name</strong> (string) and <strong>data</strong> (array of Field elements).</li>
+<li>Event types are defined in the contract source but <strong>not stored on-chain</strong> — only the raw field arrays are persisted.</li>
+<li>Events cannot be accessed provably inside smart contracts (read-only from outside via <code>fetchEvents()</code>).</li>
+</ul>
+<h3 id="actions" tabindex="-1"><a class="header-anchor" href="#actions">Actions</a></h3>
+<p>Actions are structurally similar to events but have additional power:</p>
+<pre><code class="language-typescript">this.reducer.dispatch(action);
+this.reducer.reduce(actions, State, callback);
+</code></pre>
+<ul>
+<li>Actions maintain an <strong>action state</strong> — a rolling hash commitment (<code>actionState</code>) that proves which actions were dispatched.</li>
+<li>Actions can be <strong>processed inside smart contracts</strong> via the reducer pattern, enabling concurrent state updates.</li>
+<li>Actions have a <strong>sequence number</strong> and <strong>state hash</strong> that tracks the action accumulator progression.</li>
+</ul>
+<hr>
+<h2 id="3-display-strategy-specification" tabindex="-1"><a class="header-anchor" href="#3-display-strategy-specification">3. Display Strategy — Specification</a></h2>
+<p>The explorer renders raw fields by default and overlays labels when a contract has a registered schema. The system has four cooperating pieces and the boundary between them is fixed:</p>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Responsibility</th>
+<th>Stores</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Indexer</strong></td>
+<td>Persist the raw 8-field state, raw event field arrays, and raw action field arrays exactly as the sequencer publishes them. Never reads schemas.</td>
+<td>SurrealDB</td>
+</tr>
+<tr>
+<td><strong>Registry repo</strong> (<code>zeko-contract-registry</code>, separate public repo)</td>
+<td>Hold one versioned submission per contract — <code>contracts/&lt;name&gt;/contract.json</code> + <code>contracts/&lt;name&gt;/fixtures.json</code>. PR + CI is the only write path.</td>
+<td>Git</td>
+</tr>
+<tr>
+<td><strong>Cloudflare KV</strong></td>
+<td>Runtime schema store. One entry per <code>(network, address)</code> pair — a single submission with <code>meta.networks: [&quot;zeko-m-devnet&quot;, ...]</code> produces one KV entry per listed network. Written by a maintainer-triggered <code>workflow_dispatch</code> publish job, read by the Contract Registry API.</td>
+<td>Cloudflare KV</td>
+</tr>
+<tr>
+<td><strong>Contract Registry API</strong></td>
+<td>Standalone GraphQL service in this monorepo (sibling of the Explorer and Bridge APIs). Exposes <code>contractSchema(network, address)</code> as an edge-cached pass-through over Cloudflare KV. Composed through the unified Hive gateway (spike 4) so the UI fetches raw fields and labels in one round trip.</td>
+<td>— (KV is the store)</td>
+</tr>
+<tr>
+<td><strong>UI</strong></td>
+<td>Calls the unified gateway, runs <code>@zeko/contract-schema</code> in the browser to label raw fields against the schema, and renders both side by side.</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="data-flow" tabindex="-1"><a class="header-anchor" href="#data-flow">Data flow</a></h3>
+<pre><code>Author opens PR → CI runs `bun run verify &lt;dir&gt;` → maintainer merges to main
+                                                               │
+                                                      maintainer triggers
+                                                     `workflow_dispatch`
+                                                               │
+                                      `bun run upload put &lt;dir&gt;` (one PUT per network)
+                                                               │
+                                                       Cloudflare KV
+                                                               │
+                                            contract-registry-api: contractSchema(net, addr)
+                                                               │
+                                            unified Hive gateway (spike 4)
+                                                               │
+                             raw fields (Explorer API) + labels (UI runs interpreter)
+</code></pre>
+<p>Publish is never automatic. The merge is the review signal; <code>workflow_dispatch</code> is the deploy signal. Decoding is a pure function of <code>(raw_fields, schema)</code> and runs in the UI — the unified gateway gives the UI both inputs in a single round trip.</p>
+<h3 id="milestone-scope" tabindex="-1"><a class="header-anchor" href="#milestone-scope">Milestone scope</a></h3>
+<table>
+<thead>
+<tr>
+<th>Milestone</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>M1 (backend)</strong></td>
+<td>Stand up <code>zeko-contract-registry</code> with the Bun verify CLI, the <code>verify</code> GitHub Actions job (runs on PRs), and the <code>publish</code> job (runs on <code>workflow_dispatch</code> only). Publish <code>@zeko/contract-schema</code> (JSON Schema v1 + TS types + interpreter + signature helper + TypeScript upload script). Stand up a standalone <strong>Contract Registry API</strong> in this monorepo (sibling of <code>explorer-api</code> and <code>bridge-api</code>) exposing the <code>ContractSchema</code> type and <code>contractSchema(network, address)</code> query as an edge-cached KV pass-through; the unified Hive gateway (spike 4) composes it with the Explorer and Bridge APIs. Seed PRs for Zeko bridge outer + inner.</td>
+</tr>
+<tr>
+<td><strong>M2 (frontend)</strong></td>
+<td>Contract page with State / Events / Actions / Deployments tabs. UI queries <code>contractSchema</code>, calls the interpreter, renders labeled values next to raw fields. Grade badge per contract. Raw-only fallback for unknown contracts with a &quot;Submit this contract&quot; CTA pointing at the registry's PR template.</td>
+</tr>
+</tbody>
+</table>
+<p>The full pipeline specification — versioned JSON Schema, DSL, verify stages, signature scheme, CI workflow, TypeScript upload script, and KV layout — is in <a href="./addendums/addendum-contract-verification.html"><code>addendums/addendum-contract-verification.md</code></a>. A runnable example with verbatim CI output for every flow is in <a href="addendums/examples/"><code>addendums/examples/</code></a>.</p>
+<hr>
+<h2 id="4-contract-registry-specification" tabindex="-1"><a class="header-anchor" href="#4-contract-registry-specification">4. Contract Registry — Specification</a></h2>
+<p>The registry is a separate public repository (<code>zeko-contract-registry</code>). Each submission is a directory with two files: <code>contracts/&lt;name&gt;/contract.json</code> (the schema-validated payload that lands in KV) and <code>contracts/&lt;name&gt;/fixtures.json</code> (golden tests, verified in CI, never uploaded). Submissions conform to <a href="addendums/examples/contract.v1.schema.json"><code>addendums/examples/contract.v1.schema.json</code></a>. The full DSL, verify pipeline, signature scheme, CI workflow, and TypeScript upload script are documented in <a href="./addendums/addendum-contract-verification.html"><code>addendums/addendum-contract-verification.md</code></a>.</p>
+<h3 id="41-schema-versioning" tabindex="-1"><a class="header-anchor" href="#41-schema-versioning">4.1 Schema versioning</a></h3>
+<p>Every <code>contract.json</code> declares <code>&quot;version&quot;: 1</code>. The schema file is named <code>contract.v1.schema.json</code> and its JSON Schema <code>$id</code> is <code>https://zeko.io/schema/v1/contract.json</code>. Future breaking shape changes ship as <code>contract.v2.schema.json</code> with <code>&quot;version&quot;: 2</code>; old entries continue to validate against v1 until migrated. The explorer dispatches to the matching interpreter by reading <code>version</code> at decode time. Not versioning the payload would bake an implicit &quot;always v1&quot; assumption into every reader.</p>
+<h3 id="42-kv-layout" tabindex="-1"><a class="header-anchor" href="#42-kv-layout">4.2 KV layout</a></h3>
+<p>One KV entry per <code>(network, address)</code> pair. A single submission with <code>meta.networks: [&quot;zeko-m-devnet&quot;, &quot;zeko-m-mainnet&quot;]</code> produces two entries with the same value.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+<th>Writer</th>
+<th>Reader</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>${network}:${address}</code> (e.g. <code>zeko-m-devnet:B62qrSyBR…</code>)</td>
+<td>The <code>contract.json</code> bytes, exactly as merged</td>
+<td><code>bun run upload put &lt;dir&gt;</code> (TypeScript script calling the Cloudflare KV REST API), invoked by the registry's <code>publish</code> job on maintainer-triggered <code>workflow_dispatch</code></td>
+<td><code>contractSchema(network, address)</code> resolver in the standalone Contract Registry API</td>
+</tr>
+</tbody>
+</table>
+<p>Flat layout. Multi-network deployments are a property of the submission, not of the file path — there is no <code>contracts/&lt;network&gt;/</code> subtree to keep in sync. There is no compaction, no indexing layer, no derived values.</p>
+<h3 id="43-submission-shape" tabindex="-1"><a class="header-anchor" href="#43-submission-shape">4.3 Submission shape</a></h3>
+<p>The canonical example is the LuminaPool contract — see §2 of the addendum for the full <code>contract.json</code> with three event variants (AddLiquidity, ReceiveMina, Swap) plus <code>fixtures.json</code> with four golden fixtures, all matching real on-chain values from <code>B62qrSyBR5jLgekkwjDdpt6UX8FfYntYB1uXydFyViWMFLkrGSceFEV</code> on <code>zeko-m-devnet</code>.</p>
+<p>Every <code>contract.json</code> has at minimum: <code>version: 1</code>, <code>meta</code> (<code>address</code>, <code>networks: [...]</code>, <code>name</code>), <code>state</code> (<code>{ slots }</code>), and optionally <code>events</code>, <code>actions</code>, <code>types</code>, <code>owner</code>. Events and actions take exactly one of three shapes: <code>null</code>, <code>{ fields }</code> (single shape), or <code>{ discriminator: { at }, variants }</code> (multi-shape, tag at slot <code>at</code> selects the variant).</p>
+<p><code>fixtures.json</code> is a test artefact validated by the <code>FixtureFile</code> TypeScript type; it is never uploaded to KV and not part of the JSON Schema. Authors submit it alongside <code>contract.json</code> so CI has deterministic inputs to exercise the interpreter against.</p>
+<h3 id="44-decoder-runtime" tabindex="-1"><a class="header-anchor" href="#44-decoder-runtime">4.4 Decoder runtime</a></h3>
+<p>The decoder is a pure TypeScript module exported from <code>@zeko/contract-schema</code>:</p>
+<pre><code class="language-ts">decodeState(submission, raw: readonly string[]) → Record&lt;string, unknown&gt;
+decodeEventOrAction(variants, raw: readonly string[], types) → Record&lt;string, unknown&gt; | null
+</code></pre>
+<p>Both functions run in the UI. An unknown discriminator value, a slot that reads past the raw array, or any other decoder error returns <code>null</code> so the caller can fall back to raw fields without a hard failure.</p>
+<h3 id="45-verification-grade" tabindex="-1"><a class="header-anchor" href="#45-verification-grade">4.5 Verification grade</a></h3>
+<p>The verify CLI assigns one of three grades, surfaced in the response the UI receives:</p>
+<table>
+<thead>
+<tr>
+<th>Grade</th>
+<th>Earned when</th>
+<th>UI badge</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>owner-signed</code></td>
+<td>The submission's <code>owner.signature</code> verifies against <code>meta.address</code></td>
+<td>&quot;Owner-signed by <code>B62q…</code>&quot;</td>
+</tr>
+<tr>
+<td><code>source-linked</code></td>
+<td><code>meta.source</code> + <code>meta.vkeyHash</code> are present and the build matches</td>
+<td>&quot;Source-linked to <code>&lt;repo&gt;@&lt;commit&gt;</code>&quot;</td>
+</tr>
+<tr>
+<td><code>community-submitted</code></td>
+<td>Schema, semantic checks, and fixtures pass without owner or source</td>
+<td>&quot;Community-submitted, fixtures verified&quot;</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-surrealdb-schema-impact" tabindex="-1"><a class="header-anchor" href="#5-surrealdb-schema-impact">5. SurrealDB Schema Impact</a></h2>
+<h3 id="key-design-decision" tabindex="-1"><a class="header-anchor" href="#key-design-decision">Key Design Decision</a></h3>
+<p><strong>Raw fields stored, labels applied at query time.</strong> The database stores raw field element strings. The API layer applies labels from the registry at resolution time. This avoids re-indexing when registry entries change, and preserves the raw source of truth.</p>
+<p><strong>No <code>decoded_fields</code> column.</strong> The PRD mentions &quot;decoded fields&quot; — after investigation, decoding is a view concern (API layer), not a storage concern, because:</p>
+<ol>
+<li>Registry can change without re-indexing.</li>
+<li>Different consumers want different representations (hex, decimal, labeled).</li>
+<li>Raw data is the source of truth.</li>
+</ol>
+<h3 id="account-table-additions" tabindex="-1"><a class="header-anchor" href="#account-table-additions"><code>account</code> Table Additions</a></h3>
+<pre><code class="language-surql">DEFINE FIELD zkapp_state ON account TYPE option&lt;array&lt;string, 8&gt;&gt;;
+DEFINE FIELD verification_key_hash ON account TYPE option&lt;string&gt;;
+DEFINE FIELD zkapp_uri ON account TYPE option&lt;string&gt;;
+
+DEFINE INDEX idx_account_vkey ON account FIELDS verification_key_hash;
+</code></pre>
+<h3 id="account-table-actionstate-vector" tabindex="-1"><a class="header-anchor" href="#account-table-actionstate-vector"><code>account</code> Table — action_state vector</a></h3>
+<p>The account record also stores the current 5-element action_state vector:</p>
+<pre><code class="language-surql">DEFINE FIELD action_state ON account TYPE option&lt;array&lt;string, 5&gt;&gt;;
+</code></pre>
+<p>This is the post-state from <code>changed_accounts[].account.zkapp.action_state</code> — the head (<code>[0]</code>) is the most recent rolling hash, used as the prior state when the next action arrives.</p>
+<h3 id="zkappevent-table" tabindex="-1"><a class="header-anchor" href="#zkappevent-table"><code>zkapp_event</code> Table</a></h3>
+<pre><code class="language-surql">DEFINE TABLE zkapp_event SCHEMAFULL;
+DEFINE FIELD id ON zkapp_event TYPE string;  -- deterministic: {tx_hash}:{account}:{event_index}
+DEFINE FIELD transaction ON zkapp_event TYPE record&lt;transaction&gt;;
+DEFINE FIELD emitting_account ON zkapp_event TYPE record&lt;account&gt;;
+DEFINE FIELD event_index ON zkapp_event TYPE int;
+DEFINE FIELD fields ON zkapp_event TYPE array&lt;string&gt;;  -- raw field elements
+DEFINE FIELD timestamp ON zkapp_event TYPE datetime;
+DEFINE FIELD sequence_number ON zkapp_event TYPE int;
+DEFINE FIELD target_ledger_hash ON zkapp_event TYPE string;  -- for consumer-side rollback revert
+
+DEFINE INDEX idx_event_account ON zkapp_event FIELDS emitting_account;
+DEFINE INDEX idx_event_tx ON zkapp_event FIELDS transaction;
+DEFINE INDEX idx_event_seq ON zkapp_event FIELDS sequence_number;
+DEFINE INDEX idx_event_ledger ON zkapp_event FIELDS target_ledger_hash;
+</code></pre>
+<h3 id="zkappaction-table" tabindex="-1"><a class="header-anchor" href="#zkappaction-table"><code>zkapp_action</code> Table</a></h3>
+<pre><code class="language-surql">DEFINE TABLE zkapp_action SCHEMAFULL;
+DEFINE FIELD id ON zkapp_action TYPE string;  -- deterministic: {tx_hash}:{account}:{action_index}
+DEFINE FIELD transaction ON zkapp_action TYPE record&lt;transaction&gt;;
+DEFINE FIELD emitting_account ON zkapp_action TYPE record&lt;account&gt;;
+DEFINE FIELD action_index ON zkapp_action TYPE int;
+DEFINE FIELD fields ON zkapp_action TYPE array&lt;string&gt;;  -- raw field elements
+DEFINE FIELD before_action_state ON zkapp_action TYPE string;  -- rolling hash before this action
+DEFINE FIELD action_state ON zkapp_action TYPE string;         -- rolling hash after this action (chain key)
+DEFINE FIELD timestamp ON zkapp_action TYPE datetime;
+DEFINE FIELD sequence_number ON zkapp_action TYPE int;
+DEFINE FIELD target_ledger_hash ON zkapp_action TYPE string;  -- for consumer-side rollback revert
+
+DEFINE INDEX idx_action_account ON zkapp_action FIELDS emitting_account;
+DEFINE INDEX idx_action_tx ON zkapp_action FIELDS transaction;
+DEFINE INDEX idx_action_state ON zkapp_action FIELDS action_state UNIQUE;
+DEFINE INDEX idx_action_before ON zkapp_action FIELDS before_action_state;
+DEFINE INDEX idx_action_seq ON zkapp_action FIELDS sequence_number;
+DEFINE INDEX idx_action_ledger ON zkapp_action FIELDS target_ledger_hash;
+</code></pre>
+<p>The <code>before_action_state</code> / <code>action_state</code> pair gives the actions a chain structure matching the bridge <code>outer_action.before_state</code> / <code>after_state</code> convention from spike 002. This enables &quot;list actions after action_state X&quot; queries (common for reducer consumers).</p>
+<hr>
+<h2 id="6-indexer-processing" tabindex="-1"><a class="header-anchor" href="#6-indexer-processing">6. Indexer Processing</a></h2>
+<p>When the indexer receives a <code>zeko.l2.transactions</code> message with <code>command.type === &quot;zkapp_command&quot;</code>:</p>
+<pre><code>NATS message received
+    │
+    ├─► Extract changed_accounts[].account.zkapp.{app_state, action_state, ...}
+    │   → Upsert account records with zkapp_state array + verification_key_hash + action_state vector
+    │
+    ├─► Extract command.account_updates[]
+    │   → For each account_update:
+    │       ├─► If update has events → create zkapp_event records
+    │       └─► If update has actions → create zkapp_action records (with before/after action state)
+    │
+    └─► Link events/actions to transaction and emitting account, tag with target_ledger_hash
+</code></pre>
+<p>Each <code>account_update</code> contains:</p>
+<pre><code class="language-json">{
+  &quot;body&quot;: {
+    &quot;public_key&quot;: &quot;&lt;emitting account&gt;&quot;,
+    &quot;update&quot;: {
+      &quot;app_state&quot;: [&quot;Set &lt;field&gt;&quot; | &quot;Keep&quot;, ...8 entries],
+      &quot;verification_key&quot;: { &quot;data&quot;: &quot;...&quot;, &quot;hash&quot;: &quot;...&quot; } | null
+    },
+    &quot;actions&quot;: [[&quot;&lt;field&gt;&quot;, &quot;&lt;field&gt;&quot;, ...], ...],
+    &quot;events&quot;: [[&quot;&lt;field&gt;&quot;, &quot;&lt;field&gt;&quot;, ...], ...],
+    &quot;preconditions&quot;: { ... }
+  }
+}
+</code></pre>
+<p>The indexer should:</p>
+<ol>
+<li><strong>Events</strong>: For each field array in <code>account_update.body.events</code> → create a <code>zkapp_event</code> record linked to the transaction and emitting account.</li>
+<li><strong>Actions</strong>: For each field array in <code>account_update.body.actions</code> → create a <code>zkapp_action</code> record with <code>before_action_state</code> and <code>after_action_state</code>, linked to the transaction and emitting account.</li>
+<li><strong>State</strong>: Use the post-state from <code>changed_accounts[].account.zkapp</code>. The indexer does <strong>not</strong> interpret <code>account_update.body.update.app_state</code> <code>Set</code>/<code>Keep</code> operations itself — see §6.1.</li>
+<li><strong>Verification key</strong>: Extract <code>.hash</code> from <code>account_update.body.update.verification_key</code> when present, store on account.</li>
+<li><strong>Tag with target_ledger_hash</strong>: Every zkApp record (state row, event, action) is tagged with <code>target_ledger_hash</code> so the consumer-side rollback revert (§10) can drop records by hash.</li>
+</ol>
+<h3 id="61-set-keep-semantics-why-the-indexer-ignores-them" tabindex="-1"><a class="header-anchor" href="#61-set-keep-semantics-why-the-indexer-ignores-them">6.1 <code>Set</code> / <code>Keep</code> Semantics — Why the Indexer Ignores Them</a></h3>
+<p>In Mina, each zkApp state slot in an <code>account_update</code> is one of two markers:</p>
+<ul>
+<li><code>Set &lt;field&gt;</code> — replace the stored slot with the given field element</li>
+<li><code>Keep</code> — leave the stored slot unchanged</li>
+</ul>
+<p><strong>The sequencer has already applied these operations before publishing</strong> to NATS. The <code>changed_accounts[].account.zkapp.app_state</code> array in the NATS payload is the fully-resolved <strong>post-state</strong> of the account — an 8-element field array with all <code>Set</code>/<code>Keep</code> operations from every account_update in the transaction collapsed into concrete values. The indexer persists this array verbatim.</p>
+<p><strong>Consequence:</strong> The indexer never needs to read <code>account_update.body.update.app_state</code>. That field is useful only to consumers that want to display &quot;this transaction changed slot 3 from A to B&quot; (a transaction-level diff view). For state storage, the post-state in <code>changed_accounts</code> is authoritative and already correct.</p>
+<p>This is also why <code>Keep</code> does not appear in the stored schema — by the time data reaches SurrealDB it is always a concrete field element.</p>
+<h3 id="62-action-state-computation" tabindex="-1"><a class="header-anchor" href="#62-action-state-computation">6.2 Action State Computation</a></h3>
+<p>Each account has an on-chain <code>action_state</code>: a 5-element field vector that commits to the history of dispatched actions (Mina <code>Zkapp_account.action_state</code>). The head (<code>action_state[0]</code>) is the most recent rolling hash; elements <code>[1..4]</code> are previous hashes retained for reducer processing.</p>
+<p>The per-action <code>action_state</code> stored in the <code>zkapp_action</code> table is the <strong>rolling hash after that action was applied</strong>. It is derived deterministically using the Mina formula:</p>
+<pre><code>after_action_state = Poseidon.hash([before_action_state, actions_commitment])
+actions_commitment = Poseidon.hash_with_prefix(&quot;MinaZkappActions*******&quot;,
+                       [field_1, field_2, ..., field_k])
+</code></pre>
+<p>where <code>field_1..field_k</code> are the raw fields of the action as emitted in <code>account_update.body.actions[i]</code>.</p>
+<p><strong>Data sources available to the indexer:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>What it gives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>changed_accounts[].account.zkapp.action_state</code> (post-state)</td>
+<td>The 5-element action state vector after the whole transaction. <code>[0]</code> is the post-state head.</td>
+</tr>
+<tr>
+<td>Previous account record in SurrealDB</td>
+<td>The prior <code>[0]</code> (i.e., the <code>before_action_state</code> of the first action in the current transaction for this account)</td>
+</tr>
+<tr>
+<td><code>account_update.body.actions[i]</code></td>
+<td>Raw field arrays for actions emitted in this update</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Indexer algorithm (per emitting account, per transaction):</strong></p>
+<ol>
+<li>Load prior <code>action_state[0]</code> from the account record → <code>s_0</code> (or genesis empty hash if first action).</li>
+<li>For each action <code>A_i</code> (in declaration order across this transaction's account_updates for this account):
+<ul>
+<li><code>actions_commitment = Poseidon.hash_with_prefix(&quot;MinaZkappActions*******&quot;, A_i.fields)</code></li>
+<li><code>s_i = Poseidon.hash([s_{i-1}, actions_commitment])</code></li>
+<li>Store <code>zkapp_action{ before_action_state = s_{i-1}, action_state = s_i, fields = A_i.fields, ... }</code></li>
+</ul>
+</li>
+<li>Verify <code>s_N</code> matches <code>changed_accounts[account].zkapp.action_state[0]</code>. If not → log a consistency error and halt (protects against computation drift from protocol updates).</li>
+</ol>
+<p>The Mina prefix string and algorithm are documented in <code>mina/src/lib/mina_base/zkapp_account.ml</code> and <code>o1js/src/lib/mina/actions.ts</code>. An OCaml/TypeScript port is implementation work for Milestone 1, not spike work; the spike's responsibility is confirming the data is derivable from the NATS payload, which it is.</p>
+<hr>
+<h2 id="7-api-shape-specification" tabindex="-1"><a class="header-anchor" href="#7-api-shape-specification">7. API Shape — Specification</a></h2>
+<p>The explorer reads zkApp display data through the unified Hive gateway (designed in spike 4):</p>
+<ul>
+<li><strong>Explorer API</strong> — indexed on-chain data (accounts, events, actions) returned as raw fields only.</li>
+<li><strong>Contract Registry API</strong> — a single <code>contractSchema(network, address)</code> query reading from Cloudflare KV.</li>
+</ul>
+<p>The gateway joins them so a UI page can fetch raw fields and labels in one round trip. Decoding — running <code>@zeko/contract-schema</code>'s interpreter against <code>(raw_fields, schema)</code> — runs in the UI.</p>
+<h3 id="71-graphql-types-and-queries" tabindex="-1"><a class="header-anchor" href="#71-graphql-types-and-queries">7.1 GraphQL types and queries</a></h3>
+<pre><code class="language-graphql">scalar JSON
+
+type Account {
+  # ...existing fields...
+  zkappState: [String!]            # 8 raw field elements, null for non-zkApp
+  verificationKeyHash: String
+  zkappUri: String
+  events(first: Int, after: String): ZkappEventConnection!
+  actions(first: Int, after: String): ZkappActionConnection!
+}
+
+type ZkappEvent {
+  id: String!
+  transaction: Transaction!
+  emittingAccount: Account!
+  eventIndex: Int!
+  fields: [String!]!               # raw field elements
+  timestamp: DateTime!
+  sequenceNumber: Int!
+}
+
+type ZkappAction {
+  id: String!
+  transaction: Transaction!
+  emittingAccount: Account!
+  actionIndex: Int!
+  fields: [String!]!               # raw field elements
+  actionState: String!
+  timestamp: DateTime!
+  sequenceNumber: Int!
+}
+
+type ContractSchema {
+  network: String!                 # &quot;zeko-m-devnet&quot; | &quot;zeko-m-mainnet&quot;
+  address: String!
+  version: Int!                    # currently always 1
+  grade: String!                   # &quot;owner-signed&quot; | &quot;source-linked&quot; | &quot;community-submitted&quot;
+  submission: JSON!                # the contract.json bytes as merged in the registry
+}
+
+type Query {
+  # ...existing queries...
+  contractSchema(network: String!, address: String!): ContractSchema
+}
+</code></pre>
+<p>The Explorer API's <code>Account</code>/<code>ZkappEvent</code>/<code>ZkappAction</code> types return raw fields only — no <code>labeledState</code>, no <code>labeledFields</code>, no <code>decoded</code> on those types. Decoding belongs on a separate axis from indexed data: the indexer is unaware of contract schemas, and mixing them in would force reindexing whenever a registry entry changes.</p>
+<p>The Contract Registry API's <code>contractSchema(network, address)</code> resolver is a thin reader over KV: one <code>GET</code> on key <code>${network}:${address}</code>, return <code>null</code> on miss, 5-minute edge cache on hit.</p>
+<h3 id="72-ui-join-default-contract-page" tabindex="-1"><a class="header-anchor" href="#72-ui-join-default-contract-page">7.2 UI join (default contract page)</a></h3>
+<pre><code class="language-ts">// One round trip to the Hive gateway — Explorer API + Contract Registry API
+// are joined server-side.
+const { account, contractSchema: schema } = await graphql.query(CONTRACT_PAGE_QUERY, {
+  address,
+  network,
+});
+
+const submission = schema?.submission ?? null;
+
+const labeledState = submission
+  ? decodeState(submission, account.zkappState)
+  : null;
+
+const labeledEvents = account.events.nodes.map(e =&gt; ({
+  ...e,
+  labeled: submission ? decodeEventOrAction(submission.events, e.fields, submission.types) : null,
+}));
+</code></pre>
+<p>Both views (raw + labeled) are rendered side-by-side. When <code>schema</code> is null the page shows raw fields only and a &quot;Submit this contract&quot; CTA pointing at the registry's PR template.</p>
+<hr>
+<h2 id="8-rollback-handling-consumer-side-revert-by-targetledgerhash" tabindex="-1"><a class="header-anchor" href="#8-rollback-handling-consumer-side-revert-by-targetledgerhash">8. Rollback Handling — Consumer-Side Revert by <code>target_ledger_hash</code></a></h2>
+<p>zkApp state, events, and actions live entirely inside L2 transactions, so they are subject to the same L2 rollback mechanism as other transaction data (spike 001 §5, PRD §7.5). There is no <code>zeko.l2.rollbacks</code> subject — the indexer detects rollbacks itself from hash chain breaks on <code>zeko.l2.transactions</code>.</p>
+<p><strong>Detection (delegated to the generic transaction consumer):</strong></p>
+<ul>
+<li><code>M[n].source_ledger_hash != M[n-1].target_ledger_hash</code></li>
+<li>If <code>M[n].source_ledger_hash</code> matches an earlier <code>M[k].target_ledger_hash</code> → rollback of <code>M[k+1]..M[n-1]</code></li>
+<li>Otherwise → gap, triggers backfill</li>
+</ul>
+<p><strong>zkApp-specific revert actions when the transaction consumer identifies rolled-back transactions:</strong></p>
+<ol>
+<li><strong>Events</strong>: <code>DELETE zkapp_event WHERE target_ledger_hash IN &lt;rolled-back hashes&gt;</code>. These are purely derived records — no cascading state.</li>
+<li><strong>Actions</strong>: <code>DELETE zkapp_action WHERE target_ledger_hash IN &lt;rolled-back hashes&gt;</code>. Because <code>action_state</code> is a uniqueness constraint and actions form a chain, the next action after the rollback will have its <code>before_action_state</code> matching the last surviving <code>action_state</code> for that account — no recomputation needed.</li>
+<li><strong>zkApp state</strong>: The account's <code>zkapp_state</code> and <code>action_state</code> must be rolled back to the values from the last surviving transaction that changed this account. Two implementation options:
+<ul>
+<li><strong>A. Snapshot per change (chosen)</strong>: Write an <code>account_activity</code> row (already proposed in PRD §5.2.6) for every zkApp state change. The revert walks <code>account_activity</code> for the account back to the last row where <code>target_ledger_hash</code> is not in the rollback set, and restores <code>zkapp_state</code> / <code>action_state</code> from that snapshot.</li>
+<li><strong>B. Recompute from NATS</strong>: Rebuild the account from the genesis point by replaying <code>zeko.l2.transactions</code>. Correct but expensive; only used as a last-resort repair.</li>
+</ul>
+</li>
+</ol>
+<p>Option A is the normal path. Option B is the fallback if <code>account_activity</code> is missing or inconsistent (e.g., after a manual DB edit).</p>
+<ol start="4">
+<li><strong>Verification key / zkApp URI</strong>: Treated as account fields, reverted the same way (from <code>account_activity</code>).</li>
+</ol>
+<p><strong>No special &quot;rolled_back&quot; state for events/actions.</strong> Unlike <code>bridge_operation</code> (spike 002 §5), which retains <code>ROLLED_BACK</code> as an observable status, events and actions are pure derivations of on-chain transactions — if the transaction is reverted, the records are deleted outright. The audit trail lives on <code>account_activity</code>.</p>
+<p>This approach piggybacks on the transaction-level rollback machinery — no zkApp-specific rollback stream is introduced, and the <code>target_ledger_hash</code> tag on every record is the only addition needed.</p>
+<hr>
+<h2 id="9-open-questions-resolved" tabindex="-1"><a class="header-anchor" href="#9-open-questions-resolved">9. Open Questions — Resolved</a></h2>
+<table>
+<thead>
+<tr>
+<th>Original Question</th>
+<th>Resolution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>How does Zekoscan display zkApp state?</td>
+<td>Minimal — shows zkApp transactions but no decoded state/events/actions.</td>
+</tr>
+<tr>
+<td>How does Minascan display zkApp state?</td>
+<td>Developer-opt-in via contract verification + custom metadata. Raw fields without verification.</td>
+</tr>
+<tr>
+<td>Community conventions for annotating state fields?</td>
+<td>None standardized. No ABI equivalent in the Mina ecosystem.</td>
+</tr>
+<tr>
+<td>How are events and actions structured?</td>
+<td>Events: named, typed field arrays via <code>emitEvent()</code>. Actions: similar but with <code>actionState</code> rolling hash and reducer processing. Both stored as raw field arrays. Event/action names are <strong>not</strong> persisted on-chain — multi-type contracts need a discriminator field (§4.1).</td>
+</tr>
+<tr>
+<td>Can field labels be associated with a deployed contract?</td>
+<td>Yes — by PR into <code>zeko-contract-registry</code> (separate repo). Each contract is a directory with <code>contract.json</code> (versioned: <code>version: 1</code>) describing state/events/actions via a small declarative DSL, plus <code>fixtures.json</code> with golden test cases. CI runs the Bun verify CLI against the fixtures (deep-equal; mismatch exits 1), optionally verifies an o1js owner signature, and optionally builds the source repo for a vkey hash compare. Publish is gated behind a maintainer-triggered <code>workflow_dispatch</code> that calls a TypeScript upload script — one Cloudflare KV <code>PUT</code> per network listed in <code>meta.networks</code>. A standalone Contract Registry API (sibling of the Explorer and Bridge APIs in this monorepo) serves the schema via a <code>contractSchema(network, address)</code> query, edge-cached. The unified Hive gateway (spike 4) composes it with the Explorer API so the UI fetches raw fields and labels in one round trip; decoding runs in the UI. Full design in <code>addendums/addendum-contract-verification.md</code>; runnable end-to-end proof at <code>addendums/examples/</code>.</td>
+</tr>
+<tr>
+<td>For Zeko's own contracts, can we hardcode labels?</td>
+<td>No — they submit through the same PR flow. Seed PRs add the bridge outer / inner on M1 launch. The bridge's <code>action[0] ∈ {&quot;0&quot;,&quot;1&quot;}</code> convention (spike 002 §1) is expressed as <code>discriminator: { at: 0 }</code> with two variants; the interpreter dispatches each action record to the matching variant at decode time.</td>
+</tr>
+<tr>
+<td>Why a static DSL instead of per-contract code?</td>
+<td>A static schema is reviewable by diff, runnable through the same interpreter in CI and the UI, and never executes user-supplied JavaScript. Golden fixtures prove the author's mental model matches the interpreter's output.</td>
+</tr>
+<tr>
+<td>How do we verify that a submitter owns the contract?</td>
+<td>Three acceptance grades. (a) <strong>Owner-signed:</strong> optional <code>owner</code> block carrying an o1js signature over the canonical payload; verified by <code>Signature.verify</code> against <code>meta.address</code> — only the deploying key can forge this. (b) <strong>Source-linked:</strong> optional <code>meta.source</code> points at a public repo and commit; CI builds it and compares the resulting vkey hash to <code>meta.vkeyHash</code>. (c) <strong>Community-submitted:</strong> neither present; accepted on PR reviewer judgment, UI displays a &quot;Community-submitted&quot; badge. Grade is surfaced in the API so the frontend can render appropriately.</td>
+</tr>
+<tr>
+<td>What queries do developers run against events/actions?</td>
+<td>By emitting account, by sequence number, by <code>action_state</code> / <code>before_action_state</code> chain walks. Reflected in SurrealDB indexes.</td>
+</tr>
+<tr>
+<td>How is <code>action_state</code> computed?</td>
+<td>Poseidon hash of (<code>before_action_state</code>, <code>actions_commitment</code>). Derivable from NATS payload — see §6.2. Post-state is cross-checked against <code>changed_accounts[].account.zkapp.action_state[0]</code>.</td>
+</tr>
+<tr>
+<td>How are <code>Set</code> / <code>Keep</code> app_state markers handled?</td>
+<td>Indexer ignores them — the sequencer has already applied them. The indexer persists the post-state array from <code>changed_accounts[].account.zkapp.app_state</code> verbatim (§6.1).</td>
+</tr>
+<tr>
+<td>How is L2 rollback handled for zkApp records?</td>
+<td>Delegated to the generic transaction-consumer rollback machinery. Every zkApp record is tagged with <code>target_ledger_hash</code>; on rollback, matching events/actions are deleted and account state is restored from <code>account_activity</code> snapshots (§8).</td>
+</tr>
+</tbody>
+</table>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/003-zkapp-state-display/results.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>
