@@ -9,7 +9,15 @@ dependsOn:
 
 tasks:
   dev:
-    command: "pnpm"
-    args: ["run", "dev"]
+    command: "../../node_modules/.bin/wrangler"
+    args: ["dev", "--local", "--port", "8788"]
     options:
       persistent: true
+
+  types:
+    command: "../../node_modules/.bin/wrangler"
+    args: ["types", "--config", "wrangler.jsonc"]
+    inputs:
+      - "wrangler.jsonc"
+    outputs:
+      - "worker-configuration.d.ts"

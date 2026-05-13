@@ -1,4 +1,4 @@
-import { renderSurrealMigration } from "@zeko/db";
+import { SURREALKIT_PROJECT_DIR } from "@zeko/db";
 import { NATS_SUBJECTS } from "@zeko/nats-protocol";
 
 console.log(
@@ -12,7 +12,7 @@ console.log(
         NATS_SUBJECTS.l1Rollbacks,
         NATS_SUBJECTS.health,
       ],
-      migrationsLoaded: renderSurrealMigration().split("\n").length,
+      surrealKitProject: SURREALKIT_PROJECT_DIR,
     },
     null,
     2,

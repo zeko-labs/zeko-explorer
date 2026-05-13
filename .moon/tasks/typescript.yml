@@ -1,5 +1,5 @@
 inheritedBy:
-  toolchains: ["javascript", "typescript"]
+  language: "typescript"
 
 fileGroups:
   sources:
@@ -14,28 +14,34 @@ fileGroups:
 
 tasks:
   build:
-    command: "pnpm"
-    args: ["exec", "tsc", "--project", "tsconfig.json"]
+    command: "../../node_modules/.bin/tsc"
+    args: ["--project", "tsconfig.json"]
     inputs:
       - "@group(sources)"
     outputs:
       - "dist"
 
   lint:
-    command: "pnpm"
-    args: ["exec", "eslint", "."]
+    command: "../../node_modules/.bin/biome"
+    args: ["check", "."]
+    inputs:
+      - "@group(sources)"
+
+  format:
+    command: "../../node_modules/.bin/biome"
+    args: ["check", "--write", "."]
     inputs:
       - "@group(sources)"
 
   test:
-    command: "pnpm"
-    args: ["exec", "vitest", "run", "--passWithNoTests"]
+    command: "../../node_modules/.bin/vitest"
+    args: ["run", "--passWithNoTests"]
     inputs:
       - "@group(sources)"
       - "@group(tests)"
 
   typecheck:
-    command: "pnpm"
-    args: ["exec", "tsc", "--project", "tsconfig.json", "--noEmit"]
+    command: "../../node_modules/.bin/tsc"
+    args: ["--project", "tsconfig.json", "--noEmit"]
     inputs:
       - "@group(sources)"

@@ -1,9 +1,3 @@
-export interface Env {
-  readonly EXPLORER_API_URL: string;
-  readonly BRIDGE_API_URL: string;
-  readonly CONTRACT_REGISTRY_API_URL: string;
-}
-
 export default {
   fetch(_request: Request, env: Env): Response {
     return Response.json({

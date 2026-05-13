@@ -1,4 +1,5 @@
 <template>
+  <NuxtRouteAnnouncer />
   <main>
     <h1>Zeko Explorer</h1>
     <p>Local frontend shell for the Zeko indexing substrate.</p>

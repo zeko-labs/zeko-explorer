@@ -1,5 +1,5 @@
-import { loadConfig } from "./config.js";
-import { describeL1Watcher } from "./service.js";
+import { loadConfig } from "./config";
+import { describeL1Watcher } from "./service";
 
 const config = loadConfig();
 

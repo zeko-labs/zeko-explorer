@@ -1,8 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "../../",
-    "types": ["@cloudflare/workers-types"]
+    "rootDir": "../../"
   },
-  "include": ["src/**/*.ts", "../../packages/*/src/**/*.ts"]
+  "include": ["src/**/*.ts", "worker-configuration.d.ts", "../../packages/*/src/**/*.ts"]
 }

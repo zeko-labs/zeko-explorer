@@ -1,8 +1,0 @@
-name = "zeko-explorer-hive-gateway"
-main = "src/index.ts"
-compatibility_date = "2026-05-13"
-
-[vars]
-EXPLORER_API_URL = "http://localhost:4101/graphql"
-BRIDGE_API_URL = "http://localhost:4102/graphql"
-CONTRACT_REGISTRY_API_URL = "http://localhost:8788/graphql"

@@ -1,0 +1,3 @@
+EXPLORER_API_URL=http://localhost:4101/graphql
+BRIDGE_API_URL=http://localhost:4102/graphql
+CONTRACT_REGISTRY_API_URL=http://localhost:8788/graphql

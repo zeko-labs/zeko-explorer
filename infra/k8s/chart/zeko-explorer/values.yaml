@@ -3,7 +3,8 @@ networkId: zeko-m-local
 images:
   nats: nats:2.10-alpine
   natsBox: natsio/nats-box:0.16.0
-  surrealdb: surrealdb/surrealdb:v2.2.2
+  surrealdb: surrealdb/surrealdb:v3
+  surrealkit: ghcr.io/surrealdb/surrealkit:latest
   l1Watcher: zeko/l1-watcher:local
   zekoIndexer: zeko/zeko-indexer:local
   explorerApi: zeko/explorer-api:local

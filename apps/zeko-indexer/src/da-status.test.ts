@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  applyFinality,
-  applySettlement,
-  emptyDaStatusState,
-} from "./da-status.js";
+import { applyFinality, applySettlement, emptyDaStatusState } from "./da-status";
 
 describe("DA status baseline derivation", () => {
   it("buffers proved finality until the matching batch exists", () => {

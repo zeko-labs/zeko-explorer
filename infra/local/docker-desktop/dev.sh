@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pnpm --parallel \
-  --filter "@zeko/hive-gateway" \
-  --filter "@zeko/contract-registry-api" \
-  --filter "@zeko/mcp-worker" \
-  --filter "@zeko/frontend" \
-  dev
+proto run moon -- run hive-gateway:dev contract-registry-api:dev mcp-worker:dev frontend:dev

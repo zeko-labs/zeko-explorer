@@ -20,10 +20,7 @@ export interface DaStatusState {
   readonly pending: ReadonlyMap<string, PendingDaAttestation>;
 }
 
-export function applySettlement(
-  state: DaStatusState,
-  event: SettlementEvent,
-): DaStatusState {
+export function applySettlement(state: DaStatusState, event: SettlementEvent): DaStatusState {
   const existing = state.batches.get(event.targetLedgerHash);
   const nextBatch: BatchDaProjection =
     existing?.daStatus === "attested"

@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-  compatibilityDate: "2026-05-13",
+  compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
   modules: [],
   nitro: {

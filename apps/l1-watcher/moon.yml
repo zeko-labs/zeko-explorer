@@ -10,7 +10,7 @@ dependsOn:
 
 tasks:
   dev:
-    command: "pnpm"
-    args: ["run", "dev"]
+    command: "node"
+    args: ["--experimental-strip-types", "--experimental-specifier-resolution=node", "src/index.ts"]
     options:
       persistent: true

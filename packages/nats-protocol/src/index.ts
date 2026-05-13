@@ -1,4 +1,17 @@
-import { z } from "zod";
+import {
+  type InferOutput,
+  integer,
+  minLength,
+  minValue,
+  number,
+  object,
+  optional,
+  picklist,
+  pipe,
+  record,
+  string,
+  unknown,
+} from "valibot";
 
 export const NATS_STREAMS = {
   l2: "zeko-l2",
@@ -16,7 +29,7 @@ export const NATS_SUBJECTS = {
   health: "zeko.health",
 } as const;
 
-export const NetworkIdSchema = z.enum([
+export const NetworkIdSchema = picklist([
   "zeko-m-local",
   "zeko-m-devnet",
   "zeko-m-alphanet",
@@ -25,30 +38,33 @@ export const NetworkIdSchema = z.enum([
   "zeko-e-mainnet",
 ]);
 
-export const FinalityEventSchema = z.object({
+const NonEmptyString = pipe(string(), minLength(1));
+const NonNegativeInteger = pipe(number(), integer(), minValue(0));
+
+export const FinalityEventSchema = object({
   network: NetworkIdSchema,
-  level: z.enum(["proved", "committed"]),
-  ledgerHash: z.string().min(1),
-  timestamp: z.string().datetime(),
+  level: picklist(["proved", "committed"]),
+  ledgerHash: NonEmptyString,
+  timestamp: string(),
 });
 
-export const SettlementEventSchema = z.object({
+export const SettlementEventSchema = object({
   network: NetworkIdSchema,
-  targetLedgerHash: z.string().min(1),
-  l1TransactionHash: z.string().min(1),
-  blockHeight: z.number().int().nonnegative(),
-  confirmations: z.number().int().nonnegative(),
-  timestamp: z.string().datetime(),
+  targetLedgerHash: NonEmptyString,
+  l1TransactionHash: NonEmptyString,
+  blockHeight: NonNegativeInteger,
+  confirmations: NonNegativeInteger,
+  timestamp: string(),
 });
 
-export const HealthEventSchema = z.object({
+export const HealthEventSchema = object({
   network: NetworkIdSchema,
-  component: z.string().min(1),
-  status: z.enum(["ok", "degraded", "down"]),
-  timestamp: z.string().datetime(),
-  details: z.record(z.unknown()).optional(),
+  component: NonEmptyString,
+  status: picklist(["ok", "degraded", "down"]),
+  timestamp: string(),
+  details: optional(record(string(), unknown())),
 });
 
-export type FinalityEvent = z.infer<typeof FinalityEventSchema>;
-export type SettlementEvent = z.infer<typeof SettlementEventSchema>;
-export type HealthEvent = z.infer<typeof HealthEventSchema>;
+export type FinalityEvent = InferOutput<typeof FinalityEventSchema>;
+export type SettlementEvent = InferOutput<typeof SettlementEventSchema>;
+export type HealthEvent = InferOutput<typeof HealthEventSchema>;

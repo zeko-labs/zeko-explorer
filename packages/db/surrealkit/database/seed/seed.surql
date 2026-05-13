@@ -1,0 +1,1 @@
+-- Local seed data is intentionally empty for the foundation stack.

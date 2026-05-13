@@ -36,11 +36,11 @@ spec:
           image: {{ .Values.images.surrealdb | quote }}
           args:
             - start
-            - --user
+            - --username
             - {{ .Values.surrealdb.rootUser | quote }}
-            - --pass
+            - --password
             - {{ .Values.surrealdb.rootPassword | quote }}
-            - rocksdb:/data/explorer.db
+            - surrealkv:/data/explorer.db
           ports:
             - name: http
               containerPort: 8000
@@ -67,8 +67,10 @@ metadata:
     app.kubernetes.io/name: surrealdb-migrations
     {{- include "zeko-explorer.labels" . | nindent 4 }}
 data:
-  001-da-status.surql: |
-    DEFINE TABLE batch SCHEMAFULL;
+  surrealkit.toml: |
+    # SurrealKit project for the Zeko Explorer read model.
+  000_schema.surql: |
+    DEFINE TABLE OVERWRITE batch SCHEMAFULL;
     DEFINE FIELD network ON batch TYPE string;
     DEFINE FIELD target_ledger_hash ON batch TYPE string;
     DEFINE FIELD da_status ON batch TYPE option<string> ASSERT $value IN ['attested'];
@@ -102,14 +104,19 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: surrealdb-migrate
-          image: {{ .Values.images.surrealdb | quote }}
+          image: {{ .Values.images.surrealkit | quote }}
+          workingDir: /work
           command: ["/bin/sh", "-ceu"]
           args:
             - |
-              surreal sql --conn http://surrealdb:8000 --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} --namespace {{ .Values.surrealdb.namespace }} --database {{ .Values.surrealdb.database }} --file /migrations/001-da-status.surql
+              surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} sync --fail-fast
           volumeMounts:
             - name: migrations
-              mountPath: /migrations
+              mountPath: /work/surrealkit.toml
+              subPath: surrealkit.toml
+            - name: migrations
+              mountPath: /work/database/schema/000_schema.surql
+              subPath: 000_schema.surql
       volumes:
         - name: migrations
           configMap:
