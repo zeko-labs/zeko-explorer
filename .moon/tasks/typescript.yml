@@ -1,0 +1,41 @@
+inheritedBy:
+  toolchains: ["javascript", "typescript"]
+
+fileGroups:
+  sources:
+    - "src/**/*"
+    - "package.json"
+    - "tsconfig.json"
+    - "/tsconfig.base.json"
+  tests:
+    - "tests/**/*"
+    - "src/**/*.test.ts"
+    - "src/**/*.spec.ts"
+
+tasks:
+  build:
+    command: "pnpm"
+    args: ["exec", "tsc", "--project", "tsconfig.json"]
+    inputs:
+      - "@group(sources)"
+    outputs:
+      - "dist"
+
+  lint:
+    command: "pnpm"
+    args: ["exec", "eslint", "."]
+    inputs:
+      - "@group(sources)"
+
+  test:
+    command: "pnpm"
+    args: ["exec", "vitest", "run", "--passWithNoTests"]
+    inputs:
+      - "@group(sources)"
+      - "@group(tests)"
+
+  typecheck:
+    command: "pnpm"
+    args: ["exec", "tsc", "--project", "tsconfig.json", "--noEmit"]
+    inputs:
+      - "@group(sources)"

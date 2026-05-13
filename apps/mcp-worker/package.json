@@ -1,0 +1,13 @@
+{
+  "name": "@zeko/mcp-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8789",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@zeko/domain": "workspace:*"
+  }
+}

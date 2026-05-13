@@ -1,0 +1,39 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "bash"
+layer: "automation"
+stack: "infrastructure"
+tags: ["infra", "kubernetes", "docker"]
+
+tasks:
+  build-local-images:
+    command: "./local/docker-desktop/build-local-images.sh"
+    inputs:
+      - "docker/**/*"
+      - "/apps/*/src/**/*"
+      - "/packages/*/src/**/*"
+      - "/package.json"
+      - "/pnpm-workspace.yaml"
+
+  dev:
+    command: "./local/docker-desktop/dev.sh"
+    options:
+      persistent: true
+
+  k8s-local-down:
+    command: "./local/docker-desktop/down.sh"
+
+  k8s-local-forward:
+    command: "./local/docker-desktop/forward.sh"
+    options:
+      persistent: true
+
+  k8s-local-up:
+    command: "./local/docker-desktop/up.sh"
+    deps:
+      - "infra:build-local-images"
+    inputs:
+      - "k8s/**/*"
+      - "local/docker-desktop/**/*"
+
+  lint:
+    script: "if command -v helm >/dev/null 2>&1; then helm lint k8s/chart/zeko-explorer --values k8s/values/local/docker-desktop.yaml; else echo 'helm not installed; skipping chart lint'; fi"

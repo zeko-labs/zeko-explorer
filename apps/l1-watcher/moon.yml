@@ -1,0 +1,16 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "typescript"
+layer: "application"
+stack: "backend"
+tags: ["kubernetes", "watcher", "nats"]
+
+dependsOn:
+  - "domain"
+  - "nats-protocol"
+
+tasks:
+  dev:
+    command: "pnpm"
+    args: ["run", "dev"]
+    options:
+      persistent: true
