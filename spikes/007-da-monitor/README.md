@@ -1,8 +1,9 @@
 # Spike 007: DA Monitor — Attestation Status Tracking
 
 **Status:** Not started
-**Blocking:** Milestone 1 (DA attestation data)
+**Blocking:** Milestone 1 baseline DA attestation data
 **Owner:** TBD
+**Results:** [results.html](./results.html)
 
 ---
 

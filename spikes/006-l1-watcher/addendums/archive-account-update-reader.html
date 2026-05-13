@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Archive-Node-API zkApp Command Query Requirement</title>
+  <style>
+:root {
+  --bg: #07111f;
+  --panel: #0f1b2e;
+  --panel-2: #13253f;
+  --ink: #e6edf7;
+  --muted: #9fb0c7;
+  --line: #2b3d57;
+  --green: #34d399;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --blue: #60a5fa;
+  --violet: #a78bfa;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+    radial-gradient(circle at 16% 0%, rgba(34,211,238,.15), transparent 30rem),
+    radial-gradient(circle at 86% 8%, rgba(167,139,250,.12), transparent 32rem),
+    var(--bg);
+  background-size: 42px 42px, 42px 42px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.58;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 80px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(15,27,46,.97), rgba(9,20,35,.97));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.24);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 24px; padding: 32px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+h1 { margin: 12px 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: 1.03; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 72ch; margin: 0; }
+.diagram { border: 1px solid var(--line); border-radius: 12px; background: #081425; min-height: 260px; display: grid; place-items: center; overflow: hidden; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.nav a { color: var(--ink); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+.toc { position: sticky; top: 18px; padding: 18px; }
+.toc h2 { font-size: 14px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.content-card { padding: 30px; }
+.content-card h1 { font-size: 42px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 28px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+strong { color: var(--ink); }
+code { color: #d8b4fe; background: rgba(216,180,254,.08); border: 1px solid rgba(216,180,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); margin: 16px 0 22px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.12); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 22px; }
+.callout { border: 1px solid var(--line); border-radius: 12px; background: rgba(19,37,63,.52); padding: 16px; }
+.callout strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.callout span { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) { .page { width: min(100% - 24px, 1180px); padding-top: 20px; } .hero, .layout { grid-template-columns: 1fr; } .toc { position: static; } .callouts { grid-template-columns: 1fr; } .content-card { padding: 22px; } }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Spike 006 · L1 Watcher</div>
+        <h1>Archive-Node-API zkApp Command Query Requirement</h1>
+        <p class="subtitle">Required Archive-Node-API query for complete Zeko-M historical bridge recovery, with fields, resolver behavior, and implementation plan.</p>
+        <nav class="nav"><a href="../results.html">Results</a><a href="../addendums/index.html">Addenda Index</a><a href="../test-scenarios/">Cucumber Scenarios</a></nav>
+      </div>
+      <div class="diagram" aria-label="Watcher runtime loop diagram"><svg viewBox="0 0 780 310" role="img"><rect width="780" height="310" fill="#081425"/><circle cx="390" cy="155" r="82" fill="#10233d" stroke="#22d3ee" stroke-width="2"/><text x="390" y="145" text-anchor="middle" fill="#e6edf7" font-size="19" font-weight="700">Watcher Core</text><text x="390" y="174" text-anchor="middle" fill="#9fb0c7" font-size="13">publish after ack + state write</text><g fill="#10233d" stroke-width="2"><rect x="45" y="52" width="180" height="64" rx="12" stroke="#34d399"/><rect x="45" y="194" width="180" height="64" rx="12" stroke="#60a5fa"/><rect x="555" y="52" width="180" height="64" rx="12" stroke="#fbbf24"/><rect x="555" y="194" width="180" height="64" rx="12" stroke="#a78bfa"/></g><g fill="#e6edf7" font-size="15" font-weight="700" text-anchor="middle"><text x="135" y="90">Live L1 Loop</text><text x="135" y="232">Archive Catch-up</text><text x="645" y="90">SurrealDB State</text><text x="645" y="232">NATS JetStream</text></g><g stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M225 84C285 84 286 120 318 130"/><path d="M225 226C285 226 286 190 318 180"/><path d="M462 130C508 110 505 84 555 84"/><path d="M462 180C508 200 505 226 555 226"/></g><defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
+    </section>
+
+    <section class="layout">
+      <div class="toc"><h2>On This Page</h2><a href="#why-this-is-required">Why This Is Required</a><a href="#consequence-if-not-fixed">Consequence If Not Fixed</a><a href="#required-upstream-api">Required Upstream API</a><a href="#upstream-pr-shape">Upstream PR Shape</a><a href="#query-contract-for-the-watcher">Query Contract For The Watcher</a><a href="#watcher-behavior-before-upstream-merge">Watcher Behavior Before Upstream Merge</a></div>
+      <article class="content-card"><h1 id="archive-node-api-zkapp-command-query-requirement">Archive-Node-API zkApp Command Query Requirement</h1>
+<h2 id="why-this-is-required">Why This Is Required</h2>
+<p>We are not planning to operate a Mina L1 node, run our own archive node, or access the archive database directly. The L1 Watcher must be able to rebuild from public APIs plus NATS retention.</p>
+<p>Archive-Node-API is already sufficient for actions on a known account:</p>
+<ul>
+<li><code>actions(input: { address: OUTER_PK, ... })</code> gives commit/witness action field arrays.</li>
+<li>This covers <code>zeko.l1.outer-actions</code> and settlement backfill.</li>
+</ul>
+<p>It is not sufficient for historical bridge-event detection:</p>
+<ul>
+<li>Deposit submissions are actions emitted by arbitrary user account updates, not by <code>OUTER_PK</code>.</li>
+<li>Cancel deposits do not emit an outer witness action.</li>
+<li>Withdrawal finalization needs transaction-level account update and event context.</li>
+<li>Archive-Node-API <code>blocks</code> currently exposes zkApp command hash/status/memo/fee payer, but not account update actions/events/app state/preconditions.</li>
+</ul>
+<h2 id="consequence-if-not-fixed">Consequence If Not Fixed</h2>
+<p>If Archive-Node-API does not expose full zkApp account updates:</p>
+<ul>
+<li>The watcher can detect bridge events only live from Mina daemon blocks and whatever <code>zeko.l1.bridge-events</code> still exists in JetStream retention.</li>
+<li>This creates an unfillable gap for any missed bridge event outside those live/retained windows. That includes data before the watcher first starts and data missed during any explorer/watcher downtime after it starts.</li>
+<li>Historical deposits before watcher launch are not recoverable through public APIs.</li>
+<li>Historical cancels are not recoverable from <code>OUTER_PK</code> actions because cancel emits no outer action.</li>
+<li>Any watcher outage longer than the Mina daemon frontier creates a permanent bridge-event gap. A shorter outage is only recoverable if the daemon still has the missed blocks in its frontier or NATS retained already-published events.</li>
+<li>Per-user bridge history becomes incomplete for old data and for any downtime gap, so the replacement for <code>findDeposits(pk)</code> / <code>findWithdrawals(pk)</code> is only correct for continuously observed periods.</li>
+<li>Rebuilding SurrealDB from NATS is only complete if JetStream still retains all <code>zeko.l1.bridge-events</code>.</li>
+</ul>
+<p>That is not acceptable for a production explorer unless product explicitly accepts both a &quot;bridge history starts at watcher deployment&quot; cutoff and permanent gaps for any watcher downtime not covered by the daemon frontier or NATS retention.</p>
+<h2 id="required-upstream-api">Required Upstream API</h2>
+<p>Add this Archive-Node-API query:</p>
+<pre><code>query ZkappCommands($from: Int!, $to: Int!) {
+  zkappCommands(input: { from: $from, to: $to, status: ALL }) {
+    blockInfo {
+      height
+      stateHash
+      parentHash
+      timestamp
+      globalSlotSinceGenesis
+      chainStatus
+      distanceFromMaxBlockHeight
+    }
+    hash
+    feePayer
+    fee
+    memo
+    status
+    failureReason
+    sequenceNumber
+    accountUpdates {
+      id
+      publicKey
+      tokenId
+      authorizationKind
+      balanceChange
+      incrementNonce
+      callDepth
+      actions
+      events
+      appState
+      accountPrecondition {
+        state
+        actionState
+        provedState
+        isNew
+      }
+      networkPrecondition {
+        globalSlotSinceGenesis
+      }
+    }
+  }
+}</code></pre>
+<p>The L1 Watcher only needs block-range pagination. Optional <code>accountPublicKey</code> filtering is useful for diagnostics, but the watcher must be able to scan all account updates because deposits are emitted by arbitrary user public keys.</p>
+<h2 id="upstream-pr-shape">Upstream PR Shape</h2>
+<p>Open a PR against <code>https://github.com/o1-labs/Archive-Node-API</code> that adds <code>Query.zkappCommands</code>.</p>
+<p>Reference implementation was validated locally against base commit <code>8e52218caf2ba1a16925ec0ac893e1c6bf7c0446</code> with:</p>
+<ul>
+<li><code>npm ci</code></li>
+<li><code>npm run codegen</code></li>
+<li><code>npm run build</code></li>
+</ul>
+<p>Files to change in the upstream PR:</p>
+<table><thead><tr>
+<th>File</th>
+<th>Change</th>
+</tr></thead><tbody>
+<tr>
+<td><code>schema.graphql</code></td>
+<td>Add <code>ZkappCommandFilterOptionsInput</code>, <code>ZkappCommandOutput</code>, <code>ZkappAccountUpdateOutput</code>, <code>ZkappAccountPrecondition</code>, <code>ZkappNetworkPrecondition</code>, and <code>Query.zkappCommands</code>.</td>
+</tr>
+<tr>
+<td><code>src/blockchain/types.ts</code></td>
+<td>Add output types matching the schema.</td>
+</tr>
+<tr>
+<td><code>src/resolvers.ts</code></td>
+<td>Add resolver wiring to <code>context.db_client.getZkappCommands</code>.</td>
+</tr>
+<tr>
+<td><code>src/db/archive-node-adapter/archive-node-adapter.interface.ts</code></td>
+<td>Add <code>getZkappCommands(input, options)</code>.</td>
+</tr>
+<tr>
+<td><code>src/db/archive-node-adapter/archive-node-adapter.ts</code></td>
+<td>Instantiate <code>ZkappCommandsService</code> and forward <code>getZkappCommands</code>.</td>
+</tr>
+<tr>
+<td><code>src/services/zkapp-commands-service/zkapp-commands-service.ts</code></td>
+<td>New service, following the existing <code>ActionsService</code>/<code>EventsService</code> pattern.</td>
+</tr>
+<tr>
+<td><code>src/services/zkapp-commands-service/zkapp-commands-service.interface.ts</code></td>
+<td>New service interface.</td>
+</tr>
+<tr>
+<td><code>src/db/sql/zkapp-commands/queries.ts</code></td>
+<td>New SQL query for block-range zkApp commands with full account update detail.</td>
+</tr>
+<tr>
+<td><code>src/db/sql/zkapp-commands/types.ts</code></td>
+<td>New database row type.</td>
+</tr>
+<tr>
+<td><code>src/resolvers-types.ts</code></td>
+<td>Regenerate with <code>npm run codegen</code>; do not edit manually.</td>
+</tr>
+</tbody></table>
+<p>Implementation details that matter:</p>
+<ul>
+<li>Reuse the existing <code>BLOCK_RANGE_SIZE</code> enforcement pattern from <code>ActionsService</code> and <code>EventsService</code>.</li>
+<li>Follow existing tracing style: <code>zkappCommands.SQL</code> and <code>zkappCommands.processing</code>.</li>
+<li>Return only non-failed zkApp commands in the first version, matching current <code>actions</code> behavior.</li>
+<li>Keep the range API height-based: <code>from</code> inclusive, <code>to</code> exclusive.</li>
+<li>Preserve account update ordering by unnesting <code>zkc.zkapp_account_updates_ids WITH ORDINALITY</code>.</li>
+<li>Preserve nested action/event order by unnesting <code>zkapp_events.element_ids WITH ORDINALITY</code> and <code>zkapp_field_array.element_ids WITH ORDINALITY</code>.</li>
+<li>Return raw field strings exactly as stored. Archive-Node-API should not decode bridge-specific data.</li>
+<li>Include optional <code>accountPublicKey</code> and <code>tokenId</code> filters, but do not require them. The watcher must scan all account updates.</li>
+</ul>
+<p>Core SQL shape:</p>
+<pre><code>SELECT
+  b.height,
+  b.state_hash,
+  b.parent_hash,
+  b.global_slot_since_genesis,
+  b.timestamp,
+  b.chain_status,
+  zkc.hash,
+  zkc.memo,
+  bzkc.status,
+  bzkc.sequence_no,
+  fee_payer_pk.value AS fee_payer,
+  zkau.id AS account_update_id,
+  account_update_ids.account_update_order,
+  account_update_pk.value AS public_key,
+  t.value AS token_id,
+  zkub.authorization_kind,
+  zkub.balance_change,
+  zkub.increment_nonce,
+  zkub.call_depth,
+  actions.fields AS actions,
+  events.fields AS events,
+  app_state.fields AS app_state,
+  account_precondition.state AS account_precondition_state,
+  account_precondition.action_state AS account_precondition_action_state,
+  network_precondition.global_slot_since_genesis
+FROM blocks b
+JOIN blocks_zkapp_commands bzkc ON b.id = bzkc.block_id
+JOIN zkapp_commands zkc ON bzkc.zkapp_command_id = zkc.id
+JOIN zkapp_fee_payer_body fpb ON zkc.zkapp_fee_payer_body_id = fpb.id
+JOIN public_keys fee_payer_pk ON fpb.public_key_id = fee_payer_pk.id
+JOIN LATERAL unnest(zkc.zkapp_account_updates_ids)
+  WITH ORDINALITY AS account_update_ids(account_update_id, account_update_order) ON true
+JOIN zkapp_account_update zkau ON zkau.id = account_update_ids.account_update_id
+JOIN zkapp_account_update_body zkub ON zkau.body_id = zkub.id
+JOIN account_identifiers ai ON zkub.account_identifier_id = ai.id
+JOIN public_keys account_update_pk ON ai.public_key_id = account_update_pk.id
+JOIN tokens t ON ai.token_id = t.id
+LEFT JOIN zkapp_network_precondition network_precondition
+  ON network_precondition.id = zkub.zkapp_network_precondition_id
+WHERE b.height &gt;= $from
+  AND b.height &lt; $to
+  AND bzkc.status &lt;&gt; &#x27;failed&#x27;
+ORDER BY b.height, bzkc.sequence_no, account_update_ids.account_update_order;</code></pre>
+<p>The actual PR needs lateral subqueries to materialize <code>actions</code>, <code>events</code>, app state, and account precondition field arrays. Those subqueries should mirror the existing <code>src/db/sql/events-actions/queries.ts</code> event/action field-array joins rather than introducing bridge-specific logic.</p>
+<h2 id="query-contract-for-the-watcher">Query Contract For The Watcher</h2>
+<p>Constraints:</p>
+<ul>
+<li><code>from</code> is inclusive.</li>
+<li><code>to</code> is exclusive.</li>
+<li>Chunk size must stay at or below Archive-Node-API <code>BLOCK_RANGE_SIZE</code>, default <code>10000</code>.</li>
+<li>Use <code>status: ALL</code> so the watcher can map pending/canonical/orphaned facts and handle rollbacks.</li>
+<li>Sort order must be block height, zkApp command sequence number, account update order.</li>
+<li>Preserve raw field strings exactly as returned. Decoding belongs in <code>packages/l1-watcher</code>.</li>
+</ul>
+<p>Required fields by bridge event:</p>
+<table><thead><tr>
+<th>Bridge event</th>
+<th>Required fields</th>
+</tr></thead><tbody>
+<tr>
+<td>Deposit submission</td>
+<td>signed account update public key, <code>actions</code>, <code>balanceChange</code>, tx hash, block info</td>
+</tr>
+<tr>
+<td>Withdrawal finalization</td>
+<td>outer witness <code>actions</code>, finalize-withdrawal <code>events</code>, fee payer/signed updater, tx hash, block info</td>
+</tr>
+<tr>
+<td>Cancel deposit</td>
+<td>helper account <code>appState</code>, account precondition state/action state, tx hash, block info</td>
+</tr>
+</tbody></table>
+<h2 id="watcher-behavior-before-upstream-merge">Watcher Behavior Before Upstream Merge</h2>
+<p>Before the Archive-Node-API change lands, the watcher can be implemented in a reduced mode:</p>
+<ul>
+<li>Live bridge events from daemon <code>bestChain</code> blocks.</li>
+<li>Historical <code>outer-actions</code> and settlements from <code>actions(OUTER_PK)</code>.</li>
+<li>Health status <code>degraded</code> with limitation: <code>historical_bridge_events_unavailable</code>.</li>
+<li>Config option <code>BRIDGE_HISTORY_START_HEIGHT</code> set to the deployment height.</li>
+<li>Operational warning: any watcher downtime can create an unfillable bridge-event gap once the missed blocks age out of the daemon frontier and were not already published to NATS.</li>
+</ul>
+<p>This reduced mode should not be presented as a complete replacement for archive scanning.</p></article>
+    </section>
+    <footer>Spike 006 · L1 Watcher · Archive-Node-API Requirement</footer>
+  </main>
+</body>
+</html>

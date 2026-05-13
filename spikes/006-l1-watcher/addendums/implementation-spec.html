@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>L1 Watcher Implementation Spec</title>
+  <style>
+:root {
+  --bg: #07111f;
+  --panel: #0f1b2e;
+  --panel-2: #13253f;
+  --ink: #e6edf7;
+  --muted: #9fb0c7;
+  --line: #2b3d57;
+  --green: #34d399;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --blue: #60a5fa;
+  --violet: #a78bfa;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+    radial-gradient(circle at 16% 0%, rgba(34,211,238,.15), transparent 30rem),
+    radial-gradient(circle at 86% 8%, rgba(167,139,250,.12), transparent 32rem),
+    var(--bg);
+  background-size: 42px 42px, 42px 42px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.58;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 80px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(15,27,46,.97), rgba(9,20,35,.97));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.24);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 24px; padding: 32px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+h1 { margin: 12px 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: 1.03; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 72ch; margin: 0; }
+.diagram { border: 1px solid var(--line); border-radius: 12px; background: #081425; min-height: 260px; display: grid; place-items: center; overflow: hidden; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.nav a { color: var(--ink); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+.toc { position: sticky; top: 18px; padding: 18px; }
+.toc h2 { font-size: 14px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.content-card { padding: 30px; }
+.content-card h1 { font-size: 42px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 28px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+strong { color: var(--ink); }
+code { color: #d8b4fe; background: rgba(216,180,254,.08); border: 1px solid rgba(216,180,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); margin: 16px 0 22px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.12); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 22px; }
+.callout { border: 1px solid var(--line); border-radius: 12px; background: rgba(19,37,63,.52); padding: 16px; }
+.callout strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.callout span { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) { .page { width: min(100% - 24px, 1180px); padding-top: 20px; } .hero, .layout { grid-template-columns: 1fr; } .toc { position: static; } .callouts { grid-template-columns: 1fr; } .content-card { padding: 22px; } }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Spike 006 · L1 Watcher</div>
+        <h1>L1 Watcher Implementation Spec</h1>
+        <p class="subtitle">Implementation handoff for <code>packages/l1-watcher</code>: runtime loops, durable state, provider adapter boundary, deployment config, and Milestone 1 build order.</p>
+        <nav class="nav"><a href="../results.html">Results</a><a href="../addendums/index.html">Addenda Index</a><a href="../test-scenarios/">Cucumber Scenarios</a></nav>
+      </div>
+      <div class="diagram" aria-label="Watcher runtime loop diagram"><svg viewBox="0 0 780 310" role="img"><rect width="780" height="310" fill="#081425"/><circle cx="390" cy="155" r="82" fill="#10233d" stroke="#22d3ee" stroke-width="2"/><text x="390" y="145" text-anchor="middle" fill="#e6edf7" font-size="19" font-weight="700">Watcher Core</text><text x="390" y="174" text-anchor="middle" fill="#9fb0c7" font-size="13">publish after ack + state write</text><g fill="#10233d" stroke-width="2"><rect x="45" y="52" width="180" height="64" rx="12" stroke="#34d399"/><rect x="45" y="194" width="180" height="64" rx="12" stroke="#60a5fa"/><rect x="555" y="52" width="180" height="64" rx="12" stroke="#fbbf24"/><rect x="555" y="194" width="180" height="64" rx="12" stroke="#a78bfa"/></g><g fill="#e6edf7" font-size="15" font-weight="700" text-anchor="middle"><text x="135" y="90">Live L1 Loop</text><text x="135" y="232">Archive Catch-up</text><text x="645" y="90">SurrealDB State</text><text x="645" y="232">NATS JetStream</text></g><g stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M225 84C285 84 286 120 318 130"/><path d="M225 226C285 226 286 190 318 180"/><path d="M462 130C508 110 505 84 555 84"/><path d="M462 180C508 200 505 226 555 226"/></g><defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
+    </section>
+
+    <section class="layout">
+      <div class="toc"><h2>On This Page</h2><a href="#package-boundary">Package Boundary</a><a href="#boot-sequence">Boot Sequence</a><a href="#runtime-loops">Runtime Loops</a><a href="#tip-reconciler">Tip Reconciler</a><a href="#outer-action-poller">Outer Action Poller</a><a href="#bridge-event-backfill-poller">Bridge Event Backfill Poller</a><a href="#helper-counter-verifier">Helper Counter Verifier</a><a href="#health-loop">Health Loop</a><a href="#state-model">State Model</a><a href="#error-handling">Error Handling</a><a href="#testing-requirements">Testing Requirements</a></div>
+      <article class="content-card"><h1 id="l1-watcher-implementation-spec">L1 Watcher Implementation Spec</h1>
+<p>This file is the implementation handoff for the L1 Watcher package. Milestone 1 implements the Zeko-M / Mina adapter. Milestone 4 implements the Zeko-E / Ethereum adapter behind the same package boundary.</p>
+<h2 id="package-boundary">Package Boundary</h2>
+<p>Implement the watcher lifecycle, publication, state, and health code once. Put provider-specific source access and decoding behind adapters:</p>
+<pre><code>packages/l1-watcher/
+  package.json
+  tsconfig.json
+  src/
+    main.ts
+    config.ts
+    service.ts
+    state/
+      l1-watcher-state.ts
+      surreal-state-store.ts
+    nats/
+      publisher.ts
+      subjects.ts
+    adapters/
+      mina/
+        mina-daemon-client.ts
+        mina-archive-api-client.ts
+        mina-archive-zkapp-command-client.ts
+        mina-action-decoder.ts
+        mina-bridge-decoder.ts
+        mina-reorg-detector.ts
+      ethereum/
+        README.md
+    health/
+      health-server.ts
+      heartbeat.ts</code></pre>
+<p>Suggested dependencies:</p>
+<ul>
+<li><code>nats</code> for JetStream publication.</li>
+<li>GraphQL client already used elsewhere in the repo, or <code>graphql-request</code> if no shared client exists.</li>
+<li>Existing SurrealDB client used by the indexer package.</li>
+<li><code>o1js</code> only in the Mina adapter/decoder package path, for public key conversion and Poseidon hash compatibility.</li>
+</ul>
+<h2 id="boot-sequence">Boot Sequence</h2>
+<ol>
+<li>Parse stack-provided config and fail fast only on invalid static configuration, such as missing stack/network context or malformed public keys.</li>
+<li>Generate <code>instanceId</code>.</li>
+<li>Start <code>GET /healthz</code>.</li>
+<li>Start dependency connection managers for SurrealDB, NATS, and the active adapter&#x27;s live/archive L1 endpoints.</li>
+<li>When SurrealDB is reachable, load watcher cursors and rolling block window.</li>
+<li>When the live L1 endpoint is reachable, query the adapter canonical chain window and reconcile before publishing new live-derived facts.</li>
+<li>For the Mina adapter, verify whether Archive-Node-API exposes <code>zkappCommands</code> before marking historical bridge-event backfill available.</li>
+<li>Start runtime loops immediately; each loop waits for its required dependency and otherwise reports degraded health.</li>
+</ol>
+<p>Readiness means the process is alive and can report health. Dependency availability is represented inside health status, not by crashing or refusing to start.</p>
+<h2 id="runtime-loops">Runtime Loops</h2>
+<p>The shared watcher owns loop scheduling, retry/backoff, durable cursors, NATS publication, and health. The adapter owns live/archive L1 reads and provider-specific decoding.</p>
+<h3 id="tip-reconciler">Tip Reconciler</h3>
+<p>Zeko-M / Mina inputs:</p>
+<ul>
+<li>Hosted Mina daemon <code>bestChain(maxLength: 290)</code></li>
+<li>Mina daemon <code>newBlock</code> subscription</li>
+<li>Mina daemon <code>chainReorganization</code> subscription</li>
+</ul>
+<p>Shared behavior:</p>
+<ol>
+<li>Wake on subscription event or every <code>POLL_INTERVAL_MS</code>.</li>
+<li>Query <code>bestChain(290)</code>.</li>
+<li>Normalize blocks oldest-to-newest.</li>
+<li>Run reorg detection against persisted block window.</li>
+<li>Publish rollback if old blocks were orphaned and published facts are affected.</li>
+<li>Process new best-chain blocks:</li>
+</ol>
+<ul>
+<li>detect provider-specific settlement facts;</li>
+<li>detect live bridge events from provider-specific block/log data;</li>
+<li>store published fact IDs by block hash.</li>
+</ul>
+<ol>
+<li>Recompute confirmation depth for tracked settlements.</li>
+<li>Publish finality update if a settlement crosses from <code>settling</code> to <code>finalized</code>.</li>
+<li>Persist updated block window.</li>
+</ol>
+<p>Use subscription payloads as wake-up signals. Always reconcile through <code>bestChain</code>.</p>
+<h3 id="outer-action-poller">Outer Action Poller</h3>
+<p>Zeko-M / Mina inputs:</p>
+<ul>
+<li>Archive-Node-API <code>networkState</code></li>
+<li>Archive-Node-API <code>actions(input)</code></li>
+</ul>
+<p>Behavior:</p>
+<ol>
+<li>Read <code>outer_actions</code> cursor from SurrealDB.</li>
+<li>Query archive pending max height.</li>
+<li>For each chunk <code>[from, to)</code>:</li>
+</ol>
+<ul>
+<li>call <code>actions(input: { address: OUTER_PK, status: ALL, from, to })</code>;</li>
+<li>flatten returned <code>actionData</code>;</li>
+<li>sort by block height, tx sequence number, account update index, action index;</li>
+<li>decode commit/witness/unknown;</li>
+<li>publish <code>zeko.l1.outer-actions</code>;</li>
+<li>publish <code>zeko.l1.settlements</code> if a commit exists that was missed by live daemon processing;</li>
+<li>persist published IDs.</li>
+</ul>
+<ol>
+<li>Advance <code>outer_actions</code> cursor only after all messages in the chunk ack.</li>
+</ol>
+<p>Keep the cursor height based. Action-state filters are useful for diagnostics, but height ranges are simpler and match the archive API&#x27;s documented scan cap.</p>
+<p>The Zeko-E / Ethereum adapter implements the equivalent archive scan for settlement logs/transactions in Milestone 4.</p>
+<h3 id="bridge-event-backfill-poller">Bridge Event Backfill Poller</h3>
+<p>Zeko-M / Mina inputs:</p>
+<ul>
+<li>Archive-Node-API <code>zkappCommands(input)</code>.</li>
+</ul>
+<p>Behavior:</p>
+<ol>
+<li>Read <code>bridge_events</code> cursor from SurrealDB.</li>
+<li>Query zkApp commands by block range using Archive-Node-API.</li>
+<li>For each successful zkApp command:</li>
+</ol>
+<ul>
+<li>run deposit detector over all signed account updates with actions;</li>
+<li>run withdrawal finalization detector over outer witness plus event payloads;</li>
+<li>run cancel detector over helper account state update/precondition pattern;</li>
+<li>publish detected bridge events with deterministic IDs;</li>
+<li>store published IDs by block hash.</li>
+</ul>
+<ol>
+<li>Advance <code>bridge_events</code> cursor only after NATS ack.</li>
+</ol>
+<p>This poller is what turns the watcher into a rebuildable service. Without the upstream <code>zkappCommands</code> query, bridge events are live-only and incomplete for historical data.</p>
+<p>The Zeko-E / Ethereum adapter implements the equivalent archive log/event scan for bridge contracts in Milestone 4.</p>
+<h3 id="helper-counter-verifier">Helper Counter Verifier</h3>
+<p>Zeko-M / Mina inputs:</p>
+<ul>
+<li>Mina daemon <code>account(publicKey: HELPER_ACCOUNT_L1_PK)</code>.</li>
+</ul>
+<p>Behavior:</p>
+<ol>
+<li>Every 10 daemon blocks, read <code>zkappState[0]</code>.</li>
+<li>Compare it with the last counter value explained by published cancel events.</li>
+<li>If it advanced without a matching event:</li>
+</ol>
+<ul>
+<li>mark health degraded;</li>
+<li>rescan recent daemon window and archive range;</li>
+<li>keep degraded status until the counter delta is reconciled.</li>
+</ul>
+<p>This is a consistency check. It is not the primary cancel detector.</p>
+<h3 id="health-loop">Health Loop</h3>
+<p>Every <code>HEARTBEAT_INTERVAL_MS</code>:</p>
+<ol>
+<li>Measure live L1 connectivity, tip height, and last block time.</li>
+<li>Measure archive L1 connectivity and lag.</li>
+<li>Measure NATS publish state.</li>
+<li>Measure cursor lag.</li>
+<li>Upsert <code>sync_status:l1-watcher:{network}</code>.</li>
+<li>Publish <code>zeko.health</code>.</li>
+</ol>
+<h2 id="state-model">State Model</h2>
+<p>Use SurrealDB records:</p>
+<pre><code>DEFINE TABLE l1_watcher_cursor SCHEMAFULL;
+DEFINE FIELD network ON l1_watcher_cursor TYPE string;
+DEFINE FIELD cursor_name ON l1_watcher_cursor TYPE string;
+DEFINE FIELD height ON l1_watcher_cursor TYPE int;
+DEFINE FIELD action_state ON l1_watcher_cursor TYPE option&lt;string&gt;;
+DEFINE FIELD updated_at ON l1_watcher_cursor TYPE datetime;
+DEFINE INDEX idx_l1_watcher_cursor_unique ON l1_watcher_cursor FIELDS network, cursor_name UNIQUE;
+
+DEFINE TABLE l1_watcher_block SCHEMAFULL;
+DEFINE FIELD network ON l1_watcher_block TYPE string;
+DEFINE FIELD height ON l1_watcher_block TYPE int;
+DEFINE FIELD block_hash ON l1_watcher_block TYPE string;
+DEFINE FIELD parent_hash ON l1_watcher_block TYPE string;
+DEFINE FIELD slot ON l1_watcher_block TYPE option&lt;int&gt;;
+DEFINE FIELD provider ON l1_watcher_block TYPE string;
+DEFINE FIELD provider_fields ON l1_watcher_block TYPE option&lt;object&gt;;
+DEFINE FIELD observed_at ON l1_watcher_block TYPE datetime;
+DEFINE INDEX idx_l1_watcher_block_hash ON l1_watcher_block FIELDS network, block_hash UNIQUE;
+DEFINE INDEX idx_l1_watcher_block_height ON l1_watcher_block FIELDS network, height;
+
+DEFINE TABLE l1_watcher_published SCHEMAFULL;
+DEFINE FIELD network ON l1_watcher_published TYPE string;
+DEFINE FIELD event_id ON l1_watcher_published TYPE string;
+DEFINE FIELD subject ON l1_watcher_published TYPE string;
+DEFINE FIELD block_height ON l1_watcher_published TYPE int;
+DEFINE FIELD block_hash ON l1_watcher_published TYPE string;
+DEFINE FIELD tx_hash ON l1_watcher_published TYPE option&lt;string&gt;;
+DEFINE FIELD published_at ON l1_watcher_published TYPE datetime;
+DEFINE INDEX idx_l1_watcher_published_event ON l1_watcher_published FIELDS network, event_id UNIQUE;
+DEFINE INDEX idx_l1_watcher_published_block ON l1_watcher_published FIELDS network, block_hash;</code></pre>
+<h2 id="error-handling">Error Handling</h2>
+<table><thead><tr>
+<th>Dependency</th>
+<th>If down</th>
+<th>Continue?</th>
+</tr></thead><tbody>
+<tr>
+<td>NATS</td>
+<td>Mark down. Keep cursors unchanged. Buffer only bounded in-memory data for very short outages.</td>
+<td>Process continues; data progress pauses.</td>
+</tr>
+<tr>
+<td>SurrealDB</td>
+<td>Mark down. Pause data publication because state cannot be persisted.</td>
+<td>Process continues; data progress pauses.</td>
+</tr>
+<tr>
+<td>Live L1 endpoint</td>
+<td>Mark degraded. Keep archive pollers running.</td>
+<td>Historical catch-up continues if archive is reachable.</td>
+</tr>
+<tr>
+<td>Archive L1 endpoint</td>
+<td>Mark degraded. Keep live loop running.</td>
+<td>Historical catch-up stops.</td>
+</tr>
+</tbody></table>
+<p>Use exponential backoff with jitter per dependency. Avoid process exit loops for transient outages before or after boot.</p>
+<p>Detailed recovery behavior, including downstream API/UI degradation, is specified in <a href="fault-tolerance.html">Fault tolerance and recovery</a>.</p>
+<h2 id="testing-requirements">Testing Requirements</h2>
+<p>Acceptance coverage is defined as Cucumber scenarios in <code>../test-scenarios</code>:</p>
+<ul>
+<li><code>settlements-and-outer-actions.feature</code></li>
+<li><code>bridge-event-detection.feature</code></li>
+<li><code>dependency-startup.feature</code></li>
+<li><code>daemon-and-archive-recovery.feature</code></li>
+<li><code>durable-publication-failures.feature</code></li>
+<li><code>watcher-restart-and-reorg.feature</code></li>
+<li><code>downstream-service-downtime.feature</code></li>
+<li><code>partial-bridge-data-ui.feature</code></li>
+</ul>
+<p>Use recorded daemon/archive fixtures for L1 facts and controllable service doubles for dependency outage, recovery, acknowledgement timeout, stale-data paths, and partial API/UI rendering.</p></article>
+    </section>
+    <footer>Spike 006 · L1 Watcher · Implementation Spec</footer>
+  </main>
+</body>
+</html>

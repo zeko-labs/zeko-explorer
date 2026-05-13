@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 006: L1 Watcher - Results</title>
+  <style>
+:root {
+  --bg: #07111f;
+  --panel: #0f1b2e;
+  --panel-2: #13253f;
+  --ink: #e6edf7;
+  --muted: #9fb0c7;
+  --line: #2b3d57;
+  --green: #34d399;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --blue: #60a5fa;
+  --violet: #a78bfa;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+    radial-gradient(circle at 16% 0%, rgba(34,211,238,.15), transparent 30rem),
+    radial-gradient(circle at 86% 8%, rgba(167,139,250,.12), transparent 32rem),
+    var(--bg);
+  background-size: 42px 42px, 42px 42px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.58;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 80px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(15,27,46,.97), rgba(9,20,35,.97));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.24);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 24px; padding: 32px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+h1 { margin: 12px 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: 1.03; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 72ch; margin: 0; }
+.diagram { border: 1px solid var(--line); border-radius: 12px; background: #081425; min-height: 260px; display: grid; place-items: center; overflow: hidden; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.nav a { color: var(--ink); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+.toc { position: sticky; top: 18px; padding: 18px; }
+.toc h2 { font-size: 14px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.content-card { padding: 30px; }
+.content-card h1 { font-size: 42px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 28px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+strong { color: var(--ink); }
+code { color: #d8b4fe; background: rgba(216,180,254,.08); border: 1px solid rgba(216,180,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); margin: 16px 0 22px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.12); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 22px; }
+.callout { border: 1px solid var(--line); border-radius: 12px; background: rgba(19,37,63,.52); padding: 16px; }
+.callout strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.callout span { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) { .page { width: min(100% - 24px, 1180px); padding-top: 20px; } .hero, .layout { grid-template-columns: 1fr; } .toc { position: static; } .callouts { grid-template-columns: 1fr; } .content-card { padding: 22px; } }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Spike 006 · L1 Watcher</div>
+        <h1>L1 Watcher - Results</h1>
+        <p class="subtitle">Defines the L1 Watcher component boundary, provider adapter responsibilities, Zeko-M / Mina implementation requirements, Zeko-E / Ethereum planning boundary, and fault-tolerant recovery behavior.</p>
+        <nav class="nav"><a href="results.html">Results</a><a href="addendums/index.html">Addenda Index</a><a href="test-scenarios/">Cucumber Scenarios</a></nav>
+      </div>
+      <div class="diagram" aria-label="Shared watcher and adapter boundary diagram"><svg viewBox="0 0 780 310" role="img"><rect width="780" height="310" fill="#081425"/><g stroke="#26364d" opacity=".5"><path d="M0 62H780M0 124H780M0 186H780M0 248H780"/><path d="M78 0V310M156 0V310M234 0V310M312 0V310M390 0V310M468 0V310M546 0V310M624 0V310M702 0V310"/></g><rect x="260" y="105" width="260" height="100" rx="14" fill="#10233d" stroke="#22d3ee"/><text x="390" y="145" text-anchor="middle" fill="#e6edf7" font-size="20" font-weight="700">Shared L1 Watcher</text><text x="390" y="176" text-anchor="middle" fill="#9fb0c7" font-size="13">health · cursors · NATS · rollback facts</text><rect x="40" y="45" width="170" height="84" rx="12" fill="#10233d" stroke="#34d399"/><text x="125" y="82" text-anchor="middle" fill="#e6edf7" font-size="16" font-weight="700">Zeko-M / Mina</text><text x="125" y="106" text-anchor="middle" fill="#9fb0c7" font-size="12">daemon + Archive-Node-API</text><rect x="40" y="182" width="170" height="84" rx="12" fill="#10233d" stroke="#60a5fa"/><text x="125" y="219" text-anchor="middle" fill="#e6edf7" font-size="16" font-weight="700">Zeko-E / Ethereum</text><text x="125" y="243" text-anchor="middle" fill="#9fb0c7" font-size="12">JSON-RPC + archive logs</text><rect x="575" y="62" width="160" height="186" rx="12" fill="#10233d" stroke="#a78bfa"/><text x="655" y="105" text-anchor="middle" fill="#e6edf7" font-size="17" font-weight="700">NATS</text><text x="655" y="132" text-anchor="middle" fill="#9fb0c7" font-size="12">zeko.l1.*</text><text x="655" y="154" text-anchor="middle" fill="#9fb0c7" font-size="12">zeko.health</text><path d="M210 87H260" stroke="#64748b" stroke-width="3" marker-end="url(#a)"/><path d="M210 224C245 224 232 170 260 170" stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#a)"/><path d="M520 155H575" stroke="#64748b" stroke-width="3" marker-end="url(#a)"/><defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
+    </section>
+    <div class="callouts"><div class="callout"><strong>Shared watcher</strong><span>Lifecycle, health, cursors, NATS, rollback facts.</span></div><div class="callout"><strong>Zeko-M / Mina</strong><span>Milestone 1 adapter with daemon and Archive-Node-API.</span></div><div class="callout"><strong>Zeko-E / Ethereum</strong><span>Milestone 4 adapter boundary and requirements.</span></div></div>
+    <section class="layout">
+      <div class="toc"><h2>On This Page</h2><a href="#implementer-summary">Implementer Summary</a><a href="#l1-watcher-component">L1 Watcher Component</a><a href="#shared-runtime-contract">Shared Runtime Contract</a><a href="#shared-durable-state">Shared Durable State</a><a href="#shared-runtime-loops">Shared Runtime Loops</a><a href="#shared-fault-tolerance-requirements">Shared Fault Tolerance Requirements</a><a href="#zeko-m-mina-adapter">Zeko-M / Mina Adapter</a><a href="#inputs">Inputs</a><a href="#responsibilities">Responsibilities</a><a href="#runtime-loops">Runtime Loops</a><a href="#stack-configuration">Stack Configuration</a><a href="#implementation-order">Implementation Order</a><a href="#settlement-detection">Settlement Detection</a><a href="#outer-actions">Outer Actions</a><a href="#bridge-events">Bridge Events</a><a href="#rollbacks">Rollbacks</a><a href="#historical-bridge-event-gap">Historical Bridge Event Gap</a><a href="#zeko-m-fault-findings">Zeko-M Fault Findings</a><a href="#zeko-m-implementation-notes-that-matter">Zeko-M Implementation Notes That Matter</a><a href="#zeko-e-ethereum-adapter">Zeko-E / Ethereum Adapter</a><a href="#inputs">Inputs</a><a href="#responsibilities">Responsibilities</a><a href="#required-milestone-4-design-inputs">Required Milestone 4 Design Inputs</a><a href="#zeko-e-fault-requirements">Zeko-E Fault Requirements</a><a href="#source-verification">Source Verification</a></div>
+      <article class="content-card"><h1 id="spike-006-l1-watcher-results">Spike 006: L1 Watcher - Results</h1>
+<p><strong>Status:</strong> Complete <strong>Date:</strong> 2026-05-07</p>
+<hr>
+<h2 id="implementer-summary">Implementer Summary</h2>
+<p>Build <code>packages/l1-watcher</code> as the TypeScript component that runs inside one network&#x27;s explorer stack and publishes normalized L1 facts to that stack&#x27;s NATS instance. The watcher does not encode a single settlement-chain implementation. It delegates provider-specific L1 reads and decoding to the adapter selected for that network.</p>
+<p>The shared L1 Watcher owns:</p>
+<ul>
+<li>process lifecycle, config loading, health, retry/backoff, and graceful degradation;</li>
+<li>NATS publication and JetStream acknowledgement handling;</li>
+<li>SurrealDB durable state for cursors, canonical block windows, published fact IDs, and <code>sync_status</code>;</li>
+<li>common <code>zeko.l1.*</code> event contracts;</li>
+<li>rollback fact publication after an adapter reports canonical-chain divergence.</li>
+</ul>
+<p>The provider adapters own:</p>
+<table><thead><tr>
+<th>Network family</th>
+<th>Adapter</th>
+<th>Milestone</th>
+<th>Adapter owns</th>
+</tr></thead><tbody>
+<tr>
+<td>Zeko-M</td>
+<td>Mina adapter</td>
+<td>1</td>
+<td>Mina daemon and Archive-Node-API reads, Mina action/account-update/event decoding, Zeko-M finality and rollback interpretation.</td>
+</tr>
+<tr>
+<td>Zeko-E</td>
+<td>Ethereum adapter</td>
+<td>4</td>
+<td>Ethereum JSON-RPC/archive reads, Ethereum log/transaction decoding, Zeko-E finality and reorg interpretation.</td>
+</tr>
+</tbody></table>
+<p>Common output subjects:</p>
+<ul>
+<li><code>zeko.l1.settlements</code>: settlement detections and finality updates.</li>
+<li><code>zeko.l1.rollbacks</code>: L1 reorg facts that reference affected published L1 facts.</li>
+<li><code>zeko.l1.bridge-events</code>: bridge operation facts with user keys, params, and L1 identity.</li>
+<li><code>zeko.health</code>: watcher freshness, lag, dependency status, and source limitations.</li>
+</ul>
+<p>Provider-specific output subjects:</p>
+<ul>
+<li><code>zeko.l1.outer-actions</code>: Zeko-M / Mina Commit and Witness actions from <code>OUTER_PK</code>. The Ethereum adapter should only emit this subject if Milestone 4 defines an equivalent outer-action domain fact.</li>
+</ul>
+<p>This spike fully specifies the Zeko-M / Mina adapter needed for Milestone 1. It defines only the shared adapter boundary and required design inputs for the future Zeko-E / Ethereum adapter in Milestone 4.</p>
+<p>Supporting artifacts:</p>
+<ul>
+<li><a href="addendums/implementation-spec.html">Implementation spec</a></li>
+<li><a href="addendums/nats-event-schemas.html">NATS event schemas</a></li>
+<li><a href="addendums/l1-adapter-interfaces.ts">L1 adapter interfaces</a></li>
+<li><a href="addendums/fault-tolerance.html">Fault tolerance and recovery</a></li>
+<li><a href="addendums/archive-account-update-reader.html">Archive-Node-API zkApp command query requirement</a></li>
+<li><a href="test-scenarios">Cucumber test scenarios</a></li>
+</ul>
+<hr>
+<h2 id="l1-watcher-component">L1 Watcher Component</h2>
+<p>The L1 Watcher consumes provider facts through the active adapter and publishes normalized events. It should not contain Mina-specific or Ethereum-specific chain logic outside the adapter boundary.</p>
+<p>Shared package shape:</p>
+<pre><code>packages/l1-watcher
+  src/
+    main.ts
+    config.ts
+    service.ts
+    state/
+      l1-watcher-state.ts
+      surreal-state-store.ts
+    nats/
+      publisher.ts
+      subjects.ts
+    adapters/
+      mina/
+        mina-daemon-client.ts
+        mina-archive-api-client.ts
+        mina-archive-zkapp-command-client.ts
+        mina-bridge-decoder.ts
+        mina-action-decoder.ts
+        mina-reorg-detector.ts
+      ethereum/
+        README.md
+    health/
+      health-server.ts
+      heartbeat.ts</code></pre>
+<h3 id="shared-runtime-contract">Shared Runtime Contract</h3>
+<p>Each network stack runs its own watcher instance. The active adapter supplies:</p>
+<ul>
+<li>a live L1 endpoint for canonical-chain hints and near-tip observations;</li>
+<li>an archive L1 endpoint for historical catch-up;</li>
+<li>provider-specific decoders for settlements, bridge events, and rollback inputs;</li>
+<li>provider-specific finality semantics.</li>
+</ul>
+<p>The shared watcher code handles:</p>
+<ul>
+<li>one <code>/healthz</code> endpoint;</li>
+<li>periodic <code>zeko.health</code> publication;</li>
+<li>JetStream publish acknowledgement handling;</li>
+<li>durable cursor advancement only after publish acknowledgement and state write;</li>
+<li>independent retry/backoff per dependency and loop;</li>
+<li>bounded in-memory buffering only for short publish interruptions;</li>
+<li>process survival during transient dependency outages.</li>
+</ul>
+<h3 id="shared-durable-state">Shared Durable State</h3>
+<p>Use SurrealDB for watcher state and heartbeat state.</p>
+<p>Required state records:</p>
+<table><thead><tr>
+<th>Record</th>
+<th>Purpose</th>
+</tr></thead><tbody>
+<tr>
+<td><code>l1_watcher_cursor:{network}:{cursor_name}</code></td>
+<td>Adapter-owned archive/live progress cursors. Zeko-M uses at least <code>outer_actions</code> and <code>bridge_events</code>.</td>
+</tr>
+<tr>
+<td><code>l1_watcher_block:{network}:{block_hash}</code></td>
+<td>Rolling canonical block window used for reorg detection. Mina stores the Mina state hash as <code>block_hash</code>; Ethereum stores the Ethereum block hash.</td>
+</tr>
+<tr>
+<td><code>l1_watcher_published:{network}:{event_id}</code></td>
+<td>Published L1 fact IDs with subject, provider, block hash, tx hash, and publish timestamp.</td>
+</tr>
+<tr>
+<td><code>sync_status:l1-watcher:{network}</code></td>
+<td>Health/freshness row consumed by APIs and status UI.</td>
+</tr>
+</tbody></table>
+<p>Shared cursor rule: publish to NATS, wait for JetStream ack, persist published IDs/cursor state, then advance the cursor. If SurrealDB is unavailable, data publication pauses and health degrades while the process remains alive.</p>
+<h3 id="shared-runtime-loops">Shared Runtime Loops</h3>
+<p>The shared watcher schedules loops, but adapter-specific work stays in the adapter.</p>
+<table><thead><tr>
+<th>Loop</th>
+<th>Shared responsibility</th>
+<th>Adapter responsibility</th>
+</tr></thead><tbody>
+<tr>
+<td>Tip reconciler</td>
+<td>Wake on adapter hint or poll, call adapter canonical-chain read, compare persisted block window, publish rollback facts for orphaned published IDs.</td>
+<td>Read canonical chain window, provide provider block hashes, interpret provider finality/reorg data.</td>
+</tr>
+<tr>
+<td>Archive catch-up</td>
+<td>Resume from durable cursor, publish facts in deterministic order, advance cursor after ack/state write.</td>
+<td>Read historical provider data and decode provider facts.</td>
+</tr>
+<tr>
+<td>Bridge event backfill</td>
+<td>Resume from durable bridge cursor, publish bridge facts in deterministic order.</td>
+<td>Provide enough historical bridge data for that provider.</td>
+</tr>
+<tr>
+<td>Provider consistency checks</td>
+<td>Record adapter health and limitations.</td>
+<td>Run provider-specific checks such as Mina helper counter verification.</td>
+</tr>
+<tr>
+<td>Health loop</td>
+<td>Write <code>sync_status</code> and publish <code>zeko.health</code>.</td>
+<td>Report live/archive source health, lag, and provider limitations.</td>
+</tr>
+</tbody></table>
+<h3 id="shared-fault-tolerance-requirements">Shared Fault Tolerance Requirements</h3>
+<p>All L1 inputs are unreliable. The watcher and downstream explorer must handle failures without hard process crashes and without blocking unrelated UI.</p>
+<p>Required behavior:</p>
+<ul>
+<li>Live L1 endpoint down: live finality/reorg processing pauses; archive catch-up continues if archive is reachable.</li>
+<li>Archive L1 endpoint down: historical catch-up pauses; live processing continues if the live endpoint is reachable.</li>
+<li>NATS down: data publication and cursor advancement pause.</li>
+<li>SurrealDB down: data publication pauses because durable state cannot be updated.</li>
+<li>Watcher restart: reload cursors and canonical block window before resuming.</li>
+<li>Indexer/API/UI downtime: watcher continues publishing when NATS/SurrealDB are available; UI renders stale or partial data instead of blocking.</li>
+<li>Missing bridge-related data must surface through API data-quality metadata and inline UI warnings.</li>
+</ul>
+<p>The full failure matrix and UI/API degradation contract are in <a href="addendums/fault-tolerance.html">Fault tolerance and recovery</a>.</p>
+<hr>
+<h2 id="zeko-m-mina-adapter">Zeko-M / Mina Adapter</h2>
+<p>Milestone: 1.</p>
+<p>This section is the implementer handoff for the Milestone 1 adapter. Statements in this section are specific to Zeko-M / Mina unless explicitly called out as shared watcher behavior.</p>
+<h3 id="inputs">Inputs</h3>
+<ol>
+<li>Hosted Mina daemon GraphQL for live best-chain blocks, recent account updates, account state, and reorg wake-up signals.</li>
+<li>Public Archive-Node-API GraphQL for historical catch-up.</li>
+</ol>
+<h3 id="responsibilities">Responsibilities</h3>
+<ul>
+<li>Query <code>bestChain(290)</code> and reconcile canonical block windows.</li>
+<li>Use Mina daemon subscriptions as wake-up signals for live processing.</li>
+<li>Read <code>OUTER_PK</code> actions through Archive-Node-API <code>actions</code>.</li>
+<li>Decode Mina account updates, actions, events, app state, and preconditions.</li>
+<li>Detect Zeko-M settlement commits, outer actions, bridge events, and L1 rollbacks.</li>
+<li>Apply Mina finality semantics: <code>finalized</code> at <code>confirmationDepth &gt;= 290</code>.</li>
+<li>Verify helper-account cancel counter progress for cancelled deposits.</li>
+</ul>
+<p>Current Archive-Node-API supports <code>OUTER_PK</code> actions. Historical Zeko-M bridge-event detection also needs full zkApp command account updates by block range, so Milestone 1 needs an upstream Archive-Node-API change. The proposed upstream PR shape is documented in <a href="addendums/archive-account-update-reader.html">Archive-Node-API zkApp command query requirement</a>.</p>
+<h3 id="runtime-loops">Runtime Loops</h3>
+<table><thead><tr>
+<th>Loop</th>
+<th>Interval/source</th>
+<th>Zeko-M / Mina behavior</th>
+</tr></thead><tbody>
+<tr>
+<td>Tip reconciler</td>
+<td><code>newBlock</code> / <code>chainReorganization</code> wake-ups plus 15s poll</td>
+<td>Query <code>bestChain(290)</code>, detect reorgs, process new daemon blocks, update settlement confirmation depth.</td>
+</tr>
+<tr>
+<td>Outer action poller</td>
+<td>15s Archive-Node-API poll</td>
+<td>Query <code>actions(OUTER_PK)</code>, parse commit/witness actions, publish <code>zeko.l1.outer-actions</code>, backfill missed settlement commits.</td>
+</tr>
+<tr>
+<td>Bridge event backfill poller</td>
+<td>15s Archive-Node-API poll</td>
+<td>Query <code>zkappCommands</code>, detect deposits/withdrawals/cancels historically, publish <code>zeko.l1.bridge-events</code>.</td>
+</tr>
+<tr>
+<td>Helper counter verifier</td>
+<td>Every 10 Mina daemon blocks</td>
+<td>Read <code>helperAccountL1.zkappState[0]</code>; if it advanced without a matching cancel event, mark degraded and rescan recent blocks.</td>
+</tr>
+</tbody></table>
+<h3 id="stack-configuration">Stack Configuration</h3>
+<p>For Milestone 1, the Zeko-M stack provides Mina endpoints and Zeko-M contract keys:</p>
+<table><thead><tr>
+<th>Env var</th>
+<th>Required</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>NATS_URL</code></td>
+<td>yes</td>
+<td>JetStream endpoint.</td>
+</tr>
+<tr>
+<td><code>SURREALDB_URL</code></td>
+<td>yes</td>
+<td>Durable watcher state and <code>sync_status</code>.</td>
+</tr>
+<tr>
+<td><code>SURREALDB_NAMESPACE</code> / <code>SURREALDB_DATABASE</code></td>
+<td>yes</td>
+<td>Target namespace/database.</td>
+</tr>
+<tr>
+<td><code>MINA_DAEMON_GRAPHQL_URL</code></td>
+<td>yes</td>
+<td>Hosted HTTP GraphQL endpoint for <code>bestChain</code>, <code>account</code>, etc.</td>
+</tr>
+<tr>
+<td><code>MINA_DAEMON_GRAPHQL_WS_URL</code></td>
+<td>yes</td>
+<td>GraphQL subscription endpoint.</td>
+</tr>
+<tr>
+<td><code>MINA_ARCHIVE_API_URL</code></td>
+<td>yes</td>
+<td>Archive-Node-API endpoint for actions/events/network state.</td>
+</tr>
+<tr>
+<td><code>OUTER_PK</code></td>
+<td>yes</td>
+<td>Zeko outer L1 contract public key.</td>
+</tr>
+<tr>
+<td><code>HELPER_ACCOUNT_L1_PK</code></td>
+<td>yes</td>
+<td>L1 helper account used for cancel counter checks.</td>
+</tr>
+<tr>
+<td><code>FINALITY_DEPTH</code></td>
+<td>default <code>290</code></td>
+<td>Mina finality depth used for <code>finalized</code>.</td>
+</tr>
+<tr>
+<td><code>POLL_INTERVAL_MS</code></td>
+<td>default <code>15000</code></td>
+<td>Daemon/archive polling interval.</td>
+</tr>
+<tr>
+<td><code>HEARTBEAT_INTERVAL_MS</code></td>
+<td>default <code>30000</code></td>
+<td>Health heartbeat interval.</td>
+</tr>
+<tr>
+<td><code>ARCHIVE_CHUNK_SIZE</code></td>
+<td>default <code>10000</code></td>
+<td>Must not exceed Archive-Node-API block range cap.</td>
+</tr>
+</tbody></table>
+<p>Container readiness:</p>
+<ul>
+<li>Ready after static config is valid and the process can serve <code>/healthz</code>.</li>
+<li>Healthy if all required dependencies are reachable and archive cursors are near archive tip.</li>
+<li>Degraded if the Mina daemon or Archive-Node-API is down, archive lag exceeds threshold, helper cancel counter mismatch exists, or bridge backfill cannot run.</li>
+</ul>
+<h3 id="implementation-order">Implementation Order</h3>
+<ol>
+<li>Create <code>packages/l1-watcher</code> with config, NATS publisher, SurrealDB state store, health endpoint, and shared <code>L1Adapter</code> boundary.</li>
+<li>Implement Mina daemon client:</li>
+</ol>
+<ul>
+<li><code>bestChain(maxLength: 290)</code></li>
+<li><code>account(publicKey)</code></li>
+<li><code>newBlock</code> subscription</li>
+<li><code>chainReorganization</code> subscription</li>
+</ul>
+<ol>
+<li>Implement Mina reorg detector over the persisted canonical block window.</li>
+<li>Implement settlement detection from Mina daemon account updates on <code>OUTER_PK</code>.</li>
+<li>Implement Archive-Node-API outer action poller for <code>actions(OUTER_PK)</code>.</li>
+<li>Implement Archive-Node-API <code>zkappCommands</code> client. This requires the upstream API change described in <a href="addendums/archive-account-update-reader.html">Archive-Node-API zkApp command query requirement</a>.</li>
+<li>Implement Mina bridge decoders:</li>
+</ol>
+<ul>
+<li>deposit submission from signed user account update action shape;</li>
+<li>withdrawal finalization from outer witness plus finalize-withdrawal event;</li>
+<li>cancel deposit from helper counter advancement and cancel transaction pattern.</li>
+</ul>
+<ol>
+<li>Implement helper counter verifier.</li>
+<li>Keep an <code>adapters/ethereum</code> package boundary for the Milestone 4 Zeko-E adapter so the shared watcher lifecycle, publication, state, and health code does not embed Mina-specific assumptions.</li>
+<li>Implement the Cucumber scenarios in <a href="test-scenarios">test-scenarios</a> using recorded Mina daemon/archive fixtures and fault-injection doubles:</li>
+</ol>
+<ul>
+<li><a href="test-scenarios/settlements-and-outer-actions.feature">settlements-and-outer-actions.feature</a></li>
+<li><a href="test-scenarios/bridge-event-detection.feature">bridge-event-detection.feature</a></li>
+<li><a href="test-scenarios/dependency-startup.feature">dependency-startup.feature</a></li>
+<li><a href="test-scenarios/daemon-and-archive-recovery.feature">daemon-and-archive-recovery.feature</a></li>
+<li><a href="test-scenarios/durable-publication-failures.feature">durable-publication-failures.feature</a></li>
+<li><a href="test-scenarios/watcher-restart-and-reorg.feature">watcher-restart-and-reorg.feature</a></li>
+<li><a href="test-scenarios/downstream-service-downtime.feature">downstream-service-downtime.feature</a></li>
+<li><a href="test-scenarios/partial-bridge-data-ui.feature">partial-bridge-data-ui.feature</a></li>
+</ul>
+<h3 id="settlement-detection">Settlement Detection</h3>
+<p>A Zeko-M settlement is a commit action on <code>OUTER_PK</code>:</p>
+<table><thead><tr>
+<th>Action index</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td>0</td>
+<td><code>&quot;0&quot;</code> commit discriminant</td>
+</tr>
+<tr>
+<td>1</td>
+<td>committed inner ledger hash</td>
+</tr>
+<tr>
+<td>2</td>
+<td>inner action state</td>
+</tr>
+<tr>
+<td>3</td>
+<td>inner action state length</td>
+</tr>
+<tr>
+<td>4</td>
+<td>synchronized outer action state</td>
+</tr>
+<tr>
+<td>5</td>
+<td>synchronized outer action state length</td>
+</tr>
+<tr>
+<td>6</td>
+<td>slot range lower</td>
+</tr>
+<tr>
+<td>7</td>
+<td>slot range upper</td>
+</tr>
+</tbody></table>
+<p>Detection:</p>
+<ul>
+<li>Live path: Mina daemon block -&gt; successful zkApp command -&gt; account update where <code>body.publicKey === OUTER_PK</code> -&gt; action with <code>fields[0] === &quot;0&quot;</code>.</li>
+<li>Historical path: Archive-Node-API <code>actions(input: { address: OUTER_PK, status: ALL, from, to })</code>.</li>
+</ul>
+<p>The Mina adapter publishes <code>zeko.l1.settlements</code> when a settlement is first seen and when the finality level changes. <code>finalized</code> means <code>confirmationDepth &gt;= 290</code>. Depths <code>0..289</code> remain <code>settling</code>.</p>
+<p>The adapter publishes the commit&#x27;s <code>innerActionState</code> and <code>innerActionStateLength</code>. The indexer walks the indexed L2 inner action chain to associate bridge operations and transactions with the batch.</p>
+<h3 id="outer-actions">Outer Actions</h3>
+<p>The Zeko-M outer action poller publishes every action emitted by <code>OUTER_PK</code>:</p>
+<ul>
+<li><code>fields[0] === &quot;0&quot;</code> -&gt; <code>commit</code></li>
+<li><code>fields[0] === &quot;1&quot;</code> -&gt; <code>witness</code></li>
+<li>anything else -&gt; <code>unknown</code>, with degraded health</li>
+</ul>
+<p>The poller chunks archive ranges by <code>ARCHIVE_CHUNK_SIZE</code>, sorts deterministically, publishes all actions, then advances the <code>outer_actions</code> cursor only after NATS ack and durable state write.</p>
+<h3 id="bridge-events">Bridge Events</h3>
+<p>The Mina adapter publishes bridge facts, not bridge operation lifecycle state. The indexer owns lifecycle transitions and <code>aux_sequence</code>.</p>
+<p>Deposit submission:</p>
+<ul>
+<li>Source: signed user account update action, not an <code>OUTER_PK</code> action.</li>
+<li>Match: action has 8 fields and fields 6-7 reconstruct configured <code>OUTER_PK</code>.</li>
+<li>Decode: recipient, amount, timeout, holder account.</li>
+<li><code>userPk</code>: signed account update public key.</li>
+<li><code>aux</code>: <code>depositAux(holderAccountL1, amount, recipient, timeout)</code>.</li>
+</ul>
+<p>Withdrawal finalization:</p>
+<ul>
+<li>Source: L1 transaction that emits outer witness action on <code>OUTER_PK</code> and finalize-withdrawal event fields.</li>
+<li>Decode recipient and amount from finalize event.</li>
+<li>Verify <code>withdrawalAux(amount, recipient) === witness.action[1]</code>.</li>
+<li><code>userPk</code>: signed finalizer account update if present, otherwise fee payer with <code>userPkSource: &quot;fee_payer&quot;</code>.</li>
+</ul>
+<p>Cancel deposit:</p>
+<ul>
+<li>Source: L1 transaction that advances <code>helperAccountL1.zkappState[0]</code>.</li>
+<li>There is no outer witness action for cancel.</li>
+<li>Detect helper counter transition and confirm the transaction includes the expected outer-account precondition witness.</li>
+<li>Publish <code>cancelledDepositIndex</code>; include <code>aux</code> only if params are available from the transaction. The indexer can resolve by FIFO deposit order.</li>
+</ul>
+<h3 id="rollbacks">Rollbacks</h3>
+<p>The Mina adapter supplies rollback inputs from Mina canonical-chain reconciliation.</p>
+<p>Algorithm:</p>
+<ol>
+<li>Persist every observed Mina best-chain block in a rolling 290+ block window.</li>
+<li>On every tip wake-up, query <code>bestChain(290)</code>.</li>
+<li>Find the latest common state hash between old and new windows.</li>
+<li>Blocks after the common hash in the old window are orphaned.</li>
+<li>Query <code>l1_watcher_published</code> for facts whose <code>block_hash</code> is orphaned.</li>
+<li>Publish one <code>zeko.l1.rollbacks</code> message listing affected settlement, outer-action, and bridge-event IDs.</li>
+<li>Process replacement blocks normally.</li>
+</ol>
+<p>If no common ancestor exists in the daemon window, the Mina adapter cannot fully prove bridge-event reconciliation from current Archive-Node-API alone. That is why the upstream <code>zkappCommands</code> query is a Milestone 1 requirement.</p>
+<h3 id="historical-bridge-event-gap">Historical Bridge Event Gap</h3>
+<p>The current Archive-Node-API <code>blocks</code> query returns zkApp command hashes, fee payer, status, and memo. Historical Zeko-M bridge reconstruction also needs account update actions/events/app state/preconditions, because deposit and cancel detection require those details.</p>
+<p>If this is not fixed upstream, the Zeko-M / Mina adapter can still run but only with these guarantees:</p>
+<ul>
+<li><code>zeko.l1.outer-actions</code> remains rebuildable from Archive-Node-API <code>actions(OUTER_PK)</code>.</li>
+<li><code>zeko.l1.settlements</code> remains rebuildable from those outer commit actions.</li>
+<li>Zeko-M <code>zeko.l1.bridge-events</code> becomes live-only from the daemon frontier and NATS retention. It cannot be rebuilt from genesis, from periods before the watcher existed, or from watcher downtime after the missed blocks leave the daemon frontier.</li>
+<li>Any Zeko-M watcher downtime can therefore create an unfillable bridge-event gap unless the missed blocks are still in the hosted daemon frontier or the events had already been published and retained in NATS.</li>
+<li>Per-user deposit history will be incomplete for pre-watcher deposits and for any downtime gap. The bridge API can only show operations that were observed live or were still visible in retained NATS.</li>
+<li>Cancel deposit history is the weakest case: cancels do not emit outer witness actions, so archive action scans cannot recover them.</li>
+<li>A long Zeko-M watcher outage beyond the daemon frontier leaves bridge-event gaps that cannot be repaired from current public APIs.</li>
+</ul>
+<p>Decision for Milestone 1:</p>
+<p>Use upstream Archive-Node-API with a <code>zkappCommands(input)</code> query that returns full account update actions/events/app state/preconditions. The exact required query shape and PR implementation plan are specified in <a href="addendums/archive-account-update-reader.html">Archive-Node-API zkApp command query requirement</a>.</p>
+<h3 id="zeko-m-fault-findings">Zeko-M Fault Findings</h3>
+<ul>
+<li>Hosted Mina daemon down: Archive-Node-API pollers continue, finality becomes stale, health degrades, process stays alive.</li>
+<li>Archive-Node-API down: live daemon processing continues, archive cursors stop advancing, health degrades, process stays alive.</li>
+<li>Watcher restart: reload cursors, reconcile Mina <code>bestChain(290)</code>, then resume archive catch-up.</li>
+<li>Missing Zeko-M bridge-related data must not block account, bridge operation, batch, or transaction pages.</li>
+</ul>
+<h3 id="zeko-m-implementation-notes-that-matter">Zeko-M Implementation Notes That Matter</h3>
+<ul>
+<li>Use <code>chainReorganization</code> only as a wake-up signal. The rollback truth comes from comparing <code>bestChain(290)</code> state hashes.</li>
+<li>Subscribe broadly enough to observe user account updates, not only <code>newBlock(publicKey: OUTER_PK)</code>, because deposit submissions are user account actions whose payload mentions <code>OUTER_PK</code>.</li>
+<li>Leave <code>aux_sequence</code> assignment to the indexer, which derives it from durable bridge operation ordering.</li>
+<li>Advance cursors only after NATS ack and durable state write.</li>
+<li>Publish raw fields along with parsed fields. This protects the indexer from decoder bugs and supports later reprocessing.</li>
+<li>Treat unknown outer action discriminants and helper counter mismatches as degraded health, not silent skips.</li>
+</ul>
+<hr>
+<h2 id="zeko-e-ethereum-adapter">Zeko-E / Ethereum Adapter</h2>
+<p>Milestone: 4.</p>
+<p>This spike does not specify Ethereum contract details or Ethereum decoding rules. It only preserves the shared watcher boundary so the Milestone 1 implementation does not make Mina assumptions in shared code.</p>
+<h3 id="inputs">Inputs</h3>
+<ol>
+<li>Ethereum JSON-RPC live/head access for canonical chain tracking, settlement transactions, bridge events, and reorg/finality signals.</li>
+<li>Ethereum archive/log access for historical logs/transactions and catch-up after downtime.</li>
+</ol>
+<h3 id="responsibilities">Responsibilities</h3>
+<ul>
+<li>Implement the shared <code>L1Adapter</code> boundary without relying on Mina daemon or Archive-Node-API behavior.</li>
+<li>Publish shared <code>zeko.l1.*</code> event families where the Ethereum domain model applies.</li>
+<li>Map Ethereum settlement transactions into <code>zeko.l1.settlements</code>.</li>
+<li>Map Ethereum bridge contract logs/transactions into <code>zeko.l1.bridge-events</code>.</li>
+<li>Provide rollback/reorg facts through <code>zeko.l1.rollbacks</code>.</li>
+<li>Report Ethereum live/archive health and limitations through <code>zeko.health</code>.</li>
+<li>Define whether <code>zeko.l1.outer-actions</code> has an Ethereum equivalent; otherwise leave that subject Mina-only.</li>
+</ul>
+<h3 id="required-milestone-4-design-inputs">Required Milestone 4 Design Inputs</h3>
+<ul>
+<li>Ethereum settlement contract addresses.</li>
+<li>Ethereum bridge contract addresses.</li>
+<li>Event ABI mappings.</li>
+<li>Archive provider choice and historical query guarantees.</li>
+<li>Finality threshold.</li>
+<li>Reorg depth policy.</li>
+<li>Ethereum-specific payload fields needed by APIs and indexers.</li>
+</ul>
+<h3 id="zeko-e-fault-requirements">Zeko-E Fault Requirements</h3>
+<p>The Ethereum adapter must follow the shared fault contract:</p>
+<ul>
+<li>live JSON-RPC outage pauses live head tracking, finality updates, and near-tip reorg detection;</li>
+<li>archive/log-source outage pauses historical catch-up;</li>
+<li>reconnection starts with canonical-chain reconciliation before publishing new facts;</li>
+<li>missed Ethereum bridge facts are recoverable only if the selected archive source can query the required historical logs/transactions for the missed range, or if the facts were already published and retained in NATS.</li>
+</ul>
+<hr>
+<h2 id="source-verification">Source Verification</h2>
+<p>Verified against:</p>
+<ul>
+<li>Mina daemon GraphQL schema: <code>bestChain</code>, <code>block</code>, <code>newBlock</code>, <code>chainReorganization</code>, <code>account</code>, <code>ZkappCommand.accountUpdates</code>, and <code>AccountUpdateBody.actions/events/appState/preconditions</code>.</li>
+<li>Archive-Node-API schema: <code>actions</code>, <code>events</code>, <code>networkState</code>, block range cap, action-state filters, and <code>blocks</code> output limitations.</li>
+<li><code>PRD.md</code> L1 Watcher, bridge, rollback, finality, and deployment structure sections.</li>
+<li><code>spikes/002-bridge-correlation/results.md</code> for <code>aux</code>, user key, cancel observability, and bridge lifecycle constraints.</li>
+<li><code>spikes/003-zkapp-state-display/results.md</code> for Mina action/event/state field behavior.</li>
+</ul></article>
+    </section>
+    <footer>Spike 006 · L1 Watcher · Results</footer>
+  </main>
+</body>
+</html>
