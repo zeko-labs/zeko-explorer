@@ -1,7 +1,7 @@
 # PRD: Zeko Block Explorer & Indexing Substrate
 
 **Author:** Zeko Labs
-**Status:** Draft v11 (post spikes 001, 002, 003, 004, 005, 006, 008)
+**Status:** Draft v12 (post spikes 001, 002, 003, 004, 005, 006, 007, 008)
 **Last Updated:** May 13, 2026
 
 ---
@@ -10,7 +10,7 @@
 
 Zeko currently relies on Zekoscan (third-party, Blockberry/Staketab), which suffers from reliability issues, stale data, and a complete lack of L2 concepts. Zeko has no control over its roadmap.
 
-This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, the sequencer publishes raw L2 events directly to NATS JetStream (with a standalone backfill service for gap filling from the DA layer), while TypeScript services monitor L1 and DA data sources. A unified indexer consumes all streams, normalizes data, and writes to SurrealDB. The explorer is exposed through a Cloudflare-hosted unified GraphQL gateway over private Explorer and Bridge GraphQL APIs (Pothos) plus the Contract Registry API, with SSE subscriptions, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
+This document defines a **general-purpose indexing substrate** for the Zeko network and a **greenfield block explorer** as its first consumer. At the foundation, the sequencer publishes raw L2 events directly to NATS JetStream (with a standalone backfill service for gap filling from the DA layer), while the L1 Watcher monitors settlement-chain facts. DA attestation status is derived by the unified indexer from proof and settlement signals; direct DA-node signature publishing can later reduce latency and add signer detail. A unified indexer consumes all streams, normalizes data, and writes to SurrealDB. The explorer is exposed through a Cloudflare-hosted unified GraphQL gateway over private Explorer and Bridge GraphQL APIs (Pothos) plus the Contract Registry API, with SSE subscriptions, a code-mode MCP server for agent interaction, and a Nuxt 3 SPA frontend. A separate Bridge GraphQL API replaces the existing bridge actions services.
 
 The system replaces:
 - The archive relay adapter + Mina archive node + Archive-Node-API + Zekoscan pipeline.
@@ -89,28 +89,28 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
 │  │ Zeko         │  │ L1 Live Node │  │ DA Layer              │  │
-│  │ Sequencer    │  │ + L1 Archive │  │ (Ethermint/Celestia)  │  │
+│  │ Sequencer    │  │ + L1 Archive │  │ (Multisig/Celestia)   │  │
 │  │ (publishes   │  │ (Mina or     │  │                       │  │
 │  │  to NATS     │  │  Ethereum)   │  │                       │  │
 │  │  directly)   │  │              │  │                       │  │
-│  └──────┬───────┘  └──────┬───────┘  └───┬───────────┬───────┘  │
-└─────────┼─────────────────┼──────────────┼───────────┼──────────┘
-          │                 │              │           │
-          │                 │              │           ▼
-          │                 │              │  ┌─────────────────┐
-          │                 │              │  │ Backfill Service │
-          │                 │              │  │ (OCaml, standalone)
-          │                 │              │  │ GraphQL API      │
-          │                 │              │  │ DA → NATS        │
-          │                 │              │  └────────┬────────┘
-          │                 │              │           │
-          │                 ▼              ▼           │
-          │          ┌──────────────┐ ┌────────────┐  │
-          │          │ L1 Watcher   │ │ DA Monitor │  │
-          │          │ (TypeScript) │ │ (TS)       │  │
-          │          └──────┬───────┘ └─────┬──────┘  │
-          │                 │               │         │
-          ▼                 ▼               ▼         ▼
+│  └──────┬───────┘  └──────┬───────┘  └──────────┬────────────┘  │
+└─────────┼─────────────────┼─────────────────────┼───────────────┘
+          │                 │                     │
+          │                 │                     ▼
+          │                 │            ┌─────────────────┐
+          │                 │            │ Backfill Service │
+          │                 │            │ (OCaml, standalone)
+          │                 │            │ GraphQL API      │
+          │                 │            │ DA → NATS        │
+          │                 │            └────────┬────────┘
+          │                 │                     │
+          │                 ▼                     │
+          │          ┌──────────────┐             │
+          │          │ L1 Watcher   │             │
+          │          │ (TypeScript) │             │
+          │          └──────┬───────┘             │
+          │                 │                     │
+          ▼                 ▼                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     NATS JetStream                              │
 │                 (indexing substrate)                             │
@@ -119,7 +119,7 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 │  • zeko.l2.transactions    • zeko.l1.settlements                │
 │  • zeko.l2.finality        • zeko.l1.rollbacks                  │
 │  • zeko.l1.outer-actions   • zeko.l1.bridge-events              │
-│  • zeko.da.attestations    • zeko.health                        │
+│  • zeko.health                                                 │
 │                                                                 │
 │  Rolling retention (default 90d) + R2 archival                  │
 └────────────────────────────┬────────────────────────────────────┘
@@ -266,9 +266,18 @@ If that query is unavailable, `zeko.l1.bridge-events` is live-only except for re
 
 **Why TypeScript:** I/O bound — GraphQL/JSON-RPC polling. Mature async and client ecosystem.
 
-#### 5.2.3 DA Monitor (TypeScript)
+#### 5.2.3 DA Attestation Status
 
-Small, isolated service monitoring the DA layer for attestation status. Isolated behind NATS so the rest of the system is unaffected when the DA implementation changes (Ethermint → Celestia). Provides attestation metadata only.
+DA attestation status is computed by the indexer. Milestone 1 uses proof and settlement signals that already flow through NATS. Milestone 4+ can add direct signature publishing from the existing DA-node process for lower latency and per-operator signer detail. Direct signature publishing is a code hook in the DA layer, not a new explorer service or infrastructure component.
+
+The baseline DA status sources are:
+
+- **`zeko.l1.settlements`:** a settlement means a valid proof landed on L1, which implies DA quorum was reached.
+- **`zeko.l2.finality` with `level = "proved"`:** the sequencer only publishes a proved-finality event after assembling a proof; the proof is unsatisfiable unless the DA-layer multisig quorum was reached.
+
+With the direct signature upgrade enabled, each DA node may publish one self-authenticating `zeko.da.signatures` message when it persists a Schnorr signature to RocksDB. The indexer verifies each signature over `RandomOracle(ledgerHash, accSet)`, authorizes the public key against the configured/on-chain DA signer set, aggregates distinct signers per ledger hash, and marks `batch.da_status = "attested"` when quorum is reached. This adds sub-second attestation transitions and per-operator signer detail while preserving proof/settlement derivation as the fallback.
+
+The future Celestia target uses the same explorer-facing model: the publisher changes on the DA-layer side and the indexer dispatches by message `implementation`, but the batch status and GraphQL surface remain stable.
 
 #### 5.2.4 NATS JetStream
 
@@ -289,7 +298,7 @@ SurrealDB is a rebuildable read model. If the database ever needs to be rebuilt,
 | `zeko-l2` | `zeko.l2.>` | Limits | 90d (configurable 1-6 months) | Transactions + finality events. Dedup window: 2m. |
 | `zeko-health` | `zeko.health` | Limits | — | Max 1000 messages. |
 | `zeko-l1` | `zeko.l1.>` | Limits | 90d | Settlements, rollbacks, outer actions, bridge events. |
-| `zeko-da` | `zeko.da.>` | Limits | 90d | DA attestations. |
+| `zeko-da` | `zeko.da.>` | Limits | 90d | Optional direct DA signature messages. Baseline DA status does not depend on this stream. DA-node heartbeats use `zeko.health`. |
 
 **R2 archival:** A cron job exports messages older than `(max_age - 1 week)` to Cloudflare R2 as daily NDJSON files compressed with zstd. Each line includes original NATS headers (sequence, timestamp, `Nats-Msg-Id`) for replayability. JetStream `Max Age` auto-prunes expired messages after archival. R2 bucket per network. See `spikes/001-sequencer-connector/results.md` Section 7 for full archival design.
 
@@ -303,10 +312,10 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 
 **Consumes:**
 - `zeko.l2.transactions` → `transaction`, `account`, `account_activity`, `zkapp_event`, `zkapp_action`. zkApp records store raw fields only — labels are served by a separate Contract Registry API (Section 5.2.10). Each zkApp record is tagged with `target_ledger_hash` so L2 rollback can drop the affected rows without reindexing.
-- `zeko.l2.finality` → update batch proved/committed status.
-- `zeko.l1.settlements` → create/update `batch`, link to transactions.
+- `zeko.l2.finality` → update batch proved/committed status. Proved-level events also derive baseline `batch.da_status = "attested"`.
+- `zeko.l1.settlements` → create/update `batch`, link to transactions. Settlement events also derive baseline `batch.da_status = "attested"`.
 - `zeko.l1.rollbacks` → revert batch settlement status (Section 7.5).
-- `zeko.da.attestations` → attach status to batch records.
+- `zeko.da.signatures` → optional direct DA signature aggregation, signer detail, and faster `batch.da_status` updates.
 - `zeko.l1.outer-actions` → `outer_action` (Commits, Witnesses). Queryable by state range.
 - `zeko.l2.transactions` → extract inner actions → `inner_action`. Queryable by state range.
 - `zeko.l1.bridge-events` → `bridge_operation` with user PK, amount, aux, type. Graph edges (`l1_action_link`, `l2_action_link`) to outer/inner actions.
@@ -326,6 +335,8 @@ The indexer maintains a `ledger_hash → NATS sequence number` mapping (in-memor
 
 **L1 rollback handling:** The indexer subscribes to `zeko.l1.rollbacks`. On L1 rollback events, it reverts affected batch settlements and cascades to bridge data.
 
+**DA status derivation:** The indexer marks a batch `da_status = "attested"` when either `zeko.l2.finality` reaches `level = "proved"` or the matching `zeko.l1.settlements` message arrives. If a proved event arrives before the corresponding `batch` row exists, the indexer buffers it in `pending_da_attestation` keyed by `ledger_hash` and transfers it when settlement creates the row. A rollback of an L1 settlement moves the DA fact back into the pending buffer rather than erasing it, because the DA attestation itself remains true. When direct signature ingestion is enabled, `zeko.da.signatures` can set `da_source = "da-direct"` after signature verification, authorized-signer checks, and quorum aggregation. Source precedence is `settlement > da-direct > proved`.
+
 #### 5.2.6 SurrealDB (Single Node)
 
 Graph relations, record links, full-text search, live queries, schemaful mode. **Rebuildable read model** — NATS JetStream is the source of truth.
@@ -342,7 +353,8 @@ Schema migrations managed via [surrealdb-migrations](https://github.com/Odonno/s
 - `transaction` — hash, sequence_number, type, status, sender/receiver account links, amount, fee, nonce, memo, timestamp, state_hash, decoded account_updates, batch link, rollback_reason.
 - `account` — public_key (indexed, full-text searchable), balance, nonce, delegate link, token_id, `zkapp_state` (raw 8-field array), `action_state` (raw 5-field vector), `verification_key_hash`, `zkapp_uri`.
 - `account_activity` — per-account per-transaction changes, including rollback entries. zkApp state snapshots live here so revert-by-`target_ledger_hash` can restore the prior state without replaying NATS.
-- `batch` — transaction range, proof/settlement status, L1 settlement details, DA attestation status, timestamps.
+- `batch` — transaction range, proof/settlement status, L1 settlement details, DA attestation status (`da_status`, `da_source`, `da_attested_at`), optional direct-DA detail (`da_implementation`, `da_quorum_threshold`, `da_signers`), timestamps.
+- `pending_da_attestation` — write-buffer keyed by `ledger_hash` for proved or direct-DA attestation facts that arrive before the matching `batch` row exists, and for preserving DA facts across L1 settlement rollbacks.
 - `zkapp_event` / `zkapp_action` — emitting account and transaction links, **raw field arrays only** (no `decoded_fields`), sequence number, `target_ledger_hash` tag. Actions additionally store `before_action_state` / `action_state` (rolling Poseidon hash chain) with a unique index on `action_state`.
 - `sync_status` — per-source health: last processed item, timestamp, lag, error state.
 - `network_stats` — aggregates.
@@ -541,7 +553,7 @@ Each app or shared package follows DDD internally (domain core, infrastructure b
 
 Indexers write heartbeats to `sync_status`. GraphQL APIs include `_meta` freshness data. Frontend shows two-tier health:
 - **User-facing:** Freshness badge on every page ("data is N seconds old" based on last indexed block timestamp vs. wall clock).
-- **Operator-facing:** Structured `/status` endpoint returning per-component health checks — NATS lag, last indexed heights, L1 watcher status, DB responsiveness. Dedicated `/status` page on frontend.
+- **Operator-facing:** Structured `/status` endpoint returning per-component health checks — NATS lag, last indexed heights, proved-tip lag, stale pending DA attestations, L1 watcher status, DB responsiveness, and DA-node heartbeat status when direct DA signatures are enabled. Dedicated `/status` page on frontend.
 
 ### 7.2 Self-Healing Ingestion
 
@@ -555,7 +567,7 @@ NATS durable consumers resume from last ack. On first startup with `--nats-url`,
 | **L1 live endpoint down** | Cannot track tip, update finality, or detect new live L1 rollbacks. Archive catch-up can continue if the archive endpoint is reachable. | L1 Watcher heartbeat degrades with `l1_live_unavailable` → `sync_status` → "L1 status unknown." | Watcher reconnects, reconciles the adapter canonical chain window, publishes rollback events for orphaned published facts, then resumes finality updates. |
 | **L1 archive endpoint down** | Historical catch-up pauses. Existing data remains queryable. Live processing can continue if the live endpoint is reachable. | Watcher heartbeat degrades with `l1_archive_unavailable`. | Watcher reconnects and resumes from durable archive cursors. For Zeko-M, outer actions/settlements recover via `actions(OUTER_PK)`; bridge events recover only if Archive-Node-API exposes historical `zkappCommands`. |
 | **Zeko-M Archive-Node-API missing `zkappCommands`** | Historical bridge-event backfill unavailable. Deposits/cancels/withdrawal details missed during watcher downtime may become unrecoverable. | Watcher health includes `historical_bridge_events_unavailable`; APIs expose partial bridge data quality. | Add the upstream Archive-Node-API query. After deployment, scan from genesis or configured `BRIDGE_HISTORY_START_HEIGHT`; events missed before the query existed remain recoverable only if still in daemon frontier or retained NATS. |
-| **DA layer down** | Attestation status "unknown." Everything else unaffected. | DA Monitor reports unreachable. | Reconnect, backfill missed attestations. |
+| **DA layer unavailable or quorum not reached** | New proofs cannot be produced for affected batches, so proved/settlement-derived DA status does not advance. Existing indexed data remains queryable. If only direct DA publishing is unavailable, DA status still fills later via proved or settlement signals; only sub-second latency and signer detail are lost. | Proved-tip lag grows, pending DA attestation buffers age beyond one commit period, and DA-node heartbeats/signatures are absent when direct signature ingestion is enabled. | Operators restore DA quorum or DA-node NATS connectivity. Baseline signals self-heal when proof or settlement arrives. |
 | **SurrealDB down** | APIs cannot serve read models; watcher pauses new data facts because cursors and published-fact IDs cannot be persisted. | Health checks detect. | Container restart. If corrupted: restore from backup or full re-index from NATS. Watcher reloads cursors/block window before resuming. |
 | **NATS down** | Data publication halts; cursor advancement pauses. Existing indexed data still served. | Publishers report failures; watcher health degrades/down. | NATS restart. JetStream persistence recovers stream state. Watcher resumes from durable cursors and uses `Nats-Msg-Id` deduplication for retry attempts. |
 | **Indexer down** | No new data (explorer or bridge). Stale warning shown. | Heartbeat stops. | Restart. Durable consumer resumes from last ack. |
@@ -653,7 +665,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 4. **Deployment Topology + Unified Gateway** (`spikes/004-deployment-topology/`) — **Complete.** Resolved: Docker Desktop Kubernetes locally, Hetzner/Talos Kubernetes remotely, FluxCD + Flux Operator reconciliation from `zeko-k8s`, Cloudflare-hosted Hive gateway over private Explorer, Bridge, and Contract Registry APIs, private API routing through Cloudflare Tunnel, and per-network persistence/host topology. See [Spike 004 results](./spikes/004-deployment-topology/results.md) for full findings.
 5. **Pagination Schema** (`spikes/005-relay-pagination/`) — **Complete.** Resolved: full Relay Connections (`Node` interface, global IDs, `Connection`/`Edge`/`PageInfo`) for every paginated list. Every indexed row carries a **ULID** primary key serving simultaneously as the SurrealDB record ID and the inner ID inside the standard Pothos `base64("Type:<ulid>")` `Node.id` envelope; that envelope is the default normalized-cache key in both Apollo and urql graphcache. Natural keys (`tx_hash`, `(aux, auxSequence)`, `public_key`) remain queryable via dedicated root fields alongside `node(id:)` for polymorphic refetch. Range-bounded reads with a fixed window keep the flat-list shape. See [Spike 005 results](./spikes/005-relay-pagination/results.md).
 6. **L1 Watcher** (`spikes/006-l1-watcher/`) — **Complete.** Resolved: shared L1 Watcher component boundary, Zeko-M / Mina adapter design, future Zeko-E / Ethereum adapter boundary, NATS event schemas for all `zeko.l1.*` subjects, fault-tolerant live/archive recovery, and the Archive-Node-API `zkappCommands` requirement for complete Mina historical bridge recovery. See [Spike 006 results](./spikes/006-l1-watcher/results.html) and [Spike 006 addenda](./spikes/006-l1-watcher/addendums/index.html).
-7. **DA Monitor** (`spikes/007-da-monitor/`) — DA attestation model, API analysis (Ethermint/Celestia), NATS event schema for `zeko.da.attestations`, migration considerations.
+7. **DA Attestation Status** (`spikes/007-da-monitor/`) — **Complete.** Resolved: `batch.da_status` is derived from proved finality and L1 settlement signals; direct DA-node `zeko.da.signatures` publishing can add sub-second latency and signer detail. See [Spike 007 results](./spikes/007-da-monitor/results.html).
 8. **Full SurrealDB Schema** (`spikes/008-surrealdb-schema/`) — table inventory, ULID record IDs, indexes for keyset pagination (per spike 005), graph edges (per spike 002), schema migration strategy, live-query plan. Consolidates schema decisions from earlier spikes into a single coherent definition.
 
 ### Milestone 1: MCP Server + GraphQL API + Indexing Substrate (Foundation)
@@ -664,8 +676,8 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - Sequencer NATS Publishing (OCaml, in sequencer repo): `--nats-url` flag, three `enqueue_diff` publish points, finality events, health heartbeats, bootstrap during sync.
 - Backfill Service (OCaml, standalone, in sequencer repo): GraphQL API, DA layer → NATS gap filling, SSE progress streaming.
 - L1 Watcher (TypeScript, shared watcher package + Mina adapter): live/archive L1 connections, settlements, outer actions, rollbacks, bridge events, durable cursors, health, and graceful degradation. Complete Zeko-M historical bridge recovery requires the upstream Archive-Node-API `zkappCommands` query.
-- DA Monitor (TypeScript): attestation monitoring.
-- NATS JetStream: all streams configured, rolling retention (90d default) + R2 archival.
+- DA status derivation (inside Zeko Indexer): baseline `batch.da_status` from proved finality and L1 settlement signals, with `pending_da_attestation` buffering.
+- NATS JetStream: required streams configured, rolling retention (90d default) + R2 archival. `zeko-da` is configured when direct signature ingestion ships.
 - Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Consumer-side L2 rollback detection via hash chain continuity. Backfill integration for gap filling. L1 rollback handling.
 - SurrealDB: schema + migrations via surrealdb-migrations, backup cron.
 - Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only). SSE subscriptions.
@@ -735,7 +747,7 @@ Feature: Bridge Operation Indexing
 
 **Features:**
 
-*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (raw fields, labeled when a schema is published for the contract — see Section 5.2.10), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Contract detail:* Dedicated page for zkApp accounts with State / Events / Actions / Deployments tabs. When a schema is available, fields render with labels and a verification-grade badge; otherwise the page falls back to raw fields with a CTA linking to the submission flow. *Batch overview/detail:* Lifecycle, settlement confidence (settling/finalized/rolled_back). *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
+*Home:* Live transaction feed (SSE), stats, unified search bar with auto-detection (hash format, `B62` public key prefix, numeric sequence number, free-text memo fallback). *Transaction detail:* All fields, zkApp data display (raw fields, labeled when a schema is published for the contract — see Section 5.2.10), rollback status if reverted. *Account detail:* Balance, nonce, zkApp state, tabs for transactions/events/actions. *Contract detail:* Dedicated page for zkApp accounts with State / Events / Actions / Deployments tabs. When a schema is available, fields render with labels and a verification-grade badge; otherwise the page falls back to raw fields with a CTA linking to the submission flow. *Batch overview/detail:* Lifecycle, DA-attested status, settlement confidence (settling/finalized/rolled_back), and direct signer detail when available. *Bridge operations:* Lifecycle visualization with L1 ↔ L2 links, per-user bridge history. *System health:* Freshness badge on every page, degradation banner, operator `/status` page.
 
 **Future milestone:** Natural language queries in the search bar.
 
@@ -806,7 +818,7 @@ Feature: Settlement Finality
 
 **Components delivered:**
 - Ethereum L1 adapter for L1 Watcher: JSON-RPC/archive access, settlement tracking, bridge events, rollback/reorg facts, Ethereum-specific finality model, contract addresses, ABI mappings, archive provider guarantees.
-- DA Monitor update if DA implementation has changed.
+- Direct signature ingestion if required for this release: DA-node `zeko.da.signatures` publisher hook, indexer signature verification/quorum aggregation, per-operator signer detail, and implementation dispatch for future DA targets such as Celestia.
 - API hardening: Cloudflare gateway rate limiting, API key auth, documentation portal.
 - MCP server updated with Ethereum-aware SDK.
 
@@ -838,7 +850,7 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 - **Wrangler** runs Cloudflare Workers locally for the Hive Gateway, Contract Registry API, MCP Worker, and frontend/static asset workflows.
 - **proto** provides reproducible development toolchains.
 - **moonrepo** orchestrates local tasks such as building local images, bringing up the local cluster, port-forwarding services, and running dev processes.
-- The local profile must stay lean: target 4 CPU / 6 GB RAM allocated to Docker Desktop, with L1 Watcher, DA Monitor, and Backfill disabled unless explicitly enabled.
+- The local profile must stay lean: target 4 CPU / 6 GB RAM allocated to Docker Desktop, with L1 Watcher, Backfill, and optional direct DA-signature publishers disabled unless explicitly enabled.
 
 ### 10.2 Repository and GitOps Boundary
 
@@ -885,6 +897,7 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 | Custom indexing substrate | None | NATS streams, any consumer | 1 |
 | Agent access | None | Code-mode MCP | 1 |
 | Batch visibility | None | Full lifecycle | 1 (data), 2 (UI) |
+| DA attestation visibility | None | DA-attested status from proved/settlement signals; direct signer detail when available | 1 (status), later (signer detail) |
 | L1 rollback handling | None | Auto-reversion + display | 3 |
 | L2 rollback handling | None | Consumer-side hash chain detection + revert | 1 (data), 3 (finality) |
 | Bridge operations | Separate services | Unified indexer, shared DB | 1 |
@@ -905,7 +918,8 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 | Backfill Service | OCaml (standalone binary) | DA layer → NATS gap filling. GraphQL API + SSE. Lives in sequencer repo. |
 | NATS OCaml Client | OCaml library | HPUB with headers, CONNECT, PING/PONG, reconnection, JetStream dedup via Nats-Msg-Id. New dependency. |
 | L1 Watcher | TypeScript | I/O bound, GraphQL/JSON-RPC client ecosystem. Shared watcher lifecycle with provider adapters for Zeko-M/Mina and Zeko-E/Ethereum. |
-| DA Monitor | TypeScript | Small, isolated, I/O bound. |
+| DA Status Derivation | TypeScript (inside indexer) | Derives DA status from proved finality and L1 settlement events. |
+| Direct DA Signature Publisher Hook | OCaml (existing DA-node process) | Optional `zeko.da.signatures` publisher hook for sub-second attestation latency and per-operator signer detail. |
 | NATS | JetStream (rolling retention + R2 archival) | Durable, replay, extensible substrate. Source of truth. |
 | Zeko Indexer | TypeScript | I/O bound. Shared types with APIs. Rust only if perf bottleneck. |
 | Database | SurrealDB (single node) | Graph, record links, FTS, live queries. Rebuildable from NATS. |
