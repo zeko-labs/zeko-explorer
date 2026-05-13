@@ -1,16 +1,16 @@
 FROM node:26.1.0-alpine AS base
 WORKDIR /workspace
-RUN corepack enable && corepack prepare pnpm@11.1.1 --activate
+RUN npm install --global pnpm@11.1.1
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 COPY apps ./apps
 COPY packages ./packages
-RUN pnpm install --frozen-lockfile=false
+RUN pnpm install --prod --frozen-lockfile=false
 
 FROM deps AS runner
 ARG PNPM_FILTER
 ENV NODE_ENV=production
 ENV PORT=4100
 ENV PNPM_FILTER=${PNPM_FILTER}
-CMD ["sh", "-ceu", "case \"$PNPM_FILTER\" in '@zeko/l1-watcher') node --experimental-strip-types --experimental-specifier-resolution=node apps/l1-watcher/src/index.ts ;; '@zeko/zeko-indexer') node --experimental-strip-types --experimental-specifier-resolution=node apps/zeko-indexer/src/index.ts ;; '@zeko/explorer-api') PORT=4101 node --experimental-strip-types apps/explorer-api/src/index.ts ;; '@zeko/bridge-api') PORT=4102 node --experimental-strip-types apps/bridge-api/src/index.ts ;; *) echo \"Unknown PNPM_FILTER: $PNPM_FILTER\" >&2; exit 2 ;; esac"]
+CMD ["sh", "-ceu", "case \"$PNPM_FILTER\" in '@zeko/l1-watcher') node apps/l1-watcher/src/index.ts ;; '@zeko/zeko-indexer') node apps/zeko-indexer/src/index.ts ;; '@zeko/explorer-api') PORT=4101 node apps/explorer-api/src/index.ts ;; '@zeko/bridge-api') PORT=4102 node apps/bridge-api/src/index.ts ;; *) echo \"Unknown PNPM_FILTER: $PNPM_FILTER\" >&2; exit 2 ;; esac"]

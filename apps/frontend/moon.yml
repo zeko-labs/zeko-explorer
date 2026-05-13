@@ -10,7 +10,7 @@ workspace:
 
 tasks:
   build:
-    command: "node_modules/.bin/nuxt"
+    command: "nuxt"
     args: ["build"]
     inputs:
       - "app/**/*"
@@ -20,13 +20,13 @@ tasks:
       - ".output"
 
   dev:
-    command: "node_modules/.bin/nuxt"
+    command: "nuxt"
     args: ["dev", "--host", "0.0.0.0"]
     options:
       persistent: true
 
   typecheck:
-    command: "node_modules/.bin/nuxt"
+    command: "nuxt"
     args: ["typecheck"]
     inputs:
       - "app/**/*"

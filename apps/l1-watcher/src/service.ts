@@ -1,6 +1,6 @@
 import { NATS_SUBJECTS } from "@zeko/nats-protocol";
 
-import type { L1WatcherConfig } from "./config";
+import type { L1WatcherConfig } from "#config";
 
 export function describeL1Watcher(config: L1WatcherConfig): Record<string, unknown> {
   return {
