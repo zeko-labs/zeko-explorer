@@ -10,7 +10,6 @@ Feature: Schema inventory and indexes
       | account_transaction     |
       | batch                   |
       | batch_transaction       |
-      | bridge_quality_issue    |
       | bridge_operation        |
       | bridge_transaction_link |
       | da_attestation          |
@@ -20,9 +19,7 @@ Feature: Schema inventory and indexes
       | l1_watcher_cursor       |
       | l1_watcher_published    |
       | l2_action_link          |
-      | network_stats           |
       | outer_action            |
-      | schema_migration        |
       | sync_status             |
       | transaction             |
       | zkapp_action            |
@@ -31,31 +28,50 @@ Feature: Schema inventory and indexes
   Scenario: Transaction query paths have matching indexes
     Then table "transaction" should define indexes:
       | idx_tx_hash            |
-      | idx_tx_sequence        |
-      | idx_tx_block_order     |
-      | idx_tx_feed            |
-      | idx_tx_sender_feed     |
-      | idx_tx_receiver_feed   |
-      | idx_tx_fee_payer_feed  |
-      | idx_tx_target_ledger   |
+      | idx_tx_connection_order            |
+      | idx_tx_timestamp       |
+      | idx_tx_count           |
+
+  Scenario: Native aggregate count paths have matching indexes
+    Then table "account" should define indexes:
+      | idx_account_count |
+    And table "bridge_operation" should define indexes:
+      | idx_bo_count      |
+
+  Scenario: Account transaction graph query paths have matching indexes
+    Then table "account_transaction" should define indexes:
+      | idx_account_tx_public_key_all_order |
+      | idx_account_tx_public_key_role_order     |
+      | idx_account_tx_unique              |
 
   Scenario: Bridge query paths have matching indexes
     Then table "bridge_operation" should define indexes:
       | idx_bo_aux_unique          |
-      | idx_bo_sender_feed         |
-      | idx_bo_recipient_feed      |
-      | idx_bo_sender_type_feed    |
-      | idx_bo_recipient_type_feed |
-      | idx_bo_type_status_feed    |
+      | idx_bo_recipient_order      |
+      | idx_bo_sender_type_order    |
+      | idx_bo_recipient_type_order |
+      | idx_bo_type_status_order    |
       | idx_bo_l1_witness          |
       | idx_bo_l2_action           |
+      | idx_bo_sender_order         |
+      | idx_bo_data_quality        |
+      | idx_bo_quality_primary_reason |
 
-  Scenario: Bridge evidence issue query paths have matching indexes
-    Then table "bridge_quality_issue" should define indexes:
-      | idx_bqi_unique      |
-      | idx_bqi_open_feed   |
-      | idx_bqi_reason_feed |
-      | idx_bqi_bridge      |
+  Scenario: Native full-text search paths have matching indexes
+    Then table "transaction" should define indexes:
+      | idx_tx_search_text |
+    And table "account" should define indexes:
+      | idx_account_search_text |
+    And table "bridge_operation" should define indexes:
+      | idx_bo_search_text |
+
+  Scenario: Transaction detail fanout query paths have matching indexes
+    Then table "zkapp_event" should define indexes:
+      | idx_event_hash_order |
+    And table "zkapp_action" should define indexes:
+      | idx_action_hash_order |
+    And table "inner_action" should define indexes:
+      | idx_ia_txn_hash_order |
 
   Scenario: Spike 006 watcher durability tables have idempotency indexes
     Then table "l1_watcher_cursor" should define indexes:

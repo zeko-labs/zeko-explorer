@@ -9,7 +9,7 @@
 --
 -- The UPDATE below is the important data-bearing proof: existing bridge rows
 -- created before this migration are backfilled to `complete` and receive the
--- explicit ascending sort key used by newest-first bridge feeds.
+-- explicit ascending sort key used by newest-first bridge connections.
 
 DEFINE FIELD OVERWRITE data_quality ON TABLE bridge_operation TYPE "complete" | "partial" | "inferred" | "unrecoverable" DEFAULT "complete";
 DEFINE FIELD OVERWRITE data_quality_reasons ON TABLE bridge_operation TYPE option<array<string>>;
@@ -23,37 +23,9 @@ SET
   sort_submit_block_height = 0 - submit_block_height
 WHERE data_quality = NONE OR sort_submit_block_height = NONE;
 
-DEFINE INDEX OVERWRITE idx_bo_data_quality ON TABLE bridge_operation FIELDS data_quality, sort_submit_block_height, id;
-
--- Materialized issue table. This is the scale decision for incomplete bridge
--- evidence: do not scan all bridge_operation rows by low-cardinality
--- `data_quality`; write one compact operator diagnostic row per reason instead.
--- Public bridge history must read bridge_operation and treat non-complete
--- quality as row metadata, not a public issue feed, until a smaller public queue
--- is designed and benchmarked.
-DEFINE TABLE OVERWRITE bridge_quality_issue SCHEMAFULL;
-DEFINE FIELD OVERWRITE id ON TABLE bridge_quality_issue TYPE string;
-DEFINE FIELD OVERWRITE bridge_operation ON TABLE bridge_quality_issue TYPE record<bridge_operation>;
-DEFINE FIELD OVERWRITE aux ON TABLE bridge_quality_issue TYPE string;
-DEFINE FIELD OVERWRITE aux_sequence ON TABLE bridge_quality_issue TYPE int;
-DEFINE FIELD OVERWRITE type ON TABLE bridge_quality_issue TYPE "deposit" | "withdrawal";
-DEFINE FIELD OVERWRITE status ON TABLE bridge_quality_issue TYPE "submitted" | "l1_witnessed" | "l2_witnessed" | "committed" | "delay_passed" | "completed" | "timed_out" | "cancelled" | "rolled_back";
-DEFINE FIELD OVERWRITE data_quality ON TABLE bridge_quality_issue TYPE "partial" | "inferred" | "unrecoverable";
-DEFINE FIELD OVERWRITE reason ON TABLE bridge_quality_issue TYPE string;
-DEFINE FIELD OVERWRITE source_subject ON TABLE bridge_quality_issue TYPE option<string>;
-DEFINE FIELD OVERWRITE missing_fields ON TABLE bridge_quality_issue TYPE option<array<string>>;
-DEFINE FIELD OVERWRITE sender ON TABLE bridge_quality_issue TYPE option<string>;
-DEFINE FIELD OVERWRITE recipient ON TABLE bridge_quality_issue TYPE option<string>;
-DEFINE FIELD OVERWRITE submit_block_height ON TABLE bridge_quality_issue TYPE int;
-DEFINE FIELD OVERWRITE sort_submit_block_height ON TABLE bridge_quality_issue TYPE int;
-DEFINE FIELD OVERWRITE submit_timestamp ON TABLE bridge_quality_issue TYPE datetime;
-DEFINE FIELD OVERWRITE detected_at ON TABLE bridge_quality_issue TYPE datetime DEFAULT time::now() READONLY;
-DEFINE FIELD OVERWRITE resolved_at ON TABLE bridge_quality_issue TYPE option<datetime>;
-DEFINE FIELD OVERWRITE is_open ON TABLE bridge_quality_issue TYPE bool DEFAULT true;
-DEFINE INDEX OVERWRITE idx_bqi_unique ON TABLE bridge_quality_issue FIELDS bridge_operation, reason UNIQUE;
-DEFINE INDEX OVERWRITE idx_bqi_open_feed ON TABLE bridge_quality_issue FIELDS is_open, data_quality, sort_submit_block_height, id;
-DEFINE INDEX OVERWRITE idx_bqi_reason_feed ON TABLE bridge_quality_issue FIELDS reason, sort_submit_block_height, id;
-DEFINE INDEX OVERWRITE idx_bqi_bridge ON TABLE bridge_quality_issue FIELDS bridge_operation;
+DEFINE INDEX OVERWRITE idx_bo_data_quality ON TABLE bridge_operation FIELDS data_quality, sort_submit_block_height, aux, aux_sequence, id;
+DEFINE INDEX OVERWRITE idx_bo_quality_primary_reason ON TABLE bridge_operation FIELDS data_quality_reasons[0], sort_submit_block_height, aux, aux_sequence, id;
+DEFINE INDEX OVERWRITE idx_tx_ledger ON TABLE transaction FIELDS target_ledger_hash;
 
 -- Durable cursor per source/network/provider/cursor kind. This gives the L1
 -- watcher independent progress tracking for tip, outer-action, bridge-event,
@@ -84,5 +56,3 @@ DEFINE FIELD OVERWRITE source_height ON TABLE l1_watcher_published TYPE option<i
 DEFINE FIELD OVERWRITE payload_hash ON TABLE l1_watcher_published TYPE string;
 DEFINE FIELD OVERWRITE published_at ON TABLE l1_watcher_published TYPE datetime DEFAULT time::now() READONLY;
 DEFINE INDEX OVERWRITE idx_l1_published_msg ON TABLE l1_watcher_published FIELDS msg_id UNIQUE;
-
-CREATE schema_migration:0002 SET version = 2, name = "l1_watcher_and_bridge_quality", checksum = "spike008-0002";

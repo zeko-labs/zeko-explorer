@@ -7,7 +7,7 @@ Feature: SurrealDB graph model
   Scenario: Account detail can traverse bounded transaction-role edges
     When I run query "account-transaction-graph" with:
       | account | account:01J0000000000000000000ALIC |
-    Then the graph field "transactions" of the first row should contain 1 rows
+    Then the graph field "transactions" of the first row should contain 3 rows
 
   Scenario: Batch detail can traverse transaction containment edges
     When I run query "batch-with-transactions-graph" with:
@@ -21,4 +21,3 @@ Feature: SurrealDB graph model
     Then the graph field "l1_actions" of the first row should contain 2 rows
     And the graph field "l2_actions" of the first row should contain 1 rows
     And the graph field "transactions" of the first row should contain 1 rows
-

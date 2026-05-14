@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { applyFile, queryFile, runSql, spikeDir, startSurreal, stopSurreal, record, type SurrealParam } from "../lib/surreal-client.ts";
+import { datetime, queryFile, seedSqlWithSurrealKit, spikeDir, startSurreal, stopSurreal, syncSchema, record, type SurrealParam } from "../lib/surreal-client.ts";
 
 type BenchmarkConfig = {
   readonly accounts: number;
@@ -20,12 +20,54 @@ type BenchmarkResult = {
   readonly p50_ms: number;
   readonly p95_ms: number;
   readonly max_ms: number;
+  readonly budget_p95_ms: number;
+  readonly passed: boolean;
+};
+
+const queryBudgets: Readonly<Record<string, number>> = {
+  "transaction-feed-first-page": 250,
+  "transaction-feed": 250,
+  "transaction-by-hash": 100,
+  "account-by-public-key": 100,
+  "bridge-operation-by-natural-key": 100,
+  "transaction-detail-by-hash": 250,
+  "account-transaction-feed-first-page": 250,
+  "account-transaction-feed": 250,
+  "transactions-by-sender-first-page": 250,
+  "transactions-by-receiver-first-page": 250,
+  "transactions-by-sender": 250,
+  "account-activity-first-page": 250,
+  "account-activity-feed": 250,
+  "zkapp-events-first-page": 250,
+  "zkapp-events-by-account": 250,
+  "zkapp-actions-first-page": 250,
+  "zkapp-actions-by-account": 250,
+  "bridge-operations-by-sender-first-page": 250,
+  "bridge-operations-by-sender": 250,
+  "bridge-quality-issues-first-page": 250,
+  "bridge-quality-issues-by-reason": 250,
+  "batch-feed-first-page": 100,
+  "transactions-search-text": 250,
+  "accounts-search-text": 250,
+  "bridge-operations-search-text": 250,
+  "network-throughput-by-minute": 500
 };
 
 const db = process.env.BENCH_DB_NAME ?? `bench_${Date.now()}`;
 const storageDescription = process.env.SPIKE008_BENCH_STORAGE ?? (process.env.SPIKE008_SURREAL_ENDPOINT === undefined ? "in-memory local process" : "external SurrealDB endpoint");
 const skipSeed = process.env.BENCH_SKIP_SEED === "1";
-const importedSeedSeconds = process.env.BENCH_IMPORTED_SEED_SECONDS === undefined ? undefined : Number(process.env.BENCH_IMPORTED_SEED_SECONDS);
+const loadMethod = process.env.BENCH_LOAD_METHOD ?? "local-surrealkit-seed";
+const importedLoadSeconds =
+  process.env.BENCH_LOAD_SECONDS === undefined
+    ? process.env.BENCH_SURREALKIT_SEED_SECONDS === undefined ? undefined : Number(process.env.BENCH_SURREALKIT_SEED_SECONDS)
+    : Number(process.env.BENCH_LOAD_SECONDS);
+const loadBreakdown = {
+  generate: process.env.BENCH_LOAD_GENERATE_SECONDS === undefined ? undefined : Number(process.env.BENCH_LOAD_GENERATE_SECONDS),
+  dbReady: process.env.BENCH_LOAD_DB_READY_SECONDS === undefined ? undefined : Number(process.env.BENCH_LOAD_DB_READY_SECONDS),
+  schema: process.env.BENCH_LOAD_SCHEMA_SECONDS === undefined ? undefined : Number(process.env.BENCH_LOAD_SCHEMA_SECONDS),
+  data: process.env.BENCH_LOAD_DATA_SECONDS === undefined ? undefined : Number(process.env.BENCH_LOAD_DATA_SECONDS),
+  indexes: process.env.BENCH_LOAD_INDEX_SECONDS === undefined ? undefined : Number(process.env.BENCH_LOAD_INDEX_SECONDS)
+};
 
 function intEnv(name: string, fallback: number): number {
   const value = process.env[name];
@@ -57,7 +99,7 @@ function accountId(index: number): string {
 }
 
 function txId(index: number): string {
-  return `transaction:${ulid("T", index)}`;
+  return `transaction:[${0 - index}, 0, "bench-tx-${index}"]`;
 }
 
 function activityId(index: number): string {
@@ -66,10 +108,6 @@ function activityId(index: number): string {
 
 function bridgeId(index: number): string {
   return `bridge_operation:${ulid("O", index)}`;
-}
-
-function bridgeIssueId(index: number): string {
-  return `bridge_quality_issue:${ulid("Q", index)}`;
 }
 
 function eventId(index: number): string {
@@ -90,9 +128,9 @@ function isoMinute(day: number, index: number): string {
   return `2026-05-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`;
 }
 
-async function flush(statements: string[]): Promise<void> {
+function flush(statements: string[], chunks: string[]): void {
   if (statements.length === 0) return;
-  await runSql(db, statements.join("\n"));
+  chunks.push(statements.join("\n"));
   statements.length = 0;
 }
 
@@ -106,19 +144,21 @@ function progress(label: string, current: number, total: number, start: number):
 
 async function seedBenchmarkData(config: BenchmarkConfig): Promise<void> {
   const statements: string[] = [];
+  const chunks: string[] = [];
   const start = performance.now();
   const contractCount = Math.min(config.contractAccounts, config.accounts);
   const profileAccountIndex = Math.min(config.activityStride % 5 === 0 ? config.activityStride : 0, config.accounts - 1);
 
   for (let i = 0; i < config.accounts; i += 1) {
     const publicKey = accountPublicKey(i);
-    statements.push(`CREATE ${accountId(i)} SET public_key = "${publicKey}", balance = "${1_000_000_000 - i}", nonce = ${i % 100}, last_activity_height = ${1000 + i}, last_activity_at = d"${isoMinute(1, i)}" RETURN NONE;`);
-    if (statements.length >= config.batchSize) await flush(statements);
+    const searchMarker = i % 1000 === 0 ? "benchsearchaccount" : "benchaccount";
+    statements.push(`CREATE ${accountId(i)} SET public_key = "${publicKey}", balance = "${1_000_000_000 - i}", nonce = ${i % 100}, last_activity_height = ${1000 + i}, last_activity_at = d"${isoMinute(1, i)}", search_text = "${publicKey} ${searchMarker}" RETURN NONE;`);
+    if (statements.length >= config.batchSize) flush(statements, chunks);
     progress("accounts", i + 1, config.accounts, start);
   }
 
-  statements.push(`CREATE batch:${ulid("B", 1)} SET batch_height = 1, first_tx_height = 1, last_tx_height = ${config.transactions}, transaction_count = ${config.transactions}, proof_status = "proved", settlement_status = "settling", da_status = "attested" RETURN NONE;`);
-  await flush(statements);
+  statements.push(`CREATE batch:${ulid("B", 1)} SET batch_height = 1, sort_batch_height = -1, first_tx_height = 1, last_tx_height = ${config.transactions}, transaction_count = ${config.transactions}, proof_status = "proved", settlement_status = "settling", da_status = "attested" RETURN NONE;`);
+  flush(statements, chunks);
 
   for (let i = 1; i <= config.transactions; i += 1) {
     const sender = accountId(i % config.accounts);
@@ -126,23 +166,23 @@ async function seedBenchmarkData(config: BenchmarkConfig): Promise<void> {
     const senderPublicKey = accountPublicKey(i % config.accounts);
     const receiverPublicKey = i % 5 === 0 ? accountPublicKey(i % contractCount) : accountPublicKey((i + 1) % config.accounts);
     const tx = txId(i);
+    const txHash = `bench-tx-${i}`;
     const timestamp = isoMinute(2, i);
-    statements.push(`CREATE ${tx} SET hash = "bench-tx-${i}", sequence_number = ${i}, type = "${i % 3 === 0 ? "zkapp_command" : "payment"}", status = "applied", sender = ${sender}, receiver = ${receiver}, sender_public_key = "${senderPublicKey}", receiver_public_key = "${receiverPublicKey}", amount = "${i}", fee = "1", nonce = ${i % 100}, block_height = ${i}, tx_index = 0, sort_block_height = ${0 - i}, sort_tx_index = 0, timestamp = d"${timestamp}", source_ledger_hash = "bench-ledger-${i - 1}", target_ledger_hash = "bench-ledger-${i}", batch = batch:${ulid("B", 1)} RETURN NONE;`);
-    const receiverAccountIndex = i % contractCount;
-    if (i % 5 === 0 && (receiverAccountIndex === 0 || receiverAccountIndex === profileAccountIndex)) {
-      statements.push(`RELATE ${tx}->account_transaction->${receiver} SET role = "receiver", account_public_key = "${receiverPublicKey}", sort_block_height = ${0 - i}, sort_tx_index = 0 RETURN NONE;`);
-    }
+    const txSearchText = i % 1000 === 0 ? `, search_text = "benchsearchtransaction memo-${i}"` : "";
+    statements.push(`CREATE ${tx} SET hash = "${txHash}", sequence_number = ${i}, type = "${i % 3 === 0 ? "zkapp_command" : "payment"}", status = "applied", sender = ${sender}, receiver = ${receiver}, sender_public_key = "${senderPublicKey}", receiver_public_key = "${receiverPublicKey}", amount = "${i}", fee = "1", nonce = ${i % 100}${txSearchText}, block_height = ${i}, tx_index = 0, sort_block_height = ${0 - i}, sort_tx_index = 0, timestamp = d"${timestamp}", source_ledger_hash = "bench-ledger-${i - 1}", target_ledger_hash = "bench-ledger-${i}", batch = batch:${ulid("B", 1)} RETURN NONE;`);
+    statements.push(`RELATE ${tx}->account_transaction->${sender} SET role = "sender", account_public_key = "${senderPublicKey}", sort_block_height = ${0 - i}, sort_tx_index = 0 RETURN NONE;`);
+    statements.push(`RELATE ${tx}->account_transaction->${receiver} SET role = "receiver", account_public_key = "${receiverPublicKey}", sort_block_height = ${0 - i}, sort_tx_index = 0 RETURN NONE;`);
     if (i % config.activityStride === 0) {
-      statements.push(`CREATE ${activityId(i)} SET account = ${sender}, transaction = ${tx}, role = "sender", block_height = ${i}, tx_index = 0, activity_index = 0, timestamp = d"${timestamp}", balance_before = "1000", balance_after = "999", target_ledger_hash = "bench-ledger-${i}" RETURN NONE;`);
+      statements.push(`CREATE ${activityId(i)} SET account = ${sender}, transaction = ${tx}, role = "sender", block_height = ${i}, tx_index = 0, activity_index = 0, sort_block_height = ${0 - i}, sort_tx_index = 0, sort_activity_index = 0, timestamp = d"${timestamp}", balance_before = "1000", balance_after = "999", target_ledger_hash = "bench-ledger-${i}" RETURN NONE;`);
     }
     if (i % 100 === 0) {
-      statements.push(`CREATE ${eventId(i)} SET transaction = ${tx}, emitting_account = ${receiver}, event_index = 0, block_height = ${i}, tx_index = 0, timestamp = d"${timestamp}", fields = ["${i}", "${i + 1}"], sequence_number = ${i}, target_ledger_hash = "bench-ledger-${i}" RETURN NONE;`);
-      statements.push(`CREATE ${actionId(i)} SET transaction = ${tx}, emitting_account = ${receiver}, action_index = 0, block_height = ${i}, tx_index = 0, timestamp = d"${timestamp}", fields = ["${i + 2}", "${i + 3}"], before_action_state = "bench-action-${i - 1}", action_state = "bench-action-${i}", sequence_number = ${i}, target_ledger_hash = "bench-ledger-${i}" RETURN NONE;`);
+      statements.push(`CREATE ${eventId(i)} SET transaction = ${tx}, transaction_hash = "${txHash}", emitting_account = ${receiver}, event_index = 0, block_height = ${i}, tx_index = 0, sort_block_height = ${0 - i}, sort_tx_index = 0, sort_event_index = 0, timestamp = d"${timestamp}", fields = ["${i}", "${i + 1}"], sequence_number = ${i}, target_ledger_hash = "bench-ledger-${i}" RETURN NONE;`);
+      statements.push(`CREATE ${actionId(i)} SET transaction = ${tx}, transaction_hash = "${txHash}", emitting_account = ${receiver}, action_index = 0, block_height = ${i}, tx_index = 0, sort_block_height = ${0 - i}, sort_tx_index = 0, sort_action_index = 0, timestamp = d"${timestamp}", fields = ["${i + 2}", "${i + 3}"], before_action_state = "bench-action-${i - 1}", action_state = "bench-action-${i}", sequence_number = ${i}, target_ledger_hash = "bench-ledger-${i}" RETURN NONE;`);
     }
-    if (statements.length >= config.batchSize) await flush(statements);
+    if (statements.length >= config.batchSize) flush(statements, chunks);
     progress("transactions + account_activity", i, config.transactions, start);
   }
-  await flush(statements);
+  flush(statements, chunks);
 
   for (let i = 0; i < config.bridgeOperations; i += 1) {
     const aux = `bench-aux-${Math.floor(i / 3)}`;
@@ -151,14 +191,13 @@ async function seedBenchmarkData(config: BenchmarkConfig): Promise<void> {
     const sender = accountPublicKey(i % config.accounts);
     const recipient = accountPublicKey((i + 1) % config.accounts);
     const bridge = bridgeId(i);
-    statements.push(`CREATE ${bridge} SET type = "${i % 2 === 0 ? "deposit" : "withdrawal"}", status = "${i % 5 === 0 ? "submitted" : "completed"}", aux = "${aux}", aux_sequence = ${i % 3}, sender = "${sender}", recipient = "${recipient}", amount = "${i}", data_quality = "${quality}", data_quality_reasons = ${quality === "partial" ? "[\"historical_bridge_events_unavailable\"]" : "NONE"}, submit_tx_hash = "bench-submit-${i}", submit_block_height = ${submitBlockHeight}, sort_submit_block_height = ${0 - submitBlockHeight}, submit_timestamp = d"${isoMinute(3, i)}" RETURN NONE;`);
-    if (quality === "partial") {
-      statements.push(`CREATE ${bridgeIssueId(i)} SET bridge_operation = ${bridge}, aux = "${aux}", aux_sequence = ${i % 3}, type = "${i % 2 === 0 ? "deposit" : "withdrawal"}", status = "${i % 5 === 0 ? "submitted" : "completed"}", data_quality = "partial", is_open = true, reason = "historical_bridge_events_unavailable", source_subject = "zeko.l1.bridge-events", missing_fields = ["l1_witness_action_state", "commit_action_state", "l2_action_state"], sender = "${sender}", recipient = "${recipient}", submit_block_height = ${submitBlockHeight}, sort_submit_block_height = ${0 - submitBlockHeight}, submit_timestamp = d"${isoMinute(3, i)}" RETURN NONE;`);
-    }
-    if (statements.length >= config.batchSize) await flush(statements);
+    const bridgeSearchMarker = i % 1000 === 0 ? "benchsearchbridge" : "benchbridge";
+    statements.push(`CREATE ${bridge} SET type = "${i % 2 === 0 ? "deposit" : "withdrawal"}", status = "${i % 5 === 0 ? "submitted" : "completed"}", aux = "${aux}", aux_sequence = ${i % 3}, sender = "${sender}", recipient = "${recipient}", amount = "${i}", search_text = "${aux} ${sender} ${recipient} ${bridgeSearchMarker}", data_quality = "${quality}", data_quality_reasons = ${quality === "partial" ? "[\"historical_bridge_events_unavailable\"]" : "NONE"}, submit_tx_hash = "bench-submit-${i}", submit_block_height = ${submitBlockHeight}, sort_submit_block_height = ${0 - submitBlockHeight}, submit_timestamp = d"${isoMinute(3, i)}" RETURN NONE;`);
+    if (statements.length >= config.batchSize) flush(statements, chunks);
     progress("bridge_operations", i + 1, config.bridgeOperations, start);
   }
-  await flush(statements);
+  flush(statements, chunks);
+  await seedSqlWithSurrealKit(db, chunks.join("\n"));
 }
 
 function percentile(values: readonly number[], p: number): number {
@@ -169,24 +208,37 @@ function percentile(values: readonly number[], p: number): number {
 }
 
 async function measure(name: string, params: Readonly<Record<string, SurrealParam>>, iterations: number): Promise<BenchmarkResult> {
+  console.error(`[bench] ${name}: start`);
   const durations: number[] = [];
+  await queryFile(db, name, params);
   for (let i = 0; i < iterations; i += 1) {
     const start = performance.now();
     await queryFile(db, name, params);
     durations.push(performance.now() - start);
   }
+  const p95 = percentile(durations, 0.95);
+  const budget = queryBudgets[name] ?? 250;
+  console.error(`[bench] ${name}: p95=${p95.toFixed(3)}ms max=${Math.max(...durations).toFixed(3)}ms`);
   return {
     query: name,
     iterations,
     min_ms: Math.min(...durations),
     p50_ms: percentile(durations, 0.5),
-    p95_ms: percentile(durations, 0.95),
-    max_ms: Math.max(...durations)
+    p95_ms: p95,
+    max_ms: Math.max(...durations),
+    budget_p95_ms: budget,
+    passed: p95 <= budget
   };
 }
 
 function benchmarkText(config: BenchmarkConfig, results: readonly BenchmarkResult[], elapsedSeedSeconds: number): string {
   const accountActivityRows = Math.floor(config.transactions / config.activityStride);
+  const breakdown = loadBreakdown.data === undefined
+    ? []
+    : [
+        "",
+        `Load breakdown: benchmark data generation ${loadBreakdown.generate?.toFixed(2)}s, database ready ${loadBreakdown.dbReady?.toFixed(2)}s, schema apply/import ${loadBreakdown.schema?.toFixed(2)}s, ${loadMethod} data load ${loadBreakdown.data.toFixed(2)}s, index build ${loadBreakdown.indexes?.toFixed(2)}s.`
+      ];
   return [
     "# Spike 008 Benchmark Results",
     "",
@@ -194,10 +246,11 @@ function benchmarkText(config: BenchmarkConfig, results: readonly BenchmarkResul
     "",
     `Dataset: ${config.accounts.toLocaleString()} accounts (${config.contractAccounts.toLocaleString()} high-volume contract accounts), ${config.transactions.toLocaleString()} transactions, ${accountActivityRows.toLocaleString()} account activity rows, ${config.bridgeOperations.toLocaleString()} bridge operations.`,
     `Load time: ${elapsedSeedSeconds.toFixed(2)}s. SurrealDB: ${storageDescription}. Query runner: Node.js over SurrealDB HTTP SQL API after data is already loaded.`,
+    ...breakdown,
     "",
-    "| Query | Iterations | min ms | p50 ms | p95 ms | max ms |",
-    "|---|---:|---:|---:|---:|---:|",
-    ...results.map((r) => `| ${r.query} | ${r.iterations} | ${r.min_ms.toFixed(3)} | ${r.p50_ms.toFixed(3)} | ${r.p95_ms.toFixed(3)} | ${r.max_ms.toFixed(3)} |`)
+    "| Query | Iterations | min ms | p50 ms | p95 ms | budget p95 ms | max ms | pass |",
+    "|---|---:|---:|---:|---:|---:|---:|:---:|",
+    ...results.map((r) => `| ${r.query} | ${r.iterations} | ${r.min_ms.toFixed(3)} | ${r.p50_ms.toFixed(3)} | ${r.p95_ms.toFixed(3)} | ${r.budget_p95_ms.toFixed(0)} | ${r.max_ms.toFixed(3)} | ${r.passed ? "yes" : "no"} |`)
   ].join("\n");
 }
 
@@ -207,6 +260,9 @@ function escapeHtml(value: string): string {
 
 function benchmarkHtml(config: BenchmarkConfig, results: readonly BenchmarkResult[], elapsedSeedSeconds: number): string {
   const accountActivityRows = Math.floor(config.transactions / config.activityStride);
+  const breakdown = loadBreakdown.data === undefined
+    ? ""
+    : `<p>Load breakdown: benchmark data generation ${loadBreakdown.generate?.toFixed(2)}s, database ready ${loadBreakdown.dbReady?.toFixed(2)}s, schema apply/import ${loadBreakdown.schema?.toFixed(2)}s, ${escapeHtml(loadMethod)} data load ${loadBreakdown.data.toFixed(2)}s, index build ${loadBreakdown.indexes?.toFixed(2)}s.</p>`;
   const rows = results.map((r) => `
         <tr>
           <td><code>${escapeHtml(r.query)}</code></td>
@@ -214,7 +270,9 @@ function benchmarkHtml(config: BenchmarkConfig, results: readonly BenchmarkResul
           <td>${r.min_ms.toFixed(3)}</td>
           <td>${r.p50_ms.toFixed(3)}</td>
           <td>${r.p95_ms.toFixed(3)}</td>
+          <td>${r.budget_p95_ms.toFixed(0)}</td>
           <td>${r.max_ms.toFixed(3)}</td>
+          <td>${r.passed ? "PASS" : "FAIL"}</td>
         </tr>`).join("");
   return `<!doctype html>
 <html lang="en">
@@ -249,10 +307,11 @@ function benchmarkHtml(config: BenchmarkConfig, results: readonly BenchmarkResul
       <div class="stat"><b>${elapsedSeedSeconds.toFixed(2)}s</b>load time</div>
     </div>
     <p>SurrealDB: ${escapeHtml(storageDescription)}. Query runner: Node.js over SurrealDB HTTP SQL API after data is already loaded.</p>
+    ${breakdown}
   </header>
   <section>
     <table>
-      <thead><tr><th>Query</th><th>Iterations</th><th>min ms</th><th>p50 ms</th><th>p95 ms</th><th>max ms</th></tr></thead>
+      <thead><tr><th>Query</th><th>Iterations</th><th>min ms</th><th>p50 ms</th><th>p95 ms</th><th>budget p95 ms</th><th>max ms</th><th>pass</th></tr></thead>
       <tbody>${rows}
       </tbody>
     </table>
@@ -265,40 +324,96 @@ function benchmarkHtml(config: BenchmarkConfig, results: readonly BenchmarkResul
 
 const config = configFromEnv();
 if (!skipSeed && config.transactions > 100_000) {
-  throw new Error("Large benchmark datasets must be loaded with pnpm run benchmark:docker:persisted so row loading uses surreal import, not the HTTP SQL query runner.");
+  throw new Error("Large benchmark datasets must be loaded with pnpm run benchmark:docker:persisted so row loading uses the official persisted loader, not the local smoke benchmark runner.");
 }
 const profileAccountIndex = Math.min(config.activityStride % 5 === 0 ? config.activityStride : 0, config.accounts - 1);
+const latestZkappTx = Math.floor(config.transactions / 100) * 100;
+const zkappCursorTx = Math.max(100, latestZkappTx - 2_400);
 await startSurreal();
 try {
   let elapsedSeedSeconds = 0;
   if (skipSeed) {
-    if (importedSeedSeconds !== undefined && Number.isFinite(importedSeedSeconds)) elapsedSeedSeconds = importedSeedSeconds;
+    if (importedLoadSeconds !== undefined && Number.isFinite(importedLoadSeconds)) elapsedSeedSeconds = importedLoadSeconds;
   } else {
-    await applyFile(db, "schema.surql");
+    await syncSchema(db);
     const seedStart = performance.now();
     await seedBenchmarkData(config);
     elapsedSeedSeconds = (performance.now() - seedStart) / 1000;
   }
 
   const results = [
-    await measure("transaction-feed-first-page", { limit: 25 }, config.iterations),
+    await measure("transaction-feed-first-page", { from_sort_block_height: 0 - config.transactions, limit: 25 }, config.iterations),
+    await measure("transaction-feed", {
+      after_sort_block_height: 0 - (config.transactions - 24),
+      after_sort_tx_index: 0,
+      after_hash: `bench-tx-${config.transactions - 24}`,
+      limit: 25
+    }, config.iterations),
     await measure("transaction-by-hash", { hash: `bench-tx-${Math.floor(config.transactions * 0.8)}` }, config.iterations),
+    await measure("account-by-public-key", { public_key: accountPublicKey(profileAccountIndex) }, config.iterations),
+    await measure("bridge-operation-by-natural-key", { aux: `bench-aux-${Math.floor(Math.floor(config.bridgeOperations * 0.8) / 3)}`, aux_sequence: Math.floor(config.bridgeOperations * 0.8) % 3 }, config.iterations),
     await measure("transaction-detail-by-hash", { hash: `bench-tx-${Math.floor(config.transactions * 0.8)}`, event_limit: 25, action_limit: 25, inner_action_limit: 25 }, config.iterations),
-    await measure("account-profile-overview", { public_key: accountPublicKey(profileAccountIndex), activity_limit: 25, sent_limit: 25, received_limit: 25, bridge_limit: 25 }, config.iterations),
+    await measure("account-transaction-feed-first-page", { public_key: accountPublicKey(profileAccountIndex), limit: 25 }, config.iterations),
+    await measure("account-transaction-feed", {
+      public_key: accountPublicKey(profileAccountIndex),
+      after_sort_block_height: 0 - config.transactions,
+      after_sort_tx_index: 0,
+      after_role: "receiver",
+      after_hash: `bench-tx-${config.transactions}`,
+      limit: 25
+    }, config.iterations),
     await measure("transactions-by-sender-first-page", { public_key: accountPublicKey(1), limit: 25 }, config.iterations),
     await measure("transactions-by-receiver-first-page", { public_key: accountPublicKey(0), limit: 25 }, config.iterations),
     await measure("transactions-by-sender", {
       public_key: accountPublicKey(1),
       after_sort_block_height: 0 - (config.transactions + 1),
       after_sort_tx_index: -999_999,
-      after_id: record(txId(config.transactions + 1)),
+      after_hash: "",
       limit: 25
     }, config.iterations),
     await measure("account-activity-first-page", { account: record(accountId(profileAccountIndex)), limit: 25 }, config.iterations),
+    await measure("account-activity-feed", {
+      account: record(accountId(profileAccountIndex)),
+      after_sort_block_height: 0 - config.transactions,
+      after_sort_tx_index: 0,
+      after_sort_activity_index: 0,
+      after_id: record(activityId(config.transactions)),
+      limit: 25
+    }, config.iterations),
+    await measure("zkapp-events-first-page", { account: record(accountId(0)), limit: 25 }, config.iterations),
+    await measure("zkapp-events-by-account", {
+      account: record(accountId(0)),
+      after_sort_block_height: 0 - zkappCursorTx,
+      after_sort_tx_index: 0,
+      after_sort_event_index: 0,
+      after_id: record(eventId(zkappCursorTx)),
+      limit: 25
+    }, config.iterations),
+    await measure("zkapp-actions-first-page", { account: record(accountId(0)), limit: 25 }, config.iterations),
+    await measure("zkapp-actions-by-account", {
+      account: record(accountId(0)),
+      after_sort_block_height: 0 - zkappCursorTx,
+      after_sort_tx_index: 0,
+      after_sort_action_index: 0,
+      after_id: record(actionId(zkappCursorTx)),
+      limit: 25
+    }, config.iterations),
     await measure("bridge-operations-by-sender-first-page", { public_key: accountPublicKey(1), limit: 25 }, config.iterations),
+    await measure("bridge-operations-by-sender", {
+      public_key: accountPublicKey(1),
+      after_sort_submit_block_height: 0 - (5_000 + 80_001),
+      after_aux: "bench-aux-26667",
+      after_aux_sequence: 0,
+      after_id: record(bridgeId(80_001)),
+      limit: 25
+    }, config.iterations),
     await measure("bridge-quality-issues-first-page", { data_quality: "partial", limit: 25 }, config.iterations),
     await measure("bridge-quality-issues-by-reason", { reason: "historical_bridge_events_unavailable", limit: 25 }, config.iterations),
-    await measure("batch-feed-first-page", { limit: 25 }, config.iterations)
+    await measure("batch-feed-first-page", { limit: 25 }, config.iterations),
+    await measure("transactions-search-text", { term: "benchsearchtransaction", limit: 25 }, config.iterations),
+    await measure("accounts-search-text", { term: "benchsearchaccount", limit: 25 }, config.iterations),
+    await measure("bridge-operations-search-text", { term: "benchsearchbridge", limit: 25 }, config.iterations),
+    await measure("network-throughput-by-minute", { from: datetime("2026-05-02T00:00:00Z"), to: datetime("2026-05-03T00:00:00Z") }, config.iterations)
   ];
 
   const text = benchmarkText(config, results, elapsedSeedSeconds);
@@ -306,6 +421,10 @@ try {
   await mkdir(path.join(spikeDir, "harness", "benchmarks"), { recursive: true });
   await writeFile(path.join(spikeDir, "harness", "benchmarks", "latest-results.html"), html);
   console.log(text);
+  const failures = results.filter((result) => !result.passed);
+  if (failures.length > 0) {
+    throw new Error(`Benchmark p95 budget failures: ${failures.map((result) => `${result.query} p95=${result.p95_ms.toFixed(3)}ms budget=${result.budget_p95_ms}ms`).join("; ")}`);
+  }
 } finally {
   await stopSurreal();
 }

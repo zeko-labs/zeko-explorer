@@ -6,15 +6,9 @@
 -- - Give the executable Cucumber migration scenario real existing data to
 --   migrate, instead of only proving that DDL parses on an empty database.
 --
--- This is intentionally narrower than schema.surql. The consolidated schema is
--- the target; this file exists to prove forward migration behavior.
-
-DEFINE TABLE OVERWRITE schema_migration SCHEMAFULL;
-DEFINE FIELD OVERWRITE version ON TABLE schema_migration TYPE int;
-DEFINE FIELD OVERWRITE name ON TABLE schema_migration TYPE string;
-DEFINE FIELD OVERWRITE checksum ON TABLE schema_migration TYPE string;
-DEFINE FIELD OVERWRITE applied_at ON TABLE schema_migration TYPE datetime DEFAULT time::now() READONLY;
-DEFINE INDEX OVERWRITE idx_schema_migration_version ON TABLE schema_migration FIELDS version UNIQUE;
+-- This is intentionally narrower than the SurrealKit desired-state schema. The
+-- consolidated schema is the target; this file exists to prove forward
+-- migration behavior.
 
 -- Current account rows. This first migration knows only the fields needed by
 -- early transaction and bridge fixtures.
@@ -44,7 +38,6 @@ DEFINE FIELD OVERWRITE timestamp ON TABLE transaction TYPE datetime;
 DEFINE FIELD OVERWRITE source_ledger_hash ON TABLE transaction TYPE string;
 DEFINE FIELD OVERWRITE target_ledger_hash ON TABLE transaction TYPE string;
 DEFINE INDEX OVERWRITE idx_tx_hash ON TABLE transaction FIELDS hash UNIQUE;
-DEFINE INDEX OVERWRITE idx_tx_feed ON TABLE transaction FIELDS block_height, timestamp, id;
 
 -- Early bridge operation table. Migration 0002 proves that adding data-quality
 -- metadata can preserve and backfill rows already written by this shape.
@@ -63,8 +56,7 @@ DEFINE FIELD OVERWRITE submit_timestamp ON TABLE bridge_operation TYPE datetime;
 DEFINE FIELD OVERWRITE created_at ON TABLE bridge_operation TYPE datetime DEFAULT time::now() READONLY;
 DEFINE FIELD OVERWRITE updated_at ON TABLE bridge_operation TYPE datetime VALUE time::now();
 DEFINE INDEX OVERWRITE idx_bo_aux_unique ON TABLE bridge_operation FIELDS aux, aux_sequence UNIQUE;
-DEFINE INDEX OVERWRITE idx_bo_sender_feed ON TABLE bridge_operation FIELDS sender, submit_block_height, submit_timestamp, aux, aux_sequence, id;
+DEFINE INDEX OVERWRITE idx_bo_sender_order ON TABLE bridge_operation FIELDS sender, submit_block_height, submit_timestamp, aux, aux_sequence, id;
 
 -- Migration ledger insert. Production tooling should calculate real checksums;
 -- the spike uses stable labels so the scenario can assert ordering.
-CREATE schema_migration:0001 SET version = 1, name = "initial_core", checksum = "spike008-0001";

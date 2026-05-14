@@ -1,11 +1,11 @@
-import { startSurreal, stopSurreal, applyFile, runSql } from "../lib/surreal-client.ts";
+import { startSurreal, stopSurreal, runSql, syncSchema } from "../lib/surreal-client.ts";
 
 type DbInfo = { tables: Record<string, string> };
 
 await startSurreal();
 try {
   const db = `validate_${Date.now()}`;
-  await applyFile(db, "schema.surql");
+  await syncSchema(db);
   const info = await runSql<DbInfo>(db, "INFO FOR DB;");
   const result = info[0]?.result;
   if (result === undefined) throw new Error("INFO FOR DB returned no result");

@@ -145,7 +145,7 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 │  Tables: transaction, account, account_activity, batch,         │
 │  zkapp_event, zkapp_action, outer_action, inner_action,         │
 │  bridge_operation + graph edges (l1/l2_action_link),            │
-│  sync_status, network_stats                                     │
+│  sync_status; aggregate status derived from canonical tables     │
 └──────────────┬──────────────────────────┬───────────────────────┘
                │                          │
                ▼                          ▼
@@ -319,7 +319,9 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 - `zeko.l1.outer-actions` → `outer_action` (Commits, Witnesses). Queryable by state range.
 - `zeko.l2.transactions` → extract inner actions → `inner_action`. Queryable by state range.
 - `zeko.l1.bridge-events` → `bridge_operation` with user PK, amount, aux, type. Graph edges (`l1_action_link`, `l2_action_link`) to outer/inner actions.
-- Maintains `sync_status`, computes `network_stats`.
+- Maintains `sync_status`. Network status aggregates are derived from canonical
+  SurrealDB tables using count indexes and bounded time-window queries; the
+  indexer does not maintain a `network_stats` table.
 
 **Bridge operation indexing:** The indexer correlates L1 and L2 bridge events into unified `bridge_operation` records indexed by user public key. See Section 5.3 for correlation mechanics, lifecycles, and algorithms. See `spikes/002-bridge-correlation/results.md` for the full spike investigation and `spikes/002-bridge-correlation/test-scenarios/` for acceptance tests.
 
@@ -343,7 +345,7 @@ Graph relations, record links, full-text search, live queries, schemaful mode. *
 
 **Record IDs:** every indexed row carries a **ULID** primary key assigned at insert time. The ULID is the SurrealDB record ID (`bridge_operation:01HYZ...`), the inner ID inside the GraphQL `Node.id` envelope, and the join key for graph edges. Rationale and full schema strategy: [Spike 005 results](./spikes/005-relay-pagination/results.md) and `spikes/008-surrealdb-schema/`. The bridge tables shown below use composite-key record IDs (`bridge_operation:⟨{aux}_{aux_sequence}⟩`) for backward compatibility with spike 002's correlation work; spike 008 reconciles this against the ULID convention.
 
-Schema migrations managed via [surrealdb-migrations](https://github.com/Odonno/surrealdb-migrations).
+Schema sync, rollouts, seeding, and declarative tests managed via [SurrealKit](https://github.com/surrealdb/surrealkit). Historical imports or CDC from supported external sources use [Surreal Sync](https://github.com/surrealdb/surreal-sync) where it fits, such as PostgreSQL archive data, JSONL snapshots, or a Kafka bridge. NATS JetStream remains the explorer source of truth unless a supported Surreal Sync source bridge is introduced.
 
 **Live query scaling:** The GraphQL APIs fan out from shared live queries. One `LIVE SELECT` per watched subscription type, not per client. API servers manage per-client filtering and SSE fan-out at the GraphQL layer.
 
@@ -357,7 +359,7 @@ Schema migrations managed via [surrealdb-migrations](https://github.com/Odonno/s
 - `pending_da_attestation` — write-buffer keyed by `ledger_hash` for proved or direct-DA attestation facts that arrive before the matching `batch` row exists, and for preserving DA facts across L1 settlement rollbacks.
 - `zkapp_event` / `zkapp_action` — emitting account and transaction links, **raw field arrays only** (no `decoded_fields`), sequence number, `target_ledger_hash` tag. Actions additionally store `before_action_state` / `action_state` (rolling Poseidon hash chain) with a unique index on `action_state`.
 - `sync_status` — per-source health: last processed item, timestamp, lag, error state.
-- `network_stats` — aggregates.
+- Network aggregates — derived from canonical tables via SurrealDB aggregation/count indexes.
 
 *Bridge tables (confirmed schema — see `spikes/002-bridge-correlation/results.md` Section 7):*
 - `outer_action` — Record ID: `outer_action:⟨after_state⟩`. Flattened from the existing PostgreSQL `outer_actions` + `commit_actions` + `witness_actions` tables. Kind (commit/witness), before/after state, block height, txn hash, fields, slot range, timestamp. Commit-specific optional fields: `inner_action_state`, `inner_action_state_length`, `ledger`, `synchronized_outer_action_state`. Witness-specific optional field: `aux`. Indexed on `after_state` (unique), `before_state`, `index` (unique), `aux`, `kind`, `block_height`.
@@ -540,7 +542,7 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
     ├── local/docker-desktop/          # Local Kubernetes assembly
     └── scripts/
         ├── nats-stream-setup/         # JetStream bootstrap job scripts
-        └── surrealdb-migrate/         # SurrealDB migration runner scripts
+        └── surrealkit/                # SurrealKit sync, rollout, seed, and test scripts
 ```
 
 Each app or shared package follows DDD internally (domain core, infrastructure boundary, repository interfaces).
@@ -679,7 +681,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - DA status derivation (inside Zeko Indexer): baseline `batch.da_status` from proved finality and L1 settlement signals, with `pending_da_attestation` buffering.
 - NATS JetStream: required streams configured, rolling retention (90d default) + R2 archival. `zeko-da` is configured when direct signature ingestion ships.
 - Zeko Indexer (TypeScript): unified indexing of explorer data (transactions, accounts, batches, zkApp events/actions) and bridge data (outer actions, inner actions, bridge operations). Consumer-side L2 rollback detection via hash chain continuity. Backfill integration for gap filling. L1 rollback handling.
-- SurrealDB: schema + migrations via surrealdb-migrations, backup cron.
+- SurrealDB: schema sync, rollout migrations, seeding, and tests via SurrealKit; backup cron.
 - Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only). SSE subscriptions.
 - Contract Registry API (Pothos, Cloudflare Worker): single `contractSchema(network, address)` query, reads from Cloudflare KV. Backed by the `zeko-contract-registry` public submission repo. See Section 5.2.10.
 - Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(aux, auxSequence)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
@@ -923,7 +925,8 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 | NATS | JetStream (rolling retention + R2 archival) | Durable, replay, extensible substrate. Source of truth. |
 | Zeko Indexer | TypeScript | I/O bound. Shared types with APIs. Rust only if perf bottleneck. |
 | Database | SurrealDB (single node) | Graph, record links, FTS, live queries. Rebuildable from NATS. |
-| DB Migrations | surrealdb-migrations | Mature migration tooling for SurrealDB. |
+| DB Migrations | SurrealKit | Official SurrealDB schema sync, rollout migration, seeding, and declarative test tooling. |
+| Data Import / CDC | Surreal Sync where source-supported | Official SurrealDB import/CDC tooling for PostgreSQL, JSONL, Kafka, and other supported sources; not a replacement for the NATS-backed indexer without a supported bridge. |
 | Explorer API | TypeScript, Pothos | Code-first, SSE, full Relay Connections (`Node`, global IDs, `edges`/`pageInfo`) over ULID primary keys. See [Spike 005 results](./spikes/005-relay-pagination/results.md). |
 | Bridge API | TypeScript, Pothos | Separate endpoint, same tech and pagination conventions. |
 | MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. Calls gateway or explicit internal service credentials. |

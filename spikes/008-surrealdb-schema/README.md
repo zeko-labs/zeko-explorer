@@ -9,11 +9,11 @@
 ## Working Artifacts
 
 - [`results.html`](results.html) — consolidated decisions, cross-spike reconciliation, validation, and benchmark evidence.
-- [`schema.surql`](schema.surql) — current schemafull SurrealDB schema.
+- [`surrealkit/`](surrealkit/) — explicit SurrealKit project layout; `surrealkit/database/schema/000_schema.surql` is the SurrealKit-managed desired state.
 - [`queries/`](queries/) — one SurrealQL file per planned query/access path.
 - [`harness/`](harness/) — runnable TypeScript test and benchmark harness managed by pnpm.
 - [`harness/features/`](harness/features/) — Cucumber acceptance suite that runs against in-memory SurrealDB.
-- [`migrations/`](migrations/) — representative forward-only migration with existing data.
+- [`surrealkit/migrations/`](surrealkit/migrations/) — representative SurrealKit-applied rollout SQL with existing data.
 - [`harness/benchmarks/`](harness/benchmarks/) — benchmark runner and latest measured HTML output.
 
 ## Running the Evidence
@@ -27,11 +27,13 @@ pnpm run validate:schema
 pnpm run benchmark:docker:persisted
 ```
 
-`benchmark:docker:persisted` generates ordered SurrealQL import chunks, starts `surrealdb/surrealdb:v2.4.0` with a mounted SurrealKV Docker volume, imports each chunk with `surreal import` inside the container, points the TypeScript query-timing harness at the loaded database, and removes both the container and volume when the run exits.
+`surrealkit/` is the explicit SurrealKit project root. Its nested `database/` directory is the official SurrealKit layout, not a separate home-grown database layer.
 
-`pnpm run benchmark` is only a small local query-shape smoke test. It refuses large self-seeded datasets; scale evidence must use `benchmark:docker:persisted` so row loading goes through `surreal import`.
+`benchmark:docker:persisted` generates a temporary SurrealKit-compatible load project from the committed `surrealkit/` schema, applies schema with official SurrealKit sync, imports deterministic data through sequential official SurrealDB v3 `surreal import` chunk files into a persisted SurrealKV Docker volume, points the TypeScript query-timing harness at the loaded database, and removes both the container and volume when the run exits. At the time of the accepted run, `surrealdb/surrealdb:v3` resolved to `3.0.5 for linux on aarch64`. Full schema/index coverage remains the job of `pnpm run validate:schema` and the Cucumber inventory tests.
 
-The current evidence run used:
+`pnpm run benchmark` is only a small local query-shape smoke test. It refuses large self-seeded datasets; scale evidence must use `benchmark:docker:persisted` so row loading goes through official SurrealDB import tooling rather than the harness HTTP SQL client.
+
+The old persisted evidence run was produced before the benchmark target was moved to SurrealDB v3 and before rejected projection/feed tables were removed. It used:
 
 ```sh
 BENCH_TX_COUNT=2200000 \
@@ -39,12 +41,26 @@ BENCH_ACCOUNT_COUNT=50000 \
 BENCH_CONTRACT_ACCOUNT_COUNT=500 \
 BENCH_BRIDGE_COUNT=220000 \
 BENCH_ITERATIONS=5 \
-BENCH_IMPORT_CHUNK_ROWS=50000 \
+BENCH_SEED_CHUNK_ROWS=50000 \
 BENCH_ACTIVITY_STRIDE=10 \
 pnpm run benchmark:docker:persisted
 ```
 
-That run loaded 2,200,000 transaction rows into persisted SurrealKV in 947s and completed the 12-query benchmark catalog. The generated import directory under `harness/reports/` is disposable and ignored by git; `harness/benchmarks/latest-results.html` keeps the measured output.
+That result is now retained only as historical rejected evidence, not as acceptance proof for the current model. The accepted scale gates are 100k, million-row, 20M, 200M, and 2B transactions via `benchmark:docker:persisted` against SurrealDB v3 and the canonical schema; the harness fails on p95 budget violations.
+
+The current accepted persisted evidence is:
+
+```sh
+BENCH_ACCOUNT_COUNT=20000 \
+BENCH_TX_COUNT=100000 \
+BENCH_BRIDGE_COUNT=100000 \
+BENCH_ITERATIONS=30 \
+pnpm run benchmark:docker:persisted
+```
+
+That run loaded via official `surreal import` directly into Dockerized `surrealdb/surrealdb:v3` with persisted SurrealKV and passed all 26 measured query paths after removing manual feed/projection tables and adding explicit exact lookup, native full-text, zkApp timeline, and time-series aggregate coverage. The latest accepted 100k full-index run uses sequential official import chunks with 20,000-row chunk files and no monolithic `data.surql`: 486s total load, 482s data import, and all 26 query paths passed. Worst p95 was `transaction-feed-first-page` at 37.744ms against a 250ms budget.
+
+A million-transaction gate was attempted with 50k accounts, 1M transactions, 2M `account_transaction` relation edges, 100k account activity rows, 10k zkApp events, 10k zkApp actions, 100k bridge operations, and the full index/search/table-view schema. The monolithic embedded Docker import is rejected: it exited 137 under the local 4GB Docker limit. Docker live chunk import avoided the monolithic file, but OrbStack stopped mid-run. Host SurrealKV chunk import avoided Docker memory limits, but the machine had only ~3.6GB free and SurrealKV hit `No space left on device` during compaction. A streaming host importer now generates one bounded `.surql` chunk, imports it with official `surreal import`, deletes it, and continues; this fixes the harness disk amplification from generated files, but persisted million-row proof is still blocked by local disk capacity. Memory-backed streaming mode was also tested and stopped because the 8GB host began swapping before the million gate. The next scale gate needs a machine/volume with enough disk headroom for the real persisted DB and compaction, not schema shortcuts, index deferral, manual projections, or Kafka/PostgreSQL detours.
 
 ---
 
@@ -53,7 +69,7 @@ That run loaded 2,200,000 transaction rows into persisted SurrealKV in 947s and 
 Earlier spikes have settled individual pieces of the data layer in isolation:
 
 - Spike 002 (bridge correlation) defines the `bridge_operation` table — composite `(aux, aux_sequence)` correlation, FIFO disambiguation, status lifecycle, indexes for the `(sender|recipient)` pubkey filter.
-- Spike 005 (Relay pagination) commits us to **ULID** primary keys on every indexed row, exposed as `Node.id` for Relay Connections, and to keyset pagination over indexed sort columns.
+- Spike 005 (Relay pagination) commits us to stable Relay-visible record IDs and keyset pagination. This spike keeps ULIDs where they do not harm scale, uses complete cursor tuples, and accepts canonical secondary indexes when `EXPLAIN FULL` plus benchmarks prove them faster than record-ID range scans.
 - Spikes 001 / 006 / 007 produce the upstream events (sequencer connector, L1 watcher, DA monitor) that the indexer projects into rows.
 
 What is **not** yet designed is the union of those decisions: a single coherent SurrealDB schema covering every entity the indexer writes and the GraphQL API reads. The indexer cannot be built — and the GraphQL resolvers cannot be authored — without it.
@@ -69,10 +85,15 @@ All persistent state in the explorer's own database. **In scope**:
 - `transaction` — sequencer-confirmed L2 transactions (payments, zkApp commands, etc.).
 - `account` — current state for every account that has ever appeared (nonce, balance, zkApp state if applicable).
 - `account_activity` — append-only log of state transitions per account, used for "account history" queries.
+- `account_transaction` — typed transaction/account relation edges with role metadata for sender, receiver, fee-payer, touched-account, and contract feeds.
 - `batch` — L2 batches with their L1 settlement and DA attestation status.
 - `outer_action` / `inner_action` — zkApp action stream, normalized for query.
 - `zkapp_event` — zkApp event stream.
 - `bridge_operation` — settled in spike 002; included here for completeness and cross-check.
+- Bridge evidence issue lists — derived from canonical `bridge_operation.data_quality` and `data_quality_reasons`.
+- Network aggregate status — derived from canonical tables with SurrealDB aggregation/count indexes.
+- Native full-text indexes on canonical `transaction`, `account`, and `bridge_operation` search fields using SurrealDB analyzers and search functions.
+- Live-query files for transaction, account-transaction, bridge-operation, and sync-status SSE subscriptions.
 - Any additional tables required by the GraphQL types defined in the PRD.
 
 **Out of scope**: Mina archive node schema, OCaml side, NATS subject formats. This spike only covers the **explorer's own SurrealDB** instance.
@@ -133,8 +154,8 @@ All persistent state in the explorer's own database. **In scope**:
 ## Deliverables
 
 1. **Table inventory matrix** — every table, its purpose, append-only vs. mutable, primary key, expected row count.
-2. **`schema.surql`** — `DEFINE TABLE`, `DEFINE FIELD`, `DEFINE INDEX`, `DEFINE EVENT` for every table, ready to apply.
-3. **Index plan** — for each paginated GraphQL query, the index it uses and its cost class (primary range walk vs. secondary index + indirection).
+2. **`surrealkit/database/schema/000_schema.surql`** — `DEFINE TABLE`, `DEFINE FIELD`, `DEFINE INDEX`, `DEFINE EVENT` for every table, ready to apply with `surrealkit sync`.
+3. **Index plan** — for each paginated GraphQL query, the index it uses and its cost class (primary range walk vs. secondary index + indirection). Each query file includes generated EXPLAIN comments, with the full JSON plans in `harness/reports/explain-current.md`.
 4. **Edge plan** — every `RELATE` edge with direction, metadata fields, and a worked example resolver.
 5. **Migration strategy** — how schema changes are versioned, applied in dev, applied in production.
 6. **Live-query plan** — which tables back which GraphQL subscriptions, with the diff payload format.
@@ -152,4 +173,13 @@ All persistent state in the explorer's own database. **In scope**:
 - [SurrealDB DEFINE INDEX](https://surrealdb.com/docs/surrealql/statements/define/indexes).
 - [SurrealDB graph relations (`RELATE`)](https://surrealdb.com/docs/surrealql/statements/relate).
 - [SurrealDB live queries](https://surrealdb.com/docs/surrealql/statements/live).
+- [SurrealDB full-text search indexes](https://surrealdb.com/docs/learn/data-models/full-text-search/search-indexes).
+- [SurrealDB as a time-series database](https://surrealdb.com/docs/learn/data-models/time-series/using-as-time-series-database).
+- [SurrealDB time-series aggregation queries](https://surrealdb.com/docs/learn/data-models/time-series/aggregation-queries).
+- [SurrealDB record links vs graph relations](https://surrealdb.com/docs/learn/data-models/graph/record-links-vs-graph-relations).
+- [SurrealDB migrating from PostgreSQL](https://surrealdb.com/docs/build/migrating/from-other-databases/from-postgresql).
+- [SurrealDB schema management](https://surrealdb.com/docs/learn/schema-management).
+- [SurrealDB performance best practices](https://surrealdb.com/docs/learn/querying/performance/performance-best-practices).
+- [SurrealKit](https://github.com/surrealdb/surrealkit).
+- [Surreal Sync](https://github.com/surrealdb/surreal-sync).
 - [ULID — Sortable Unique Identifiers (arXiv:2509.08969)](https://arxiv.org/pdf/2509.08969).

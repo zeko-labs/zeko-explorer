@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { Given, Then, When, type DataTable } from "@cucumber/cucumber";
-import { applyFile, parseParam, queryFile, runSql, type Row, type SpikeWorld } from "../support/surreal.ts";
+import { applyWithSurrealKit, parseParam, queryFile, runSql, syncSchema, type Row, type SpikeWorld } from "../support/surreal.ts";
 import { fixtureIds, seedCoreMigrationData, seedExplorerFixture } from "../support/fixtures.ts";
 import type { SurrealParam } from "../../lib/surreal-client.ts";
 
@@ -9,6 +9,7 @@ type TableInfo = { indexes: Record<string, string> };
 type RollbackSummary = {
   transactions: Row[];
   account_activity: Row[];
+  account_transactions: Row[];
   inner_actions: Row[];
   zkapp_events: Row[];
   zkapp_actions: Row[];
@@ -25,14 +26,14 @@ function paramsFromTable(table: DataTable): Record<string, SurrealParam> {
 }
 
 Given("the consolidated schema is applied", async function (this: SpikeWorld): Promise<void> {
-  await applyFile(this.db, "schema.surql");
+  await syncSchema(this.db);
 });
 
 Given("migration {int} is applied", async function (this: SpikeWorld, version: number): Promise<void> {
   const file = version === 1
     ? "migrations/0001_initial_core.surql"
     : "migrations/0002_l1_watcher_and_bridge_quality.surql";
-  await applyFile(this.db, file);
+  await applyWithSurrealKit(this.db, file);
 });
 
 Given("core migration data exists", async function (this: SpikeWorld): Promise<void> {
@@ -67,6 +68,7 @@ CREATE bridge_operation:01J0000000000000000000BODU SET type = "deposit", status 
 When("I mark target ledger {string} as rolled back", async function (this: SpikeWorld, targetLedgerHash: string): Promise<void> {
   await runSql(this.db, `
 UPDATE transaction SET status = "reverted", rollback_reason = "time_precondition_expired" WHERE target_ledger_hash = "${targetLedgerHash}";
+DELETE account_transaction WHERE in IN (SELECT VALUE id FROM transaction WHERE target_ledger_hash = "${targetLedgerHash}");
 DELETE zkapp_event WHERE target_ledger_hash = "${targetLedgerHash}";
 DELETE zkapp_action WHERE target_ledger_hash = "${targetLedgerHash}";
 DELETE inner_action WHERE target_ledger_hash = "${targetLedgerHash}";
@@ -94,6 +96,13 @@ Then("table {string} should define indexes:", async function (this: SpikeWorld, 
   for (const indexName of expected) {
     assert.ok(indexes.includes(indexName), `Expected index ${tableName}.${indexName}`);
   }
+});
+
+Then("table {string} should define no indexes", async function (this: SpikeWorld, tableName: string): Promise<void> {
+  const info = await runSql<TableInfo>(this.db, `INFO FOR TABLE ${tableName};`);
+  const result = info[0]?.result;
+  assert.ok(result !== undefined);
+  assert.deepEqual(Object.keys(result.indexes), []);
 });
 
 Then("the result should contain {int} rows", function (this: SpikeWorld, count: number): void {
@@ -130,6 +139,12 @@ Then("all row IDs should be ULID record IDs for table {string}", function (this:
   }
 });
 
+Then("all row IDs should be record IDs for table {string}", function (this: SpikeWorld, tableName: string): void {
+  for (const row of this.lastResult) {
+    assert.match(String(row.id), new RegExp(`^${tableName}:`));
+  }
+});
+
 Then("the graph field {string} of the first row should contain {int} rows", function (this: SpikeWorld, field: string, count: number): void {
   const first = this.lastResult[0];
   assert.ok(first !== undefined);
@@ -155,6 +170,7 @@ Then("the rollback query for target ledger {string} should find no rollback-sens
   const summary = await queryFile<RollbackSummary>(this.db, "rollback-rows-by-target-ledger", {
     target_ledger_hash: targetLedgerHash
   });
+  assert.equal(summary.account_transactions.length, 0);
   assert.equal(summary.inner_actions.length, 0);
   assert.equal(summary.zkapp_events.length, 0);
   assert.equal(summary.zkapp_actions.length, 0);

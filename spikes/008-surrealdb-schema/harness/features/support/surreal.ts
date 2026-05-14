@@ -1,9 +1,9 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { After, AfterAll, Before, BeforeAll, setWorldConstructor, type ITestCaseHookParameter, World } from "@cucumber/cucumber";
-import { applyFile, queryFile, runSql, spikeDir, startSurreal, stopSurreal, type SurrealParam } from "../../lib/surreal-client.ts";
+import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, setWorldConstructor, type ITestCaseHookParameter, World } from "@cucumber/cucumber";
+import { applyWithSurrealKit, queryFile, runSql, spikeDir, startSurreal, stopSurreal, syncSchema, type SurrealParam } from "../../lib/surreal-client.ts";
 
-export { applyFile, queryFile, runSql, spikeDir, startSurreal, stopSurreal };
+export { applyWithSurrealKit, queryFile, runSql, spikeDir, startSurreal, stopSurreal, syncSchema };
 export type Row = Record<string, unknown>;
 
 export class SpikeWorld extends World {
@@ -13,6 +13,7 @@ export class SpikeWorld extends World {
 }
 
 setWorldConstructor(SpikeWorld);
+setDefaultTimeout(60_000);
 
 BeforeAll(async function (): Promise<void> {
   await mkdir(path.join(spikeDir, "harness", "reports"), { recursive: true });
@@ -39,6 +40,8 @@ export function parseParam(value: string): SurrealParam {
   if (/^[a-zA-Z_][a-zA-Z0-9_]*:[A-Za-z0-9_-]+$/.test(value)) {
     return { kind: "record", value };
   }
+  const datetime = value.match(/^d"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)"$/);
+  if (datetime?.[1] !== undefined) return { kind: "datetime", value: datetime[1] };
   if (/^-?\d+$/.test(value)) return Number(value);
   if (value === "true") return true;
   if (value === "false") return false;
