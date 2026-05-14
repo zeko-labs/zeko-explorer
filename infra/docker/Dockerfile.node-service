@@ -1,11 +1,23 @@
-FROM node:26.1.0-alpine AS base
+FROM debian:trixie-slim AS base
 WORKDIR /workspace
-RUN npm install --global pnpm@11.1.1
+ENV PROTO_HOME=/opt/proto
+ENV PATH="${PROTO_HOME}/shims:${PROTO_HOME}/bin:${PATH}"
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends bash ca-certificates curl git libatomic1 tar xz-utils \
+  && rm -rf /var/lib/apt/lists/*
+COPY .prototools ./
+RUN curl -fsSL https://moonrepo.dev/install/proto.sh | bash -s -- --yes \
+  && proto install node \
+  && proto install pnpm \
+  && proto install moon
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 COPY apps ./apps
+COPY services ./services
 COPY packages ./packages
+COPY .moon ./.moon
+RUN moon sync
 RUN pnpm install --prod --frozen-lockfile=false
 
 FROM deps AS runner
@@ -13,4 +25,4 @@ ARG PNPM_FILTER
 ENV NODE_ENV=production
 ENV PORT=4100
 ENV PNPM_FILTER=${PNPM_FILTER}
-CMD ["sh", "-ceu", "case \"$PNPM_FILTER\" in '@zeko/l1-watcher') node apps/l1-watcher/src/index.ts ;; '@zeko/zeko-indexer') node apps/zeko-indexer/src/index.ts ;; '@zeko/explorer-api') PORT=4101 node apps/explorer-api/src/index.ts ;; '@zeko/bridge-api') PORT=4102 node apps/bridge-api/src/index.ts ;; *) echo \"Unknown PNPM_FILTER: $PNPM_FILTER\" >&2; exit 2 ;; esac"]
+CMD ["sh", "-ceu", "case \"$PNPM_FILTER\" in '@zeko/l1-watcher') node services/l1-watcher/src/index.ts ;; '@zeko/zeko-indexer') node services/zeko-indexer/src/index.ts ;; '@zeko/explorer-api') PORT=4101 node services/explorer-api/src/index.ts ;; '@zeko/bridge-api') PORT=4102 node services/bridge-api/src/index.ts ;; *) echo \"Unknown PNPM_FILTER: $PNPM_FILTER\" >&2; exit 2 ;; esac"]

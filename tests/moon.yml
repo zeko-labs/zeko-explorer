@@ -1,0 +1,20 @@
+$schema: "../.moon/cache/schemas/project.json"
+language: "javascript"
+layer: "automation"
+stack: "infrastructure"
+tags: ["acceptance", "cucumber"]
+
+tasks:
+  acceptance:
+    command: "cucumber-js"
+    args:
+      - "acceptance/**/*.feature"
+      - "--import"
+      - "acceptance/steps/*.mjs"
+      - "--format"
+      - "progress"
+    inputs:
+      - "acceptance/**/*"
+      - "/infra/**/*"
+      - "/package.json"
+      - "/pnpm-lock.yaml"

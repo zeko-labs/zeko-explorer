@@ -5,11 +5,14 @@
   "packageManager": "pnpm@11.1.1",
   "type": "module",
   "devDependencies": {
+    "@cucumber/cucumber": "catalog:",
     "@biomejs/biome": "catalog:",
     "@types/node": "catalog:",
+    "glob": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vue-tsc": "catalog:",
-    "wrangler": "catalog:"
+    "wrangler": "catalog:",
+    "yaml": "catalog:"
   }
 }

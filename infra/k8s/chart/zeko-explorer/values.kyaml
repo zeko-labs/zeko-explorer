@@ -1,0 +1,77 @@
+---
+{
+  networkId: "zeko-m-local",
+  images: {
+    nats: "nats:2.10-alpine",
+    natsBox: "natsio/nats-box:0.16.0",
+    surrealdb: "surrealdb/surrealdb:v3",
+    surrealkit: "ghcr.io/surrealdb/surrealkit:latest",
+    l1Watcher: "zeko/l1-watcher:local",
+    zekoIndexer: "zeko/zeko-indexer:local",
+    explorerApi: "zeko/explorer-api:local",
+    bridgeApi: "zeko/bridge-api:local",
+  },
+  storage: {
+    className: "hostpath",
+    natsSize: "1Gi",
+    surrealdbSize: "1Gi",
+  },
+  nats: {
+    maxAge: "2160h",
+  },
+  surrealdb: {
+    namespace: "zeko",
+    database: "explorer",
+    rootUser: "root",
+    rootPassword: "root",
+  },
+  workloads: {
+    l1Watcher: {
+      enabled: false,
+    },
+    zekoIndexer: {
+      enabled: true,
+    },
+    explorerApi: {
+      enabled: true,
+    },
+    bridgeApi: {
+      enabled: true,
+    },
+    backfillService: {
+      enabled: false,
+    },
+  },
+  resources: {
+    nats: {
+      requests: {
+        cpu: "100m",
+        memory: "128Mi",
+      },
+      limits: {
+        cpu: "500m",
+        memory: "512Mi",
+      },
+    },
+    surrealdb: {
+      requests: {
+        cpu: "100m",
+        memory: "256Mi",
+      },
+      limits: {
+        cpu: "1000m",
+        memory: "1Gi",
+      },
+    },
+    app: {
+      requests: {
+        cpu: "50m",
+        memory: "128Mi",
+      },
+      limits: {
+        cpu: "500m",
+        memory: "512Mi",
+      },
+    },
+  },
+}

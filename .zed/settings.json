@@ -1,0 +1,36 @@
+{
+  "languages": {
+    "CSS": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "HTML": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "JSON": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "JSONC": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "JavaScript": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "TypeScript": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "TSX": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    },
+    "Vue.js": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
+    }
+  }
+}

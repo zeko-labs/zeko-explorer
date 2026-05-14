@@ -1,16 +1,27 @@
-$schema: "https://moonrepo.dev/schemas/project.json"
+$schema: "../.moon/cache/schemas/project.json"
 language: "bash"
 layer: "automation"
 stack: "infrastructure"
 tags: ["infra", "kubernetes", "docker"]
 
 tasks:
+  install-k8s-tools:
+    command: "./scripts/k8s-tools/install.sh"
+    inputs:
+      - "scripts/k8s-tools/install.sh"
+      - "/.prototools"
+    options:
+      cache: false
+
   build-local-images:
     command: "./local/docker-desktop/build-local-images.sh"
     inputs:
       - "docker/**/*"
       - "/apps/*/src/**/*"
+      - "/services/*/src/**/*"
       - "/packages/*/src/**/*"
+      - "/.moon/**/*"
+      - "/.prototools"
       - "/package.json"
       - "/pnpm-workspace.yaml"
 
@@ -36,4 +47,11 @@ tasks:
       - "local/docker-desktop/**/*"
 
   lint:
-    script: "if command -v helm >/dev/null 2>&1; then helm lint k8s/chart/zeko-explorer --values k8s/values/local/docker-desktop.yaml; else echo 'helm not installed; skipping chart lint'; fi"
+    command: "./scripts/k8s-tools/validate.sh"
+    deps:
+      - "infra:install-k8s-tools"
+    inputs:
+      - "k8s/**/*"
+      - "scripts/k8s-tools/**/*"
+      - "/tools/validate-yaml.mjs"
+      - "/.prototools"

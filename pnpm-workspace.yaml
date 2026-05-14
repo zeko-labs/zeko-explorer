@@ -1,5 +1,6 @@
 packages:
   - "apps/*"
+  - "services/*"
   - "packages/*"
 
 allowBuilds:
@@ -9,8 +10,10 @@ allowBuilds:
   workerd: true
 
 catalog:
+  "@cucumber/cucumber": "12.8.3"
   "@biomejs/biome": "2.4.15"
   "@types/node": "25.7.0"
+  glob: "13.0.6"
   nuxt: "4.4.5"
   typescript: "6.0.3"
   valibot: "1.4.0"
@@ -19,3 +22,4 @@ catalog:
   vue-router: "5.0.6"
   vue-tsc: "3.2.8"
   wrangler: "4.90.1"
+  yaml: "2.9.0"

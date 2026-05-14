@@ -1,0 +1,46 @@
+$schema: "../../.moon/cache/schemas/project.json"
+language: "typescript"
+layer: "application"
+stack: "frontend"
+tags: ["nuxt", "cloudflare"]
+
+fileGroups:
+  sources:
+    - "app/**/*"
+    - "nuxt.config.ts"
+    - "package.json"
+    - "tsconfig.json"
+    - "/tsconfig.base.json"
+  tests:
+    - "tests/**/*"
+    - "app/**/*.test.ts"
+    - "app/**/*.spec.ts"
+
+workspace:
+  inheritedTasks:
+    exclude: ["build", "typecheck"]
+
+tasks:
+  build:
+    command: "nuxt"
+    args: ["build"]
+    inputs:
+      - "app/**/*"
+      - "nuxt.config.ts"
+      - "package.json"
+    outputs:
+      - ".output"
+
+  dev:
+    command: "nuxt"
+    args: ["dev", "--host", "0.0.0.0"]
+    options:
+      persistent: true
+
+  typecheck:
+    command: "nuxt"
+    args: ["typecheck"]
+    inputs:
+      - "app/**/*"
+      - "nuxt.config.ts"
+      - "package.json"
