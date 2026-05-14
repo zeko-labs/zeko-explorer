@@ -16,6 +16,7 @@ import {
 export const NATS_STREAMS = {
   l2: "zeko-l2",
   l1: "zeko-l1",
+  da: "zeko-da",
   health: "zeko-health",
 } as const;
 
@@ -26,6 +27,7 @@ export const NATS_SUBJECTS = {
   l1Rollbacks: "zeko.l1.rollbacks",
   l1OuterActions: "zeko.l1.outer-actions",
   l1BridgeEvents: "zeko.l1.bridge-events",
+  daSignatures: "zeko.da.signatures",
   health: "zeko.health",
 } as const;
 

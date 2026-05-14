@@ -9,6 +9,7 @@ dist
 **/.output
 .wrangler
 **/.wrangler
+.moon/cache
 .moon/cache/*
 !.moon/cache/schemas/
 !.moon/cache/schemas/*

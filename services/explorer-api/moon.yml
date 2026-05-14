@@ -8,8 +8,20 @@ dependsOn:
   - "domain"
 
 tasks:
+  build:
+    command: "tsdown"
+    args: ["--config", "tsdown.config.ts"]
+    inputs:
+      - "@group(sources)"
+    outputs:
+      - "dist"
+
   dev:
     command: "node"
     args: ["src/index.ts"]
     options:
       persistent: true
+
+  start:
+    command: "node"
+    args: ["dist/index.mjs"]

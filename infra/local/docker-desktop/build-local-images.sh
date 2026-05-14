@@ -2,19 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-DOCKERFILE="${ROOT_DIR}/infra/docker/Dockerfile.node-service"
 
-declare -A IMAGES=(
-  ["l1-watcher"]="zeko/l1-watcher:local"
-  ["zeko-indexer"]="zeko/zeko-indexer:local"
-  ["explorer-api"]="zeko/explorer-api:local"
-  ["bridge-api"]="zeko/bridge-api:local"
+TARGETS=(
+  "l1-watcher"
+  "da-monitor"
+  "zeko-indexer"
+  "explorer-api"
+  "bridge-api"
 )
 
-for target in "${!IMAGES[@]}"; do
+for target in "${TARGETS[@]}"; do
   docker build \
-    --file "${DOCKERFILE}" \
-    --build-arg "MOON_TARGET=${target}" \
-    --tag "${IMAGES[$target]}" \
+    --file "${ROOT_DIR}/infra/docker/${target}.Dockerfile" \
+    --tag "zeko/${target}:local" \
     "${ROOT_DIR}"
 done

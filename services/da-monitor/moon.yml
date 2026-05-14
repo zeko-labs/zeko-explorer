@@ -1,0 +1,27 @@
+$schema: "../../.moon/cache/schemas/project.json"
+language: "typescript"
+layer: "application"
+stack: "backend"
+tags: ["kubernetes", "da", "nats"]
+
+dependsOn:
+  - "nats"
+
+tasks:
+  build:
+    command: "tsdown"
+    args: ["--config", "tsdown.config.ts"]
+    inputs:
+      - "@group(sources)"
+    outputs:
+      - "dist"
+
+  dev:
+    command: "node"
+    args: ["src/index.ts"]
+    options:
+      persistent: true
+
+  start:
+    command: "node"
+    args: ["dist/index.mjs"]

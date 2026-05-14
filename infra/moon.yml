@@ -23,6 +23,7 @@ tasks:
       - "/.moon/**/*"
       - "/.prototools"
       - "/package.json"
+      - "/pnpm-lock.yaml"
       - "/pnpm-workspace.yaml"
     options:
       runInCI: false

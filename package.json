@@ -11,6 +11,7 @@
     "@types/node": "catalog:",
     "glob": "catalog:",
     "lefthook": "catalog:",
+    "tsdown": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:",
     "yaml": "catalog:"

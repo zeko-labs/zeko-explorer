@@ -41,3 +41,35 @@ jobs:
         with:
           matrix: '{"ci":"ci"}'
           access-token: ${{ secrets.GITHUB_TOKEN }}
+
+  container-images:
+    name: Build container image
+    permissions:
+      contents: read
+    runs-on: warp-ubuntu-latest-x64-8x
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - l1-watcher
+          - da-monitor
+          - zeko-indexer
+          - explorer-api
+          - bridge-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: |
+          docker build \
+            --file "infra/docker/${{ matrix.image }}.Dockerfile" \
+            --tag "zeko/${{ matrix.image }}:${{ github.sha }}" \
+            .
