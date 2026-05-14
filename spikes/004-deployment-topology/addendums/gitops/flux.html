@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Addendum: FluxCD Deployment Model</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/004-deployment-topology/addendums/gitops/flux.md</div>
+        <h1>Addendum: FluxCD Deployment Model</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Lines</strong>432</span><span class="pill"><strong>Sections</strong>21</span><span class="pill"><strong>Tables</strong>3</span><span class="pill"><strong>Code blocks</strong>9</span></div>
+        <nav class="quick-nav"><a href="../../README.md">README</a><a href="../../results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">2230 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="274" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 21</text><rect x="326" y="148" width="39" height="18" rx="9" fill="#34d399"/><text x="326" y="188" fill="#9fb0c7" font-size="13">Tables: 3</text><rect x="379" y="148" width="117" height="18" rx="9" fill="#a78bfa"/><text x="379" y="188" fill="#9fb0c7" font-size="13">Code: 9</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#module-support">Module Support</a>
+<a class="toc-level-3" href="#hcloud-k8sterraform-hcloud-kubernetes">hcloud-k8s/terraform-hcloud-kubernetes</a>
+<a class="toc-level-3" href="#hcloud-talosterraform-hcloud-talos">hcloud-talos/terraform-hcloud-talos</a>
+<a class="toc-level-2" href="#recommended-bootstrap-flow">Recommended Bootstrap Flow</a>
+<a class="toc-level-2" href="#repository-layout">Repository Layout</a>
+<a class="toc-level-2" href="#flux-resource-model">Flux Resource Model</a>
+<a class="toc-level-2" href="#flux-operator-web-ui-and-mcp">Flux Operator, Web UI, And MCP</a>
+<a class="toc-level-2" href="#dependency-ordering">Dependency Ordering</a>
+<a class="toc-level-2" href="#jobs-and-migrations">Jobs And Migrations</a>
+<a class="toc-level-2" href="#ci-and-promotion-with-flux">CI And Promotion With Flux</a>
+<a class="toc-level-3" href="#option-a-github-actions-promotion-prs">Option A: GitHub Actions Promotion PRs</a>
+<a class="toc-level-3" href="#option-b-flux-image-automation">Option B: Flux Image Automation</a>
+<a class="toc-level-2" href="#image-tags">Image Tags</a>
+<a class="toc-level-2" href="#secrets">Secrets</a>
+<a class="toc-level-2" href="#cloudflare-boundary">Cloudflare Boundary</a>
+<a class="toc-level-2" href="#local-development">Local Development</a>
+<a class="toc-level-2" href="#failure-and-rollback-behavior">Failure And Rollback Behavior</a>
+<a class="toc-level-2" href="#recommendation">Recommendation</a>
+<a class="toc-level-2" href="#sources">Sources</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="addendum-fluxcd-deployment-model" tabindex="-1"><a class="header-anchor" href="#addendum-fluxcd-deployment-model">Addendum: FluxCD Deployment Model</a></h1>
+<h2 id="decision" tabindex="-1"><a class="header-anchor" href="#decision">Decision</a></h2>
+<p>FluxCD is a strong fit for the remote Kubernetes environments:</p>
+<ul>
+<li><code>zeko-m-alphanet</code></li>
+<li><code>zeko-m-devnet</code></li>
+<li><code>zeko-m-mainnet</code></li>
+</ul>
+<p>The deployment should follow <strong>single ownership per resource</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Owner</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hetzner servers, networks, firewalls, volumes</td>
+<td>Terraform</td>
+<td>External infrastructure needs Terraform state and provider lifecycle management.</td>
+</tr>
+<tr>
+<td>Talos machine config and cluster bootstrap</td>
+<td>Terraform</td>
+<td>Cluster creation must work before Kubernetes controllers exist.</td>
+</tr>
+<tr>
+<td>Core cluster bootstrap required for Kubernetes to function</td>
+<td>Terraform / Talos module</td>
+<td>CNI, CCM, CSI, API access, and Flux itself must exist before Flux can reconcile apps.</td>
+</tr>
+<tr>
+<td>Flux installation and first sync target</td>
+<td>Terraform or <code>flux bootstrap</code></td>
+<td>This is the handoff point from infrastructure bootstrap to GitOps.</td>
+</tr>
+<tr>
+<td>Explorer Kubernetes workloads</td>
+<td>Flux</td>
+<td>App state should be reconciled continuously from Git.</td>
+</tr>
+<tr>
+<td>Cloudflare Workers and static assets</td>
+<td>GitHub Actions + Wrangler</td>
+<td>They do not run in Kubernetes.</td>
+</tr>
+<tr>
+<td>Image builds and registry publishing</td>
+<td>GitHub Actions</td>
+<td>CI builds artifacts; Flux deploys pinned artifacts from Git or Flux image automation updates Git.</td>
+</tr>
+</tbody>
+</table>
+<p>Flux is a Kubernetes-native, CRD-first GitOps model with strong primitives for dependency ordering, Helm releases, source reconciliation, and image update automation. Flux 2.8 materially improves the operator experience through the Flux Operator ecosystem: a dedicated Web UI, better Helm health checking, faster recovery from failed deployments, PR/MR feedback providers, and an MCP server for agent-assisted operations.</p>
+<h2 id="module-support" tabindex="-1"><a class="header-anchor" href="#module-support">Module Support</a></h2>
+<p>Neither selected Talos Terraform module installs FluxCD as a built-in default component.</p>
+<h3 id="hcloud-k8sterraform-hcloud-kubernetes" tabindex="-1"><a class="header-anchor" href="#hcloud-k8sterraform-hcloud-kubernetes"><code>hcloud-k8s/terraform-hcloud-kubernetes</code></a></h3>
+<p>This module bootstraps the Talos cluster and selected core/add-on components. It can apply extra Talos bootstrap manifests, but Flux should be installed intentionally rather than hidden in an opaque extra manifest.</p>
+<p>Recommended options:</p>
+<ol>
+<li>Terraform creates the cluster, then GitHub Actions runs <code>flux bootstrap github</code>.</li>
+<li>Terraform installs Flux Operator and a <code>FluxInstance</code> after Kubernetes is reachable.</li>
+<li>Terraform installs raw Flux manifests or a Flux bootstrap module after Kubernetes is reachable.</li>
+</ol>
+<p>Option 1 is the standard Flux bootstrap path and writes Flux manifests back to Git. Option 2 is the stronger current option if the deployment wants the Flux Operator Web UI, Flux MCP Server, ResourceSet APIs, and operator-managed Flux lifecycle. Option 3 keeps bootstrap entirely in Terraform but requires more care to avoid Terraform owning Flux-managed objects after handoff.</p>
+<h3 id="hcloud-talosterraform-hcloud-talos" tabindex="-1"><a class="header-anchor" href="#hcloud-talosterraform-hcloud-talos"><code>hcloud-talos/terraform-hcloud-talos</code></a></h3>
+<p>This module does not install Flux. If it is used, install Flux after cluster creation with the same bootstrap boundary.</p>
+<h2 id="recommended-bootstrap-flow" tabindex="-1"><a class="header-anchor" href="#recommended-bootstrap-flow">Recommended Bootstrap Flow</a></h2>
+<p>Flux's documented GitHub bootstrap flow installs Flux controllers and configures them to sync from a GitHub repository path. It writes Flux manifests back to Git so Flux upgrades can happen by Git change.</p>
+<p>For a Flux CLI bootstrap:</p>
+<pre><code class="language-text">terraform-apply.yml
+  -&gt; create/update Hetzner + Talos cluster
+  -&gt; export kubeconfig securely for this workflow run
+  -&gt; run flux bootstrap github for the environment path if not bootstrapped
+  -&gt; Flux reconciles infra/gitops/flux/clusters/&lt;env&gt;
+</code></pre>
+<p>Example bootstrap:</p>
+<pre><code class="language-sh">flux bootstrap github \
+  --owner=zeko-labs \
+  --repository=zeko-k8s \
+  --branch=main \
+  --path=infra/gitops/flux/clusters/zeko-m-devnet \
+  --read-write-key=false
+</code></pre>
+<p>If Flux image automation will write directly to Git, the deploy key must have write access or Flux must use a write-capable credential. For a stricter promotion model, keep Flux read-only and have GitHub Actions open promotion PRs instead.</p>
+<p>Recommended initial choice: <strong>read-only Flux deploy key plus GitHub Actions promotion PRs</strong>. This is more auditable for <code>zeko-m-devnet</code> and <code>zeko-m-mainnet</code>.</p>
+<p>For a Flux Operator bootstrap:</p>
+<pre><code class="language-text">terraform-apply.yml
+  -&gt; create/update Hetzner + Talos cluster
+  -&gt; install Flux Operator Helm chart
+  -&gt; create FluxInstance for the environment
+  -&gt; optionally enable Flux Web UI
+  -&gt; optionally install Flux Operator MCP Server
+  -&gt; Flux reconciles infra/gitops/flux/clusters/&lt;env&gt;
+</code></pre>
+<p>Recommended initial choice for this spike: <strong>Flux Operator with read-only Git access, Web UI enabled for remote environments, and MCP installed in read-only mode first</strong>. Enable Git write access only after the promotion policy is explicit.</p>
+<h2 id="repository-layout" tabindex="-1"><a class="header-anchor" href="#repository-layout">Repository Layout</a></h2>
+<p>Recommended private <code>zeko-k8s</code> repo layout:</p>
+<pre><code class="language-text">infra/
+  terraform/
+    modules/
+      hcloud-zeko-cluster/
+    envs/
+      zeko-m-alphanet/
+      zeko-m-devnet/
+      zeko-m-mainnet/
+
+  gitops/
+    flux/
+      clusters/
+        zeko-m-alphanet/
+          flux-system/
+          flux-instance.yaml
+          sources.yaml
+          kustomizations.yaml
+          values.yaml
+        zeko-m-devnet/
+          flux-system/
+          flux-instance.yaml
+          sources.yaml
+          kustomizations.yaml
+          values.yaml
+        zeko-m-mainnet/
+          flux-system/
+          flux-instance.yaml
+          sources.yaml
+          kustomizations.yaml
+          values.yaml
+
+      apps/
+        platform/
+          external-secrets/
+          cloudflare-tunnel/
+        explorer/
+          nats/
+          surrealdb/
+          workloads/
+          values/
+            zeko-m-alphanet.yaml
+            zeko-m-devnet.yaml
+            zeko-m-mainnet.yaml
+</code></pre>
+<p>Use separate Flux cluster directories per environment. The cluster directory defines sources and environment-specific <code>Kustomization</code> resources. Shared app definitions live under <code>infra/gitops/flux/apps</code>.</p>
+<p>Service repos remain the source for application code, local Kubernetes, reusable chart/templates, and CI image builds. <code>zeko-k8s</code> vendors or references service charts and pins immutable image tags per environment. This spike should only create concrete app directories for explorer. NATS and SurrealDB are explorer-owned dependencies, so they live under <code>apps/explorer</code>, not <code>apps/platform</code>.</p>
+<h2 id="flux-resource-model" tabindex="-1"><a class="header-anchor" href="#flux-resource-model">Flux Resource Model</a></h2>
+<p>Flux uses composable controllers and CRDs:</p>
+<table>
+<thead>
+<tr>
+<th>Flux CRD</th>
+<th>Use in this spike</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GitRepository</code></td>
+<td>Points Flux at <code>zeko-k8s</code>.</td>
+</tr>
+<tr>
+<td><code>Kustomization</code></td>
+<td>Applies Kubernetes manifests from a path and supports dependency ordering with <code>dependsOn</code>.</td>
+</tr>
+<tr>
+<td><code>HelmRepository</code></td>
+<td>Defines external chart repositories if we use upstream NATS/SurrealDB/ESO charts.</td>
+</tr>
+<tr>
+<td><code>HelmRelease</code></td>
+<td>Installs Helm charts declaratively.</td>
+</tr>
+<tr>
+<td><code>ImageRepository</code></td>
+<td>Scans pushed image tags.</td>
+</tr>
+<tr>
+<td><code>ImagePolicy</code></td>
+<td>Selects allowed image tags.</td>
+</tr>
+<tr>
+<td><code>ImageUpdateAutomation</code></td>
+<td>Optionally writes selected image tags back to Git.</td>
+</tr>
+<tr>
+<td><code>FluxInstance</code></td>
+<td>Flux Operator-managed Flux installation and controller configuration.</td>
+</tr>
+<tr>
+<td><code>ResourceSet</code></td>
+<td>Flux Operator application/preview environment composition.</td>
+</tr>
+<tr>
+<td><code>FluxReport</code></td>
+<td>Flux Operator reporting for Web UI and status inspection.</td>
+</tr>
+</tbody>
+</table>
+<p>For explorer, use either:</p>
+<ul>
+<li><code>Kustomization</code> wrapping a Helm-rendered chart checked into the repo; or</li>
+<li><code>HelmRelease</code> pointing at an OCI/local chart source.</li>
+</ul>
+<p>Recommended initial choice: use <code>HelmRelease</code> for charted components and <code>Kustomization</code> for environment assembly.</p>
+<p>Flux 2.8 ships with Helm v4 support, server-side apply for Helm-managed resources, and kstatus-based health checking. That matters here because the explorer stack has multiple StatefulSets, Jobs, CronJobs, Deployments, and CRDs that need accurate rollout and health status.</p>
+<h2 id="flux-operator-web-ui-and-mcp" tabindex="-1"><a class="header-anchor" href="#flux-operator-web-ui-and-mcp">Flux Operator, Web UI, And MCP</a></h2>
+<p>Flux Operator should be included in the Flux variant when using Flux for remote environments.</p>
+<p>Flux Operator adds:</p>
+<ul>
+<li>Flux lifecycle management through <code>FluxInstance</code>;</li>
+<li>Flux Web UI for cluster dashboard, sync statistics, health, search, favorites, GitOps graphs, and workload rollout visibility;</li>
+<li>OIDC/Kubernetes RBAC integration for multi-tenant UI access;</li>
+<li><code>ResourceSet</code> APIs for application definitions and preview environments;</li>
+<li>Flux MCP Server for agent-assisted troubleshooting, comparison, visualization, and operations.</li>
+</ul>
+<p>The Flux Web UI changes the operational tradeoff. Flux is no longer only a CLI/controller workflow. With Flux Operator, operators get visual status and GitOps graphs while retaining Flux's CRD-first model.</p>
+<p>Flux MCP is relevant for this repo because the explorer already includes an MCP surface. For operations, Flux MCP can give agents controlled access to:</p>
+<ul>
+<li>inspect Flux installation health;</li>
+<li>compare desired state across <code>zeko-m-alphanet</code>, <code>zeko-m-devnet</code>, and <code>zeko-m-mainnet</code>;</li>
+<li>summarize failed reconciliations;</li>
+<li>correlate events, logs, and GitOps configuration;</li>
+<li>trigger reconciliations or suspend/resume resources when allowed by RBAC;</li>
+<li>generate dependency diagrams for Flux-managed resources.</li>
+</ul>
+<p>MCP should start in <strong>read-only mode</strong>. Mutating operations should require explicit RBAC and environment policy. For <code>zeko-m-mainnet</code>, agent-triggered reconciliation should be allowed only through tightly scoped service accounts or disabled until incident-response policy is defined.</p>
+<p>Flux Operator is not part of the core Talos modules. It must be installed after the cluster exists, either by Terraform Helm release or a bootstrap GitOps step.</p>
+<p>Before adoption, review Flux Operator licensing and support. The Flux Operator documentation identifies the operator project as AGPL-3.0 licensed, with enterprise distribution available from ControlPlane. This is separate from the CNCF Flux controllers and should be checked before standardizing on the Web UI or MCP Server.</p>
+<h2 id="dependency-ordering" tabindex="-1"><a class="header-anchor" href="#dependency-ordering">Dependency Ordering</a></h2>
+<p>Flux uses <code>Kustomization.spec.dependsOn</code>, health checks, and <code>wait</code> for dependency ordering.</p>
+<p>Recommended dependency graph:</p>
+<pre><code class="language-text">namespaces
+  -&gt; external-secrets
+  -&gt; cloudflare-tunnel
+  -&gt; data-plane
+       -&gt; nats
+       -&gt; surrealdb
+  -&gt; setup-jobs
+       -&gt; nats-stream-setup
+       -&gt; db-migrations
+  -&gt; ingest
+       -&gt; zeko-indexer
+       -&gt; l1-watcher
+       -&gt; da-monitor
+       -&gt; backfill
+  -&gt; api
+       -&gt; explorer-api
+       -&gt; bridge-api
+  -&gt; private-routes
+  -&gt; smoke-tests
+</code></pre>
+<p>Example:</p>
+<pre><code class="language-yaml">apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: explorer-api
+  namespace: flux-system
+spec:
+  interval: 5m
+  path: ./infra/gitops/flux/apps/explorer/api
+  prune: true
+  wait: true
+  timeout: 5m
+  dependsOn:
+    - name: setup-jobs
+    - name: data-plane
+  sourceRef:
+    kind: GitRepository
+    name: zeko-explorer
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: explorer-api
+      namespace: zeko-m-devnet
+</code></pre>
+<p>This is a good fit for this spike because the explorer has real ordering requirements: NATS and SurrealDB must exist before migrations/setup jobs; setup jobs must finish before APIs and indexers are treated as healthy.</p>
+<h2 id="jobs-and-migrations" tabindex="-1"><a class="header-anchor" href="#jobs-and-migrations">Jobs And Migrations</a></h2>
+<p>Flux can apply Kubernetes Jobs, but Jobs need careful reconciliation semantics.</p>
+<p>For one-time deploy-blocking tasks:</p>
+<ul>
+<li>use stable, idempotent Jobs;</li>
+<li>include a version/hash in the Job name if the job must re-run for each release;</li>
+<li>use Flux health checks to block dependent <code>Kustomization</code> resources until the Job succeeds;</li>
+<li>avoid non-idempotent migration logic.</li>
+</ul>
+<p>Recommended tasks:</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Flux model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NATS stream setup</td>
+<td>Job in <code>setup-jobs</code> Kustomization; idempotent create/update of streams.</td>
+</tr>
+<tr>
+<td>SurrealDB migration</td>
+<td>Job in <code>setup-jobs</code>; versioned or release-hash named if it must re-run.</td>
+</tr>
+<tr>
+<td>Smoke tests</td>
+<td>Separate Kustomization depending on <code>api</code> and <code>private-routes</code>; Job with health check.</td>
+</tr>
+<tr>
+<td>R2 archival</td>
+<td>CronJob managed by Flux after data plane exists.</td>
+</tr>
+<tr>
+<td>SurrealDB export</td>
+<td>CronJob managed by Flux after SurrealDB exists.</td>
+</tr>
+</tbody>
+</table>
+<p>Use explicit Kustomizations and dependencies for deploy-blocking setup and post-deploy validation.</p>
+<h2 id="ci-and-promotion-with-flux" tabindex="-1"><a class="header-anchor" href="#ci-and-promotion-with-flux">CI And Promotion With Flux</a></h2>
+<p>There are two viable promotion models.</p>
+<h3 id="option-a-github-actions-promotion-prs" tabindex="-1"><a class="header-anchor" href="#option-a-github-actions-promotion-prs">Option A: GitHub Actions Promotion PRs</a></h3>
+<p>GitHub Actions:</p>
+<ol>
+<li>builds images with immutable SHA tags;</li>
+<li>pushes images to Docker Hub or GCR;</li>
+<li>opens a promotion PR in <code>zeko-k8s</code> updating environment values;</li>
+<li>Flux reconciles after merge.</li>
+</ol>
+<p>This is the recommended initial model because it preserves manual review for promotion to <code>zeko-m-devnet</code> and <code>zeko-m-mainnet</code>.</p>
+<pre><code class="language-text">merge to main
+  -&gt; images.yml builds zeko/*:&lt;sha&gt;
+  -&gt; zeko-k8s promote.yml opens PR for zeko-m-alphanet values
+  -&gt; merge promotion PR
+  -&gt; Flux reconciles zeko-m-alphanet
+  -&gt; validate zeko-m-alphanet
+  -&gt; promote same SHA set to zeko-m-devnet
+  -&gt; validate zeko-m-devnet
+  -&gt; promote same SHA set to zeko-m-mainnet
+</code></pre>
+<h3 id="option-b-flux-image-automation" tabindex="-1"><a class="header-anchor" href="#option-b-flux-image-automation">Option B: Flux Image Automation</a></h3>
+<p>Flux can scan image tags using <code>ImageRepository</code>, select tags with <code>ImagePolicy</code>, and write updates back to Git with <code>ImageUpdateAutomation</code>.</p>
+<p>This is powerful but should be used carefully:</p>
+<ul>
+<li>acceptable for <code>zeko-m-alphanet</code>;</li>
+<li>probably too automatic for <code>zeko-m-devnet</code> and <code>zeko-m-mainnet</code> unless policy requires PR review or a protected branch workflow;</li>
+<li>requires write-capable Git credentials in the cluster.</li>
+</ul>
+<p>Recommended initial stance:</p>
+<ul>
+<li>use GitHub Actions PR promotion for all environments;</li>
+<li>revisit Flux image automation for <code>zeko-m-alphanet</code> after the basic GitOps flow works;</li>
+<li>consider Flux Operator ResourceSet image automation for preview environments only after the promotion model is stable.</li>
+</ul>
+<h2 id="image-tags" tabindex="-1"><a class="header-anchor" href="#image-tags">Image Tags</a></h2>
+<p>Flux should deploy immutable image tags from Git values:</p>
+<pre><code class="language-yaml">images:
+  explorerApi:
+    repository: zeko/explorer-api
+    tag: &quot;8f31c2a&quot;
+  bridgeApi:
+    repository: zeko/bridge-api
+    tag: &quot;8f31c2a&quot;
+  indexer:
+    repository: zeko/zeko-indexer
+    tag: &quot;8f31c2a&quot;
+</code></pre>
+<p>Do not deploy <code>latest</code>. Do not rely on mutable branch tags for <code>zeko-m-devnet</code> or <code>zeko-m-mainnet</code>.</p>
+<h2 id="secrets" tabindex="-1"><a class="header-anchor" href="#secrets">Secrets</a></h2>
+<p>Preferred runtime model:</p>
+<ol>
+<li>Git stores ExternalSecret manifests, not secret values.</li>
+<li>Infisical stores secret values.</li>
+<li>External Secrets Operator materializes Kubernetes Secrets.</li>
+<li>Flux reconciles the ExternalSecret resources.</li>
+</ol>
+<p>Flux supports SOPS-based secret workflows, but the primary recommendation remains Infisical + ESO, with GitHub Actions secrets only for bootstrap.</p>
+<p>Bootstrap credentials:</p>
+<ul>
+<li>Flux needs Git read credentials.</li>
+<li>Flux image automation needs Git write credentials.</li>
+<li>Prefer read-only deploy keys for the initial model.</li>
+</ul>
+<h2 id="cloudflare-boundary" tabindex="-1"><a class="header-anchor" href="#cloudflare-boundary">Cloudflare Boundary</a></h2>
+<p>Flux owns Kubernetes resources for private cluster routing:</p>
+<ul>
+<li>Cloudflare Tunnel controller;</li>
+<li>tunnel route objects;</li>
+<li><code>cloudflared</code> deployment if required by the controller;</li>
+<li>private service routing resources for Explorer API and Bridge API.</li>
+</ul>
+<p>Flux does not deploy:</p>
+<ul>
+<li>frontend static assets;</li>
+<li>Hive Gateway Worker;</li>
+<li>MCP Worker.</li>
+</ul>
+<p>Those stay in <code>cloudflare.yml</code> with Wrangler.</p>
+<h2 id="local-development" tabindex="-1"><a class="header-anchor" href="#local-development">Local Development</a></h2>
+<p>Do not use Flux for <code>zeko-m-local</code>.</p>
+<p>Local development remains:</p>
+<pre><code class="language-text">moon run infra:build-local-images
+moon run infra:k8s-local-up
+moon run infra:k8s-local-forward
+moon run infra:dev
+</code></pre>
+<p>Developers should not need Flux controllers locally to work on the explorer.</p>
+<h2 id="failure-and-rollback-behavior" tabindex="-1"><a class="header-anchor" href="#failure-and-rollback-behavior">Failure And Rollback Behavior</a></h2>
+<p>Flux gives:</p>
+<ul>
+<li>continuous reconciliation from Git;</li>
+<li>dependency-aware readiness with <code>dependsOn</code> and health checks;</li>
+<li>controller-level status on each <code>Kustomization</code> and <code>HelmRelease</code>;</li>
+<li>Web UI visibility through Flux Operator;</li>
+<li>MCP-based agent-assisted investigation through Flux Operator MCP;</li>
+<li>optional image update automation;</li>
+<li>PR/MR status feedback through notification providers.</li>
+</ul>
+<p>Rollback should be Git-based:</p>
+<ol>
+<li>revert the promotion commit or open a rollback PR;</li>
+<li>Flux reconciles the previous image tag set;</li>
+<li>smoke-test Kustomization verifies API and tunnel health.</li>
+</ol>
+<p>Do not use manual <code>kubectl set image</code> against Flux-managed Deployments. Flux will revert drift on the next reconciliation.</p>
+<h2 id="recommendation" tabindex="-1"><a class="header-anchor" href="#recommendation">Recommendation</a></h2>
+<p>FluxCD is viable for this deployment. The best Flux model for Zeko Explorer is:</p>
+<ul>
+<li>Terraform creates Hetzner/Talos infrastructure.</li>
+<li>Flux Operator and Flux are bootstrapped once per remote environment.</li>
+<li>Flux owns Kubernetes app/platform resources via <code>Kustomization</code> and <code>HelmRelease</code>.</li>
+<li>GitHub Actions builds images and opens <code>zeko-k8s</code> promotion PRs with pinned SHA tags.</li>
+<li>Flux image automation is optional later, not part of the first production path.</li>
+<li>Flux Web UI is enabled for remote environments.</li>
+<li>Flux MCP starts in read-only mode for investigation and environment comparison.</li>
+<li>Cloudflare Workers/static assets remain deployed by Wrangler.</li>
+<li><code>zeko-m-local</code> stays outside Flux.</li>
+</ul>
+<h2 id="sources" tabindex="-1"><a class="header-anchor" href="#sources">Sources</a></h2>
+<ul>
+<li><a href="https://fluxcd.io/flux/installation/bootstrap/github/">Flux bootstrap for GitHub</a></li>
+<li><a href="https://fluxcd.io/blog/2026/02/flux-v2.8.0/">Announcing Flux 2.8 GA</a></li>
+<li><a href="https://fluxcd.io/flux/components/">Flux GitOps Toolkit components</a></li>
+<li><a href="https://fluxcd.io/flux/components/kustomize/kustomizations/">Flux Kustomization dependencies and health checks</a></li>
+<li><a href="https://fluxcd.io/flux/components/image/imageupdateautomations/">Flux ImageUpdateAutomation</a></li>
+<li><a href="https://fluxoperator.dev/docs/web-ui/standalone-install/">Flux Operator Web UI standalone install</a></li>
+<li><a href="https://fluxoperator.dev/mcp-server/">Flux Operator MCP Server</a></li>
+<li><a href="https://github.com/hcloud-k8s/terraform-hcloud-kubernetes"><code>hcloud-k8s/terraform-hcloud-kubernetes</code></a></li>
+<li><a href="https://github.com/hcloud-talos/terraform-hcloud-talos"><code>hcloud-talos/terraform-hcloud-talos</code></a></li>
+</ul>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/004-deployment-topology/addendums/gitops/flux.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

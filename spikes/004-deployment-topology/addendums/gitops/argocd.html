@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Addendum: ArgoCD Deployment Model</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/004-deployment-topology/addendums/gitops/argocd.md</div>
+        <h1>Addendum: ArgoCD Deployment Model</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Lines</strong>344</span><span class="pill"><strong>Sections</strong>18</span><span class="pill"><strong>Tables</strong>3</span><span class="pill"><strong>Code blocks</strong>7</span></div>
+        <nav class="quick-nav"><a href="../../README.md">README</a><a href="../../results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">1553 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="276" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 18</text><rect x="328" y="148" width="46" height="18" rx="9" fill="#34d399"/><text x="328" y="188" fill="#9fb0c7" font-size="13">Tables: 3</text><rect x="388" y="148" width="108" height="18" rx="9" fill="#a78bfa"/><text x="388" y="188" fill="#9fb0c7" font-size="13">Code: 7</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#decision">Decision</a>
+<a class="toc-level-2" href="#module-support">Module Support</a>
+<a class="toc-level-3" href="#hcloud-k8sterraform-hcloud-kubernetes">hcloud-k8s/terraform-hcloud-kubernetes</a>
+<a class="toc-level-3" href="#hcloud-talosterraform-hcloud-talos">hcloud-talos/terraform-hcloud-talos</a>
+<a class="toc-level-2" href="#recommended-bootstrap-flow">Recommended Bootstrap Flow</a>
+<a class="toc-level-2" href="#repository-layout">Repository Layout</a>
+<a class="toc-level-2" href="#application-structure">Application Structure</a>
+<a class="toc-level-2" href="#sync-ordering">Sync Ordering</a>
+<a class="toc-level-2" href="#ci-and-promotion-with-argocd">CI And Promotion With ArgoCD</a>
+<a class="toc-level-2" href="#image-tags">Image Tags</a>
+<a class="toc-level-2" href="#secrets">Secrets</a>
+<a class="toc-level-2" href="#cloudflare-boundary">Cloudflare Boundary</a>
+<a class="toc-level-2" href="#local-development">Local Development</a>
+<a class="toc-level-2" href="#failure-and-rollback-behavior">Failure And Rollback Behavior</a>
+<a class="toc-level-2" href="#what-not-to-put-under-argocd">What Not To Put Under ArgoCD</a>
+<a class="toc-level-2" href="#recommendation">Recommendation</a>
+<a class="toc-level-2" href="#sources">Sources</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="addendum-argocd-deployment-model" tabindex="-1"><a class="header-anchor" href="#addendum-argocd-deployment-model">Addendum: ArgoCD Deployment Model</a></h1>
+<h2 id="decision" tabindex="-1"><a class="header-anchor" href="#decision">Decision</a></h2>
+<p>ArgoCD is a valid deployment model for the remote Kubernetes environments:</p>
+<ul>
+<li><code>zeko-m-alphanet</code></li>
+<li><code>zeko-m-devnet</code></li>
+<li><code>zeko-m-mainnet</code></li>
+</ul>
+<p>It should not replace Terraform. The best-practice boundary is:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Owner</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hetzner servers, networks, firewalls, volumes</td>
+<td>Terraform</td>
+<td>External infrastructure needs Terraform state and provider lifecycle management.</td>
+</tr>
+<tr>
+<td>Talos machine config and cluster bootstrap</td>
+<td>Terraform</td>
+<td>Cluster creation must work before Kubernetes controllers exist.</td>
+</tr>
+<tr>
+<td>Core cluster bootstrap required for Kubernetes to function</td>
+<td>Terraform / Talos module</td>
+<td>CNI, CCM, CSI, API access, and ArgoCD itself must exist before ArgoCD can reconcile apps.</td>
+</tr>
+<tr>
+<td>ArgoCD installation and first root Application</td>
+<td>Terraform</td>
+<td>This is the handoff point from infrastructure bootstrap to GitOps.</td>
+</tr>
+<tr>
+<td>Explorer Kubernetes workloads</td>
+<td>ArgoCD</td>
+<td>App state should be reconciled continuously from Git.</td>
+</tr>
+<tr>
+<td>Cloudflare Workers and static assets</td>
+<td>GitHub Actions + Wrangler</td>
+<td>They do not run in Kubernetes.</td>
+</tr>
+<tr>
+<td>Image builds and registry publishing</td>
+<td>GitHub Actions</td>
+<td>CI builds artifacts; ArgoCD deploys pinned artifacts from Git.</td>
+</tr>
+</tbody>
+</table>
+<p>The key rule is <strong>single ownership per resource</strong>. Do not let Terraform and ArgoCD manage the same Kubernetes object after bootstrap. Terraform should install ArgoCD and the root app; ArgoCD should own the child apps.</p>
+<h2 id="module-support" tabindex="-1"><a class="header-anchor" href="#module-support">Module Support</a></h2>
+<p>Neither selected Talos Terraform module installs ArgoCD as a built-in default component.</p>
+<h3 id="hcloud-k8sterraform-hcloud-kubernetes" tabindex="-1"><a class="header-anchor" href="#hcloud-k8sterraform-hcloud-kubernetes"><code>hcloud-k8s/terraform-hcloud-kubernetes</code></a></h3>
+<p>This module includes bootstrap support for core/add-on components such as Cilium, Talos backup, Talos CCM, CoreDNS, Hetzner CCM/CSI, metrics-server, Prometheus Operator CRDs, and optional cert-manager and Longhorn.</p>
+<p>The module supports extra Talos bootstrap manifests through <code>talos_extra_remote_manifests</code> and <code>talos_extra_inline_manifests</code>. ArgoCD can technically be bootstrapped through extra manifests, but the recommended path is to install ArgoCD from Terraform using the Helm provider after the cluster is reachable.</p>
+<h3 id="hcloud-talosterraform-hcloud-talos" tabindex="-1"><a class="header-anchor" href="#hcloud-talosterraform-hcloud-talos"><code>hcloud-talos/terraform-hcloud-talos</code></a></h3>
+<p>This module creates the Talos Kubernetes cluster and does not include ArgoCD as a built-in component. It should be treated as a lower-level cluster module. Terraform still needs to install ArgoCD separately.</p>
+<h2 id="recommended-bootstrap-flow" tabindex="-1"><a class="header-anchor" href="#recommended-bootstrap-flow">Recommended Bootstrap Flow</a></h2>
+<ol>
+<li><code>terraform-plan.yml</code> runs for <code>infra/terraform/envs/&lt;env&gt;</code>.</li>
+<li><code>terraform-apply.yml</code> creates or updates the Hetzner/Talos cluster.</li>
+<li>Terraform installs ArgoCD into the <code>argocd</code> namespace with <code>helm_release</code>.</li>
+<li>Terraform creates:
+<ul>
+<li>ArgoCD repository credential secret;</li>
+<li>ArgoCD <code>AppProject</code> for explorer apps;</li>
+<li>one root <code>Application</code> for the target environment.</li>
+</ul>
+</li>
+<li>ArgoCD reconciles the root app.</li>
+<li>The root app creates child applications for platform and explorer workloads.</li>
+<li>GitHub Actions builds images and opens promotion PRs that update Git-pinned image tags.</li>
+<li>ArgoCD applies those Git changes to the cluster.</li>
+</ol>
+<p>Terraform should only create the root application once per environment. After that, normal application changes flow through Git and ArgoCD.</p>
+<h2 id="repository-layout" tabindex="-1"><a class="header-anchor" href="#repository-layout">Repository Layout</a></h2>
+<p>Recommended private <code>zeko-k8s</code> repo layout:</p>
+<pre><code class="language-text">infra/
+  terraform/
+    modules/
+      hcloud-zeko-cluster/
+      argocd-bootstrap/
+    envs/
+      zeko-m-alphanet/
+      zeko-m-devnet/
+      zeko-m-mainnet/
+
+  gitops/
+    clusters/
+      zeko-m-alphanet/
+        root.yaml
+        values.yaml
+      zeko-m-devnet/
+        root.yaml
+        values.yaml
+      zeko-m-mainnet/
+        root.yaml
+        values.yaml
+
+    apps/
+      platform/
+        external-secrets/
+        cloudflare-tunnel/
+      explorer/
+        nats/
+        surrealdb/
+        workloads/
+        values/
+          zeko-m-alphanet.yaml
+          zeko-m-devnet.yaml
+          zeko-m-mainnet.yaml
+</code></pre>
+<p>Service repos remain the source for application code, local Kubernetes, reusable chart/templates, and CI image builds. <code>zeko-k8s</code> owns remote environment state, Terraform, ArgoCD roots, environment values, and promotion PRs. This spike should only create concrete app directories for explorer. NATS and SurrealDB are explorer-owned dependencies, so they live under <code>apps/explorer</code>, not <code>apps/platform</code>.</p>
+<h2 id="application-structure" tabindex="-1"><a class="header-anchor" href="#application-structure">Application Structure</a></h2>
+<p>Use one root app per environment:</p>
+<pre><code class="language-yaml">apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zeko-m-devnet-root
+  namespace: argocd
+spec:
+  project: zeko-explorer
+  source:
+    repoURL: https://github.com/zeko-labs/zeko-k8s.git
+    targetRevision: main
+    path: infra/gitops/clusters/zeko-m-devnet
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+</code></pre>
+<p>The root app owns child <code>Application</code> resources, for example:</p>
+<ul>
+<li><code>external-secrets</code></li>
+<li><code>cloudflare-tunnel</code></li>
+<li><code>nats</code></li>
+<li><code>surrealdb</code></li>
+<li><code>zeko-explorer</code></li>
+<li><code>smoke-tests</code></li>
+</ul>
+<p>For three environments, App-of-Apps is sufficient. ApplicationSet becomes useful if we later have many networks or repeated generated apps.</p>
+<h2 id="sync-ordering" tabindex="-1"><a class="header-anchor" href="#sync-ordering">Sync Ordering</a></h2>
+<p>Use ArgoCD sync waves and hooks for dependency order.</p>
+<p>Recommended order:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Wave</th>
+<th>Resources</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">-20</td>
+<td>namespaces, service accounts, RBAC, ArgoCD projects</td>
+</tr>
+<tr>
+<td style="text-align:right">-10</td>
+<td>External Secrets Operator resources and secret stores</td>
+</tr>
+<tr>
+<td style="text-align:right">-5</td>
+<td>Cloudflare Tunnel controller resources</td>
+</tr>
+<tr>
+<td style="text-align:right">0</td>
+<td>NATS, SurrealDB, PVCs, service accounts</td>
+</tr>
+<tr>
+<td style="text-align:right">5</td>
+<td>NATS stream setup Job, schema migration Job</td>
+</tr>
+<tr>
+<td style="text-align:right">10</td>
+<td>indexer, L1 Watcher, DA Monitor, Backfill Service</td>
+</tr>
+<tr>
+<td style="text-align:right">20</td>
+<td>Explorer API, Bridge API</td>
+</tr>
+<tr>
+<td style="text-align:right">30</td>
+<td>Cloudflare Tunnel routes to private subgraph services</td>
+</tr>
+<tr>
+<td style="text-align:right">40</td>
+<td>smoke-test Job</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>PreSync</code> hooks for deploy-blocking migration/setup jobs and <code>PostSync</code> hooks for smoke tests.</p>
+<p>Example migration Job:</p>
+<pre><code class="language-yaml">apiVersion: batch/v1
+kind: Job
+metadata:
+  name: surrealdb-migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: &quot;5&quot;
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: zeko/explorer-ops:${IMAGE_TAG}
+          command: [&quot;./bin/explorer-migrate&quot;]
+</code></pre>
+<p>The migration and setup Jobs are not long-running services. They should run from a small ops image only if they must execute inside Kubernetes.</p>
+<h2 id="ci-and-promotion-with-argocd" tabindex="-1"><a class="header-anchor" href="#ci-and-promotion-with-argocd">CI And Promotion With ArgoCD</a></h2>
+<p>With ArgoCD, CI does not deploy Kubernetes workloads directly.</p>
+<p>GitHub Actions responsibilities:</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ci.yml</code></td>
+<td>lint, typecheck, unit tests, integration tests</td>
+</tr>
+<tr>
+<td><code>images.yml</code></td>
+<td>build and push Kubernetes workload images with immutable SHA tags</td>
+</tr>
+<tr>
+<td><code>terraform-plan.yml</code></td>
+<td>plan infra and ArgoCD bootstrap changes</td>
+</tr>
+<tr>
+<td><code>terraform-apply.yml</code></td>
+<td>apply infra and ArgoCD bootstrap changes</td>
+</tr>
+<tr>
+<td><code>promote.yml</code></td>
+<td>update Git-pinned image tags for a target environment in <code>zeko-k8s</code></td>
+</tr>
+<tr>
+<td><code>cloudflare.yml</code></td>
+<td>deploy frontend, Hive Gateway Worker, and MCP Worker with Wrangler</td>
+</tr>
+</tbody>
+</table>
+<p>Promotion flow:</p>
+<pre><code class="language-text">merge to main
+  -&gt; images.yml builds zeko/*:&lt;sha&gt;
+  -&gt; zeko-k8s promote.yml opens/updates PR for zeko-m-alphanet image tags
+  -&gt; merge promotion PR
+  -&gt; ArgoCD syncs zeko-m-alphanet
+  -&gt; validate zeko-m-alphanet
+  -&gt; promote same SHA set to zeko-m-devnet
+  -&gt; validate zeko-m-devnet
+  -&gt; promote same SHA set to zeko-m-mainnet
+</code></pre>
+<p><code>zeko-m-devnet</code> must mirror the <code>zeko-m-mainnet</code> role split, so promotion failures there are meaningful before production.</p>
+<h2 id="image-tags" tabindex="-1"><a class="header-anchor" href="#image-tags">Image Tags</a></h2>
+<p>ArgoCD should deploy immutable image tags from Git values:</p>
+<pre><code class="language-yaml">images:
+  explorerApi:
+    repository: zeko/explorer-api
+    tag: &quot;8f31c2a&quot;
+  bridgeApi:
+    repository: zeko/bridge-api
+    tag: &quot;8f31c2a&quot;
+  indexer:
+    repository: zeko/zeko-indexer
+    tag: &quot;8f31c2a&quot;
+</code></pre>
+<p>Do not let ArgoCD deploy <code>latest</code>. Do not rely on mutable branch tags for <code>zeko-m-devnet</code> or <code>zeko-m-mainnet</code>.</p>
+<p>ArgoCD Image Updater can be considered later, but it is not required initially. A promotion PR is more explicit and easier to audit.</p>
+<h2 id="secrets" tabindex="-1"><a class="header-anchor" href="#secrets">Secrets</a></h2>
+<p>Preferred runtime model:</p>
+<ol>
+<li>Git stores ExternalSecret manifests, not secret values.</li>
+<li>Infisical stores secret values.</li>
+<li>External Secrets Operator materializes Kubernetes Secrets.</li>
+<li>ArgoCD reconciles the ExternalSecret resources.</li>
+</ol>
+<p>Bootstrap exceptions:</p>
+<ul>
+<li>Terraform/GitHub Actions may need enough credentials to install ESO and ArgoCD.</li>
+<li>ArgoCD repository credentials are bootstrap secrets and should be managed by Terraform or ESO once ESO is available.</li>
+</ul>
+<p>Do not commit sealed literal secrets into either repo unless the team explicitly decides to use a sealed-secret workflow.</p>
+<h2 id="cloudflare-boundary" tabindex="-1"><a class="header-anchor" href="#cloudflare-boundary">Cloudflare Boundary</a></h2>
+<p>ArgoCD owns Kubernetes resources for private cluster routing, such as:</p>
+<ul>
+<li>Cloudflare Tunnel controller;</li>
+<li>tunnel route objects;</li>
+<li><code>cloudflared</code> deployment if required by the controller;</li>
+<li>private service routing resources for Explorer API and Bridge API.</li>
+</ul>
+<p>ArgoCD does not deploy:</p>
+<ul>
+<li>frontend static assets;</li>
+<li>Hive Gateway Worker;</li>
+<li>MCP Worker.</li>
+</ul>
+<p>Those are Cloudflare artifacts deployed by <code>cloudflare.yml</code> with Wrangler.</p>
+<p>The public flow remains:</p>
+<pre><code class="language-text">client
+  -&gt; Cloudflare route
+  -&gt; Hive Gateway Worker
+  -&gt; Cloudflare Tunnel private subgraph route
+  -&gt; cloudflared / tunnel controller in Kubernetes
+  -&gt; Explorer API or Bridge API Service
+</code></pre>
+<h2 id="local-development" tabindex="-1"><a class="header-anchor" href="#local-development">Local Development</a></h2>
+<p>Do not use ArgoCD for <code>zeko-m-local</code>.</p>
+<p>Local development should stay:</p>
+<pre><code class="language-text">moon run infra:build-local-images
+moon run infra:k8s-local-up
+moon run infra:k8s-local-forward
+moon run infra:dev
+</code></pre>
+<p>Developers should not need a local ArgoCD control plane to work on the explorer.</p>
+<h2 id="failure-and-rollback-behavior" tabindex="-1"><a class="header-anchor" href="#failure-and-rollback-behavior">Failure And Rollback Behavior</a></h2>
+<p>ArgoCD gives:</p>
+<ul>
+<li>drift detection;</li>
+<li>self-heal for app resources;</li>
+<li>sync history;</li>
+<li>clearer promotion audit trail;</li>
+<li>repeatable cluster reconciliation after node replacement.</li>
+</ul>
+<p>Rollback should be Git-based:</p>
+<ol>
+<li>revert the promotion commit or open a rollback PR;</li>
+<li>ArgoCD syncs the previous image tag set;</li>
+<li>post-sync smoke tests verify API and tunnel health.</li>
+</ol>
+<p>Do not use manual <code>kubectl set image</code> against ArgoCD-managed Deployments. ArgoCD will either revert it or record drift.</p>
+<h2 id="what-not-to-put-under-argocd" tabindex="-1"><a class="header-anchor" href="#what-not-to-put-under-argocd">What Not To Put Under ArgoCD</a></h2>
+<p>Keep these outside ArgoCD ownership:</p>
+<ul>
+<li>Hetzner servers, firewalls, networks, placement groups, and volumes;</li>
+<li>Talos machine configuration;</li>
+<li>Kubernetes API endpoint configuration;</li>
+<li>CNI/CCM/CSI components if installed by the Talos Terraform module;</li>
+<li>ArgoCD's initial installation and root app;</li>
+<li>Cloudflare Workers and frontend static assets;</li>
+<li>Docker Hub/GCR image build and publish.</li>
+</ul>
+<p>This is not because ArgoCD is weak. It is because those resources either exist before ArgoCD can run, are not Kubernetes resources, or are already owned by Terraform/module lifecycle.</p>
+<h2 id="recommendation" tabindex="-1"><a class="header-anchor" href="#recommendation">Recommendation</a></h2>
+<p>Use ArgoCD for the remote Kubernetes environments when GitOps reconciliation, drift detection, and application visibility are required from the start.</p>
+<p>Recommended implementation:</p>
+<ul>
+<li>Terraform installs ArgoCD with Helm after Talos cluster creation.</li>
+<li>Terraform creates one root <code>Application</code> per environment.</li>
+<li>ArgoCD owns explorer Kubernetes apps through App-of-Apps.</li>
+<li>GitHub Actions builds images and opens promotion PRs that update pinned image tags.</li>
+<li>Wrangler deploys Cloudflare Workers and frontend static assets.</li>
+<li>Keep <code>zeko-m-local</code> out of ArgoCD.</li>
+</ul>
+<p>This is a better long-term deployment story than direct <code>helm upgrade</code> from GitHub Actions, especially because <code>zeko-m-devnet</code> must mirror <code>zeko-m-mainnet</code> and because several services must be deployed in a strict order.</p>
+<h2 id="sources" tabindex="-1"><a class="header-anchor" href="#sources">Sources</a></h2>
+<ul>
+<li><a href="https://argo-cd.readthedocs.io/en/latest/operator-manual/declarative-setup/">ArgoCD declarative setup</a></li>
+<li><a href="https://argo-cd.readthedocs.io/en/latest/operator-manual/cluster-bootstrapping/">ArgoCD cluster bootstrapping</a></li>
+<li><a href="https://argo-cd.readthedocs.io/en/latest/user-guide/sync-waves/">ArgoCD sync phases and waves</a></li>
+<li><a href="https://argo-cd.readthedocs.io/en/latest/user-guide/application-specification/">ArgoCD application specification</a></li>
+<li><a href="https://github.com/hcloud-k8s/terraform-hcloud-kubernetes"><code>hcloud-k8s/terraform-hcloud-kubernetes</code></a></li>
+<li><a href="https://github.com/hcloud-talos/terraform-hcloud-talos"><code>hcloud-talos/terraform-hcloud-talos</code></a></li>
+</ul>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/004-deployment-topology/addendums/gitops/argocd.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

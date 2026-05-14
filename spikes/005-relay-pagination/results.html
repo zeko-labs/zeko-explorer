@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 005: Cursor-Based Pagination Schema — Results</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/005-relay-pagination/results.md</div>
+        <h1>Spike 005: Cursor-Based Pagination Schema — Results</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Status</strong>Complete</span><span class="pill"><strong>Date</strong>2026-05-07</span><span class="pill"><strong>Lines</strong>530</span><span class="pill"><strong>Sections</strong>41</span><span class="pill"><strong>Tables</strong>9</span><span class="pill"><strong>Code blocks</strong>8</span></div>
+        <nav class="quick-nav"><a href="./README.md">README</a><a href="./results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">5062 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="304" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 41</text><rect x="356" y="148" width="67" height="18" rx="9" fill="#34d399"/><text x="356" y="188" fill="#9fb0c7" font-size="13">Tables: 9</text><rect x="437" y="148" width="59" height="18" rx="9" fill="#a78bfa"/><text x="437" y="188" fill="#9fb0c7" font-size="13">Code: 8</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#1-context">1. Context</a>
+<a class="toc-level-2" href="#2-who-consumes-these-apis-q1-q2">2. Who consumes these APIs (Q1, Q2)</a>
+<a class="toc-level-2" href="#3-two-approaches-side-by-side">3. Two approaches, side by side</a>
+<a class="toc-level-3" href="#31-global-identity-strategy">3.1 Global identity strategy</a>
+<a class="toc-level-3" href="#32-approach-a-full-relay-node-global-ids-connections">3.2 Approach A — Full Relay (Node + global IDs + Connections)</a>
+<a class="toc-level-3" href="#33-approach-b-custom-flat-no-relay-plugin">3.3 Approach B — Custom flat (no Relay plugin)</a>
+<a class="toc-level-3" href="#34-behavioral-parity">3.4 Behavioral parity</a>
+<a class="toc-level-3" href="#35-summary-table">3.5 Summary table</a>
+<a class="toc-level-2" href="#4-pothos-cursor-pagination-without-the-relay-plugin-q3">4. Pothos cursor pagination without the Relay plugin (Q3)</a>
+<a class="toc-level-2" href="#5-surrealdb-cursor-strategy-q4">5. SurrealDB cursor strategy (Q4)</a>
+<a class="toc-level-3" href="#51-two-cursor-regimes">5.1 Two cursor regimes</a>
+<a class="toc-level-3" href="#52-sort-tuple-per-query">5.2 Sort tuple per query</a>
+<a class="toc-level-3" href="#53-surrealql-keyset-query-template">5.3 SurrealQL keyset query template</a>
+<a class="toc-level-3" href="#54-cursor-encoding">5.4 Cursor encoding</a>
+<a class="toc-level-3" href="#55-resolver-structure">5.5 Resolver structure</a>
+<a class="toc-level-2" href="#6-performance-impact">6. Performance impact</a>
+<a class="toc-level-3" href="#61-database">6.1 Database</a>
+<a class="toc-level-3" href="#62-wire-size">6.2 Wire size</a>
+<a class="toc-level-3" href="#63-resolver-overhead">6.3 Resolver overhead</a>
+<a class="toc-level-3" href="#64-client-side-cache-identity">6.4 Client-side cache identity</a>
+<a class="toc-level-3" href="#65-subscription-patching">6.5 Subscription patching</a>
+<a class="toc-level-3" href="#66-net">6.6 Net</a>
+<a class="toc-level-2" href="#7-backward-pagination-needed-q5">7. Backward pagination needed? (Q5)</a>
+<a class="toc-level-2" href="#8-future-milestone-considerations">8. Future-milestone considerations</a>
+<a class="toc-level-2" href="#9-surrounding-ecosystem">9. Surrounding ecosystem</a>
+<a class="toc-level-3" href="#91-production-references-for-each-shape">9.1 Production references for each shape</a>
+<a class="toc-level-3" href="#92-federation-across-heterogeneous-subgraphs">9.2 Federation across heterogeneous subgraphs</a>
+<a class="toc-level-3" href="#93-client-support">9.3 Client support</a>
+<a class="toc-level-2" href="#10-recommendation">10. Recommendation</a>
+<a class="toc-level-3" href="#101-why-no-hybrid-middle-was-considered">10.1 Why no &quot;hybrid&quot; middle was considered</a>
+<a class="toc-level-2" href="#11-project-wide-conventions-proposed">11. Project-wide conventions (proposed)</a>
+<a class="toc-level-2" href="#12-edge-cases">12. Edge cases</a>
+<a class="toc-level-3" href="#121-aux-collision-and-fifo-sequence">12.1 Aux collision and FIFO sequence</a>
+<a class="toc-level-3" href="#122-rollback-during-pagination">12.2 Rollback during pagination</a>
+<a class="toc-level-3" href="#123-cursor-across-schema-migrations">12.3 Cursor across schema migrations</a>
+<a class="toc-level-3" href="#124-federation-hive-gateway">12.4 Federation (Hive gateway)</a>
+<a class="toc-level-3" href="#125-sse-freshness">12.5 SSE freshness</a>
+<a class="toc-level-3" href="#126-totalcount">12.6 totalCount</a>
+<a class="toc-level-2" href="#13-deliverables-checklist">13. Deliverables checklist</a>
+<a class="toc-level-2" href="#14-references">14. References</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="spike-005-cursor-based-pagination-schema-results" tabindex="-1"><a class="header-anchor" href="#spike-005-cursor-based-pagination-schema-results">Spike 005: Cursor-Based Pagination Schema — Results</a></h1>
+<p><strong>Status:</strong> Complete
+<strong>Date:</strong> 2026-05-07</p>
+<hr>
+<h2 id="1-context" tabindex="-1"><a class="header-anchor" href="#1-context">1. Context</a></h2>
+<p>The Explorer, Bridge, and Contract Registry GraphQL APIs need cursor-based pagination for all open-ended list queries (transactions, accounts, events, actions, bridge operations). Pothos has built-in Relay Connection support via <code>@pothos/plugin-relay</code>. The choice is binary:</p>
+<ul>
+<li><strong>Approach A — Full Relay.</strong> <code>Node</code> interface, global IDs, <code>Connection</code> / <code>Edge</code> / <code>PageInfo</code> wrappers, the full Relay arg set (<code>first</code> / <code>after</code> / <code>last</code> / <code>before</code>).</li>
+<li><strong>Approach B — Custom flat.</strong> A <code>{ items, nextCursor, hasMore }</code> page wrapper, natural identifiers, <code>limit</code> / <code>after</code> only, no Relay plugin.</li>
+</ul>
+<p>A &quot;hybrid&quot; shape (Connection types without <code>Node</code>) is not under evaluation — §10.1 documents why no production API ships it.</p>
+<p>This spike works each shape end-to-end against in-memory fixtures, surveys what the surrounding Mina/Zeko ecosystem already does, evaluates the performance impact of each shape, isolates what Relay's plugin enables that a custom shape cannot, and weighs the answer against the project's downstream milestones.</p>
+<p>Working code lives in <a href="./poc/"><code>./poc/</code></a>: two Pothos schemas, generated <code>.graphql</code> SDL files, and a runner with 23 strict-typed assertions.</p>
+<hr>
+<h2 id="2-who-consumes-these-apis-q1-q2" tabindex="-1"><a class="header-anchor" href="#2-who-consumes-these-apis-q1-q2">2. Who consumes these APIs (Q1, Q2)</a></h2>
+<table>
+<thead>
+<tr>
+<th>Consumer</th>
+<th>Client library</th>
+<th>Pagination needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>MCP code-mode agents</strong> (Milestone 1, 4)</td>
+<td>A typed SDK generated from the federated schema (<code>gql.tada</code> matches the existing zeko-ui pattern). Sandboxed JS.</td>
+<td>Multi-step agent workflows benefit from polymorphic refetch (<code>node(id:)</code> returns any object across types). With per-type lookups, the agent must remember the type of each saved ID and route refetches accordingly.</td>
+</tr>
+<tr>
+<td><strong>Bridge UI</strong> (production today)</td>
+<td><code>@urql/vue</code>.</td>
+<td>Needs a normalized cache with stable row identity. urql graphcache uses <code>__typename + id</code> by default — Relay <code>Node.id</code> lands in this slot for free; a custom shape requires per-type <code>keyFields</code> configuration.</td>
+</tr>
+<tr>
+<td><strong>Explorer frontend</strong> (Milestone 2)</td>
+<td>Nuxt 3 SPA + <code>@urql/vue</code>.</td>
+<td>Same as the bridge UI. Long-lived browsing sessions with subscription updates over SSE — see §6.4.</td>
+</tr>
+<tr>
+<td><strong>Public API third parties</strong> (Milestone 4)</td>
+<td>Unknown clients. PRD §9.4 lists rate limiting, API key auth, and a documentation portal as the hardening surface.</td>
+<td>Whichever shape we choose must be approachable for any GraphQL client. Connection-shaped APIs are the convention third-party tooling (codegen, IDE plugins, GraphiQL, Hasura) expects first.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Q2 — does the explorer frontend use Apollo Client?</strong> No. zeko-ui standardizes on <code>@urql/vue</code>, and spike 004 keeps that choice. But urql's normalized cache (<code>@urql/exchange-graphcache</code>) shares the same <code>__typename + id</code> identity model as Apollo Client's <code>InMemoryCache</code> — both treat <code>Node.id</code> as the default cache key. Apollo's <code>relayStylePagination</code> does not apply directly, but the cache-identity benefits of <code>Node</code> apply to urql too.</p>
+<hr>
+<h2 id="3-two-approaches-side-by-side" tabindex="-1"><a class="header-anchor" href="#3-two-approaches-side-by-side">3. Two approaches, side by side</a></h2>
+<p>For each approach: a worked Pothos sketch (the actual file in <a href="./poc/src/"><code>./poc/src/</code></a>, trimmed for prose), the SDL it produces, source LOC, and SDL LOC.</p>
+<p>The fixture is a list of 50 bridge operations (5 distinct <code>aux</code> strings, FIFO <code>auxSequence</code>, three pubkeys), sorted <code>(submit_block_height DESC, submit_timestamp DESC, aux ASC, aux_sequence ASC)</code>. The shared <code>compareOps</code> / <code>encodeCursor</code> / <code>decodeCursor</code> utilities live in <a href="./poc/src/fixtures.ts"><code>./poc/src/fixtures.ts</code></a>.</p>
+<h3 id="31-global-identity-strategy" tabindex="-1"><a class="header-anchor" href="#31-global-identity-strategy">3.1 Global identity strategy</a></h3>
+<p>Every indexed row is assigned a ULID primary key at insert time. ULID is time-ordered, URL-safe, and 16 bytes binary (26 chars Crockford base32). It serves three purposes simultaneously:</p>
+<ul>
+<li><strong>SurrealDB record ID</strong>: <code>bridge_operation:01HYZ...</code>. The primary B-tree key.</li>
+<li><strong>Inner identity for <code>Node.id</code></strong>: Pothos <code>builder.node</code> wraps the inner ID with the standard Relay envelope <code>base64(&quot;Type:innerID&quot;)</code>. The inner ID is the row's ULID, so the global ID is <code>base64(&quot;BridgeOperation:01HYZ...&quot;)</code>. The envelope is what clients see on the wire and store as the cache key — it is opaque, type-tagged, and trivially decodable for refetch routing. We use the Pothos default; we do <strong>not</strong> override <code>encodeGlobalID</code> / <code>decodeGlobalID</code> to expose bare ULIDs.</li>
+<li><strong>Stable cache key for clients</strong>: <code>__typename + id</code> is the default normalized-cache identity in both Apollo and urql graphcache. The <code>id</code> they index is the base64 envelope; that's fine — it is unique, stable, and never reinterpreted client-side.</li>
+</ul>
+<p>Natural keys (<code>tx_hash</code>, <code>(aux, auxSequence)</code>, <code>public_key</code>) remain queryable via dedicated root fields (<code>transaction(hash:)</code>, <code>bridgeOperation(aux:, auxSequence:)</code>, <code>account(publicKey:)</code>). The two coexist: the global ID is the cache/refetch handle, natural keys are the human-addressable lookups. This is the same pattern GitHub uses (<code>node(id:)</code> for refetch, <code>repository(owner:, name:)</code> for human lookup).</p>
+<p>The POC uses <code>${aux}|${auxSequence}</code> as the inner ID because the in-memory fixture predates the ULID column. In production the inner ID is the row's ULID; the outer envelope is identical.</p>
+<h3 id="32-approach-a-full-relay-node-global-ids-connections" tabindex="-1"><a class="header-anchor" href="#32-approach-a-full-relay-node-global-ids-connections">3.2 Approach A — Full Relay (Node + global IDs + Connections)</a></h3>
+<p><strong>Pothos sketch</strong> (full file: <a href="./poc/src/approach-a-full-relay.ts"><code>./poc/src/approach-a-full-relay.ts</code></a>):</p>
+<pre><code class="language-ts">const builder = new SchemaBuilder&lt;Pothos&gt;({
+  plugins: [RelayPlugin],
+  relay: { clientMutationId: &quot;omit&quot;, cursorType: &quot;String&quot; },
+})
+
+const BridgeOpRef = builder.node(builder.objectRef&lt;BridgeOp&gt;(&quot;BridgeOperation&quot;), {
+  id: { resolve: (op) =&gt; op.uuid },                              // production: ULID
+  loadOne: (id, { db }) =&gt; db.bridgeOperationByUuid(id),         // record-ID lookup
+  fields: (t) =&gt; ({ aux: t.exposeString(&quot;aux&quot;, { nullable: false }), /* ...etc */ }),
+})
+
+builder.queryField(&quot;bridgeOperations&quot;, (t) =&gt;
+  t.connection({
+    type: BridgeOpRef,
+    args: { publicKey: t.arg.string({ required: true }) },
+    resolve: (_root, args, { ops }) =&gt;
+      resolveCursorConnection&lt;BridgeOp[]&gt;(
+        { args, toCursor: (op) =&gt; encodeCursor(op) },
+        ({ before, after, limit, inverted }) =&gt;
+          keysetSlice(ops, args.publicKey, { before, after, limit, inverted }),
+      ),
+  })
+)
+</code></pre>
+<p><strong>Generated SDL</strong> (full output: <a href="./poc/schema-a-full-relay.graphql"><code>./poc/schema-a-full-relay.graphql</code></a>):</p>
+<pre><code class="language-graphql">interface Node { id: ID! }
+
+type BridgeOperation implements Node {
+  id: ID!                      # the ULID record key
+  aux: String!
+  auxSequence: Int!
+  # ...
+}
+
+type QueryBridgeOperationsConnection {
+  edges: [QueryBridgeOperationsConnectionEdge]
+  pageInfo: PageInfo!
+}
+
+type QueryBridgeOperationsConnectionEdge { cursor: String!  node: BridgeOperation }
+
+type PageInfo {
+  hasNextPage: Boolean!  hasPreviousPage: Boolean!
+  startCursor: String    endCursor: String
+}
+
+type Query {
+  node(id: ID!): Node
+  nodes(ids: [ID!]!): [Node]!
+  bridgeOperations(after: String, before: String, first: Int, last: Int, publicKey: String!): QueryBridgeOperationsConnection
+}
+</code></pre>
+<p><strong>LOC:</strong> 95 source, 50 SDL lines (47 non-blank).</p>
+<h3 id="33-approach-b-custom-flat-no-relay-plugin" tabindex="-1"><a class="header-anchor" href="#33-approach-b-custom-flat-no-relay-plugin">3.3 Approach B — Custom flat (no Relay plugin)</a></h3>
+<p><strong>Pothos sketch</strong> (full file: <a href="./poc/src/approach-b-custom.ts"><code>./poc/src/approach-b-custom.ts</code></a>):</p>
+<pre><code class="language-ts">const builder = new SchemaBuilder&lt;Pothos&gt;({})              // no plugins
+
+const BridgeOpRef = builder.objectRef&lt;BridgeOp&gt;(&quot;BridgeOperation&quot;).implement({
+  fields: (t) =&gt; ({ aux: t.exposeString(&quot;aux&quot;, { nullable: false }), /* ...etc */ }),
+})
+
+const BridgeOperationsPage = builder
+  .objectRef&lt;{ items: BridgeOp[]; nextCursor: string | null; hasMore: boolean }&gt;(&quot;BridgeOperationsPage&quot;)
+  .implement({
+    fields: (t) =&gt; ({
+      items: t.expose(&quot;items&quot;, { type: [BridgeOpRef], nullable: false }),
+      nextCursor: t.exposeString(&quot;nextCursor&quot;, { nullable: true }),
+      hasMore: t.exposeBoolean(&quot;hasMore&quot;, { nullable: false }),
+    }),
+  })
+
+builder.queryField(&quot;bridgeOperations&quot;, (t) =&gt;
+  t.field({
+    type: BridgeOperationsPage,
+    args: { publicKey: t.arg.string({ required: true }), limit: t.arg.int(), after: t.arg.string() },
+    resolve: (_root, args, { ops }) =&gt; {
+      const limit = Math.min(args.limit ?? 20, 100)
+      const filtered = filterAndSort(ops, args.publicKey, args.after)
+      const slice = filtered.slice(0, limit + 1)
+      const hasMore = slice.length &gt; limit
+      const items = slice.slice(0, limit)
+      return { items, hasMore, nextCursor: hasMore ? encodeCursor(items.at(-1)!) : null }
+    },
+  })
+)
+</code></pre>
+<p><strong>Generated SDL</strong> (full output: <a href="./poc/schema-b-custom.graphql"><code>./poc/schema-b-custom.graphql</code></a>):</p>
+<pre><code class="language-graphql">type BridgeOperation {
+  aux: String!
+  auxSequence: Int!
+  # ...
+}
+
+type BridgeOperationsPage {
+  items: [BridgeOperation!]!
+  nextCursor: String
+  hasMore: Boolean!
+}
+
+type Query {
+  bridgeOperations(after: String, limit: Int, publicKey: String!): BridgeOperationsPage
+}
+</code></pre>
+<p><strong>LOC:</strong> 86 source, 32 SDL lines (28 non-blank).</p>
+<h3 id="34-behavioral-parity" tabindex="-1"><a class="header-anchor" href="#34-behavioral-parity">3.4 Behavioral parity</a></h3>
+<p>The runner (<a href="./poc/run.ts"><code>./poc/run.ts</code></a>) issues <code>bridgeOperations(publicKey: PK, first/limit: 5)</code> against both schemas and asserts that the returned <code>(aux, auxSequence)</code> tuples are identical and in identical order. They are. Whichever shape is chosen, the underlying ordering and cursor semantics are the same.</p>
+<h3 id="35-summary-table" tabindex="-1"><a class="header-anchor" href="#35-summary-table">3.5 Summary table</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Approach A (full Relay)</th>
+<th>Approach B (custom flat)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Source LOC (non-blank, non-comment)</td>
+<td>95</td>
+<td>86</td>
+</tr>
+<tr>
+<td>SDL non-blank lines</td>
+<td>47</td>
+<td>28</td>
+</tr>
+<tr>
+<td>Pothos plugin needed</td>
+<td><code>@pothos/plugin-relay</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>Polymorphic refetch via <code>node(id:)</code></td>
+<td>yes</td>
+<td>no (per-type root queries)</td>
+</tr>
+<tr>
+<td>Default normalized-cache identity (urql, Apollo)</td>
+<td><code>__typename + Node.id</code> (free)</td>
+<td>requires per-type <code>keyFields</code> config</td>
+</tr>
+<tr>
+<td>Forward pagination (<code>first</code> / <code>limit</code> + <code>after</code>)</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Backward pagination (<code>last</code> + <code>before</code>)</td>
+<td>yes (built-in)</td>
+<td>needs explicit add (non-breaking)</td>
+</tr>
+<tr>
+<td>Federation: <code>@shareable PageInfo</code> directive</td>
+<td>required</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Production-API references</td>
+<td>GitHub, Shopify, Blockscout</td>
+<td>Stripe, Linear, Mina, Zeko</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="4-pothos-cursor-pagination-without-the-relay-plugin-q3" tabindex="-1"><a class="header-anchor" href="#4-pothos-cursor-pagination-without-the-relay-plugin-q3">4. Pothos cursor pagination without the Relay plugin (Q3)</a></h2>
+<p>Approach B answers this question. The recipe used in <a href="./poc/src/approach-b-custom.ts"><code>./poc/src/approach-b-custom.ts</code></a>:</p>
+<ol>
+<li>Define a generic page wrapper type via <code>builder.objectRef&lt;...&gt;(&quot;...Page&quot;).implement(...)</code>. Its <code>items</code> field is the underlying object ref typed as <code>[Ref!]!</code>; its <code>nextCursor</code> is nullable; its <code>hasMore</code> is non-null.</li>
+<li>Define query fields with <code>t.field({ type: ThePageRef, args: { limit, after, ... }, resolve: ... })</code>.</li>
+<li>The resolver implements keyset pagination directly: read <code>limit + 1</code> rows, slice off the overflow, encode the last kept row's sort tuple as <code>nextCursor</code>, set <code>hasMore = overflowed</code>.</li>
+<li>Cursor encode/decode is a 10-line utility shared across resolvers (§5.4).</li>
+</ol>
+<p>There is no Relay plugin and no Pothos-side boilerplate beyond the page wrapper. A <code>definePage(builder, ref, name)</code> helper would collapse the per-type cost to one line per list query.</p>
+<hr>
+<h2 id="5-surrealdb-cursor-strategy-q4" tabindex="-1"><a class="header-anchor" href="#5-surrealdb-cursor-strategy-q4">5. SurrealDB cursor strategy (Q4)</a></h2>
+<h3 id="51-two-cursor-regimes" tabindex="-1"><a class="header-anchor" href="#51-two-cursor-regimes">5.1 Two cursor regimes</a></h3>
+<p>The cursor strategy depends on what the rows are sorted by:</p>
+<ul>
+<li><strong>Domain-ordered queries</strong> (transactions by <code>(blockHeight, txIndex)</code>, bridge ops by <code>(submit_block_height, submit_timestamp, aux, aux_sequence)</code>, events by <code>(blockHeight, txIndex, eventIndex)</code>): cursors encode the values of the sort tuple. Keyset SELECTs run against a composite index on those columns.</li>
+<li><strong>Ingestion-ordered queries</strong> (audit logs, raw event streams, anything that wants newest-first by ingestion time): cursors are the row's ULID directly. SurrealDB's record-ID range query (<code>SELECT * FROM table:start..end</code>) walks the primary B-tree without an index lookup — the fastest path the database offers.</li>
+</ul>
+<p>Both regimes are shape-agnostic — Approach A and Approach B can each use either.</p>
+<h3 id="52-sort-tuple-per-query" tabindex="-1"><a class="header-anchor" href="#52-sort-tuple-per-query">5.2 Sort tuple per query</a></h3>
+<p>Each cursor encodes the values of the sort tuple for a single row. The sort tuple ends in a strictly-unique tie-breaker so the keyset comparison is well-defined.</p>
+<table>
+<thead>
+<tr>
+<th>Query</th>
+<th>Sort tuple</th>
+<th>Tie-breaker</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>transactions</code> (global, account)</td>
+<td><code>(blockHeight DESC, txIndex DESC)</code></td>
+<td><code>txIndex</code> is unique within block</td>
+</tr>
+<tr>
+<td><code>bridgeOperations(publicKey)</code></td>
+<td><code>(submit_block_height DESC, submit_timestamp DESC, aux ASC, aux_sequence ASC)</code></td>
+<td><code>(aux, aux_sequence)</code> (per spike 002 §7)</td>
+</tr>
+<tr>
+<td><code>zkappEvents(account)</code> / <code>zkappActions(account)</code></td>
+<td><code>(blockHeight DESC, txIndex DESC, eventIndex DESC)</code></td>
+<td><code>eventIndex</code> is unique within tx</td>
+</tr>
+<tr>
+<td><code>batches</code></td>
+<td><code>(blockHeight DESC)</code></td>
+<td>one batch per block</td>
+</tr>
+<tr>
+<td><code>outerActions</code> / <code>innerActions</code></td>
+<td>range-bounded by <code>(beforeState, afterState)</code></td>
+<td>no cursor — see §7</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-surrealql-keyset-query-template" tabindex="-1"><a class="header-anchor" href="#53-surrealql-keyset-query-template">5.3 SurrealQL keyset query template</a></h3>
+<p>For a <code>(blockHeight DESC, txIndex DESC)</code> sort:</p>
+<pre><code class="language-sql">SELECT * FROM transaction
+WHERE
+  account = $account                                   -- optional filter
+  AND (
+    blockHeight &lt; $cursor_blockHeight
+    OR (blockHeight = $cursor_blockHeight AND txIndex &lt; $cursor_txIndex)
+  )
+ORDER BY blockHeight DESC, txIndex DESC
+LIMIT $limit_plus_one;
+</code></pre>
+<p><code>$cursor_blockHeight</code> and <code>$cursor_txIndex</code> come from decoding the <code>after</code> cursor. <code>$limit_plus_one</code> is <code>limit + 1</code> so the resolver computes <code>hasMore</code> from row count &gt; limit. On the first page (<code>after = null</code>), the cursor predicate is omitted.</p>
+<p>The composite index <code>(blockHeight DESC, txIndex DESC)</code> keeps the predicate seek-bounded. Each query has an index on its sort tuple — for <code>bridge_operation</code> this is the index already specified in spike 002 §7.</p>
+<h3 id="54-cursor-encoding" tabindex="-1"><a class="header-anchor" href="#54-cursor-encoding">5.4 Cursor encoding</a></h3>
+<p>Cursors are opaque to clients. The wire format is base64-url JSON with a 1-byte version prefix, so the encoding can evolve without a schema break.</p>
+<pre><code class="language-ts">function encodeCursor(o: BridgeOp): string {
+  const body = JSON.stringify({ bh: o.submitBlockHeight, ts: o.submitTimestamp, aux: o.aux, seq: o.auxSequence })
+  return Buffer.concat([Buffer.from([0x01]), Buffer.from(body, &quot;utf8&quot;)]).toString(&quot;base64url&quot;)
+}
+
+function decodeCursor(s: string): { bh: number; ts: string; aux: string; seq: number } {
+  const buf = Buffer.from(s, &quot;base64url&quot;)
+  if (buf[0] !== 0x01) throw new Error(&quot;Unknown cursor version&quot;)
+  return JSON.parse(buf.subarray(1).toString(&quot;utf8&quot;))
+}
+</code></pre>
+<p>Implemented in <a href="./poc/src/fixtures.ts"><code>./poc/src/fixtures.ts</code></a> and exercised by the runner against both schemas.</p>
+<p>The cursor JSON shape varies per query:</p>
+<table>
+<thead>
+<tr>
+<th>Query</th>
+<th>Cursor JSON shape (before base64)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>transactions</code></td>
+<td><code>{&quot;bh&quot;:12345,&quot;ti&quot;:5}</code></td>
+</tr>
+<tr>
+<td><code>bridgeOperations</code></td>
+<td><code>{&quot;bh&quot;:12345,&quot;ts&quot;:&quot;2026-05-07T12:34:56Z&quot;,&quot;aux&quot;:&quot;...&quot;,&quot;seq&quot;:2}</code></td>
+</tr>
+<tr>
+<td><code>zkappEvents</code></td>
+<td><code>{&quot;bh&quot;:12345,&quot;ti&quot;:5,&quot;ei&quot;:2}</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="55-resolver-structure" tabindex="-1"><a class="header-anchor" href="#55-resolver-structure">5.5 Resolver structure</a></h3>
+<pre><code class="language-ts">async function listForUser(args: ListBridgeOpsArgs) {
+  const cursor = args.after ? decodeCursor(args.after) : null
+  const rows = await db.query(KEYSET_QUERY, { ...args, cursor, limit: args.limit + 1 })
+  const hasMore = rows.length &gt; args.limit
+  const items = rows.slice(0, args.limit)
+  return { items, hasMore, nextCursor: hasMore ? encodeCursor(toCursor(items.at(-1)!)) : null }
+}
+</code></pre>
+<p>For Approach A, the same resolver wraps in <code>resolveCursorConnection</code>, which converts the array to <code>edges</code> and synthesizes <code>pageInfo</code>. The keyset query underneath is identical.</p>
+<hr>
+<h2 id="6-performance-impact" tabindex="-1"><a class="header-anchor" href="#6-performance-impact">6. Performance impact</a></h2>
+<p>The DB layer is shape-agnostic — the same SurrealQL keyset query underlies each approach, so DB cost is identical for the dominant case. The differences live in four layers above the DB.</p>
+<h3 id="61-database" tabindex="-1"><a class="header-anchor" href="#61-database">6.1 Database</a></h3>
+<ul>
+<li><strong>Domain-ordered queries</strong>: both approaches issue identical keyset SELECTs against indexed sort columns. Cost: O(log n) index seek + O(limit) row fetch via index → main-table indirection. <strong>Equal.</strong></li>
+<li><strong>Ingestion-ordered queries</strong> (when the cursor is the row's ULID): <code>SELECT * FROM table:start..end LIMIT 20</code> walks the primary B-tree directly. Roughly 1.5–2× faster than the secondary-index path because the indirection step disappears. <strong>Available to both A and B equally</strong> — the DB optimization is independent of GraphQL shape.</li>
+</ul>
+<h3 id="62-wire-size" tabindex="-1"><a class="header-anchor" href="#62-wire-size">6.2 Wire size</a></h3>
+<p>For a 20-row page of typical 250-byte rows on <code>bridgeOperations</code>:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Per-row overhead</th>
+<th>Per-page overhead</th>
+<th>20-row total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A</strong></td>
+<td><code>id: ID!</code> (~26 B ULID) + <code>cursor: String!</code> (~50 B) + edge wrapper (~20 B) ≈ 96 B</td>
+<td><code>pageInfo</code> (~150 B)</td>
+<td>~6950 B</td>
+</tr>
+<tr>
+<td><strong>B</strong></td>
+<td>none (just the row data)</td>
+<td><code>nextCursor</code> (~50 B) + <code>hasMore</code> (~15 B)</td>
+<td>~5065 B</td>
+</tr>
+</tbody>
+</table>
+<p>A is ~37% heavier pre-gzip. After gzip, ULIDs share their time-prefix and cursors share encoding overhead, so the residual gap collapses to ~5–10%. Material at scale on a byte-rate-limited public API (Milestone 4); invisible at typical browsing rates.</p>
+<h3 id="63-resolver-overhead" tabindex="-1"><a class="header-anchor" href="#63-resolver-overhead">6.3 Resolver overhead</a></h3>
+<p>A allocates ~21 wrapper objects per page (one edge per row + one pageInfo). B allocates one. ~1 KB of additional JS heap per request for A. Trivial.</p>
+<h3 id="64-client-side-cache-identity" tabindex="-1"><a class="header-anchor" href="#64-client-side-cache-identity">6.4 Client-side cache identity</a></h3>
+<p>Both <code>@urql/exchange-graphcache</code> and Apollo Client's <code>InMemoryCache</code> normalize rows by <code>__typename + id</code> by default. Approach A lands in this slot for free: every paginated row already exposes <code>id: ID!</code>, and the cache's internal map is keyed by it.</p>
+<p>Approach B requires per-type <code>keyFields</code> configuration:</p>
+<pre><code class="language-ts">// urql graphcache config — one entry per type, kept in sync with the schema
+keys: {
+  BridgeOperation: (op) =&gt; `${op.aux}|${op.auxSequence}`,
+  Transaction: (tx) =&gt; tx.hash,
+  Account: (a) =&gt; a.publicKey,
+  // ...etc, ~10 types
+}
+</code></pre>
+<p>This works, but it's per-type configuration the frontend maintains in sync with the API schema. Adding a new paginated type to the API requires touching the cache config too.</p>
+<h3 id="65-subscription-patching" tabindex="-1"><a class="header-anchor" href="#65-subscription-patching">6.5 Subscription patching</a></h3>
+<p>The explorer fans out SurrealDB live queries to clients via SSE. When a row's status changes (e.g., <code>submitted → completed</code>), the subscription emits a delta.</p>
+<ul>
+<li><strong>A</strong>: emit <code>{ id: &lt;global-ID&gt;, status: COMPLETED }</code> (where <code>&lt;global-ID&gt;</code> is the standard Pothos <code>base64(&quot;BridgeOperation:&lt;ulid&gt;&quot;)</code> envelope). The cache looks up the row by <code>Node.id</code> in its normalized map and patches <code>status</code> in O(1). Works the same in Apollo and urql graphcache without any schema-shape-specific configuration.</li>
+<li><strong>B</strong>: emit <code>{ aux, auxSequence, status }</code>. The cache patch goes through the configured <code>keyFields</code> resolver — O(1) if configured (§6.4), or O(N) scan across cached pages if not. Possible, but requires the per-type config to be present and correct.</li>
+</ul>
+<h3 id="66-net" tabindex="-1"><a class="header-anchor" href="#66-net">6.6 Net</a></h3>
+<ul>
+<li><strong>DB</strong>: equal.</li>
+<li><strong>Wire</strong>: B is ~5–10% lighter post-gzip — a small public-API consideration.</li>
+<li><strong>Resolver overhead</strong>: equal.</li>
+<li><strong>Cache identity</strong>: A is the default-on path; B works but requires per-type frontend config.</li>
+<li><strong>Subscription patching</strong>: A is the default-on path; B works with the same per-type config.</li>
+</ul>
+<p>The performance differences are real but small. None dominate the choice. The recurring theme is that A inherits the <code>Node.id</code> identity convention that both major GraphQL clients normalize against by default, while B works equivalently if the frontend maintains a parallel configuration.</p>
+<hr>
+<h2 id="7-backward-pagination-needed-q5" tabindex="-1"><a class="header-anchor" href="#7-backward-pagination-needed-q5">7. Backward pagination needed? (Q5)</a></h2>
+<p>A block explorer is read-bottom-up (newest first). The natural user gesture is &quot;load more older entries&quot;, which is forward pagination. Stripe, Linear, the Mina daemon, the zeko-ui actions API, and zeko-bridge-sdk all ship forward-only pagination. Etherscan-style explorers do too — their UI reads &quot;page 1, 2, 3...&quot; but the underlying API is forward-only with cursors.</p>
+<p>There is no use case across Milestones 1–4 (transaction history, account activity, bridge op list, zkApp events/actions, settlement batches, ethereum-side equivalents) where a user starts at &quot;row N&quot; and pages backward. Live updates land at the front of the list via subscriptions, not via backward pagination.</p>
+<p><strong>Conclusion: forward is the only modelled flow in v1.</strong> Approach A inherits the full Relay arg set from <code>t.connection</code> and <code>resolveCursorConnection</code> handles <code>last</code>/<code>before</code> for free, so the resolvers accept them — there is no implementation cost or schema-shape change to leaving them on, and a niche client use case (e.g., MCP agent walking backward from a known cursor) costs nothing extra. Approach B exposes <code>limit</code> + <code>after</code> only.</p>
+<hr>
+<h2 id="8-future-milestone-considerations" tabindex="-1"><a class="header-anchor" href="#8-future-milestone-considerations">8. Future-milestone considerations</a></h2>
+<p>The recommendation has to survive the next four milestones, not just the first.</p>
+<p><strong>Milestone 1 — MCP Server + GraphQL APIs + Indexing Substrate.</strong> The MCP server is the first consumer of these schemas, via a typed SDK. Multi-step agent workflows commonly save an ID from one query, navigate to an unrelated query, then refetch the original object to compose results. With Approach A, the agent saves the global ID and refetches with <code>node(id:)</code> — one query, type-agnostic. With Approach B, the agent must remember each saved ID's type and route to the correct typed root field — workable, but the agent's tool harness is the one paying the type-routing cost. <strong>Tilts toward A.</strong></p>
+<p><strong>Milestone 2 — Explorer Frontend (Nuxt 3 SPA, urql, SSE).</strong> urql graphcache normalizes by <code>__typename + id</code> by default. Approach A's <code>Node.id</code> is the convention; Approach B works equivalently with per-type <code>keyFields</code> config (§6.4). Both work. SSE subscription patches favor A by default (§6.5). <strong>Mild tilt toward A.</strong></p>
+<p><strong>Milestone 3 — Settlement Finality, L1 Rollback.</strong> Adds the <code>_meta</code> freshness envelope on query responses. Pagination is independent of this concern; the freshness envelope wraps both shapes equally. <strong>Neutral.</strong></p>
+<p><strong>Milestone 4 — Ethereum Support + Public API hardening.</strong> This is the milestone where third-party consumers come into scope. Two populations to consider:</p>
+<ul>
+<li><strong>Mina-ecosystem-native consumers</strong> (wallet integrators, indexer operators, MCP-driven analytics on Mina archive nodes): familiar with the flat-list shape from the Mina daemon and zeko-bridge-sdk. Either shape is consumable; B is one fewer learning step.</li>
+<li><strong>General GraphQL consumers</strong> (developers approaching the API through the public documentation portal, codegen tooling, GraphiQL): the Connection convention is what their tools default to. Apollo Client <code>relayStylePagination()</code> is a one-liner for A; B requires a custom merge field policy. IDE tooling, schema introspection viewers, and the major learning resources all default to Connection shapes. <strong>Tilts toward A.</strong></li>
+</ul>
+<p>The PRD's Milestone 4 deliverable list (rate limiting, API key auth, documentation portal) implies a public API positioned for general GraphQL consumers, not exclusively Mina-native ones. The cost of the convention deviation is paid by every third-party developer; the cost of the convention adoption is paid once by us.</p>
+<p><strong>Net across milestones: A is preferred or neutral at every step. The strongest signal is M4's broader public-API positioning.</strong></p>
+<hr>
+<h2 id="9-surrounding-ecosystem" tabindex="-1"><a class="header-anchor" href="#9-surrounding-ecosystem">9. Surrounding ecosystem</a></h2>
+<p>The four GraphQL surfaces this project sits next to all use flat lists, never Connection types. This is a data point worth recording, but it does not deicde the recommendation — see §10.</p>
+<ul>
+<li><strong>Mina daemon</strong>: paginates blocks via <code>bestChain(maxLength: Int): [Block!]</code>. No <code>first</code>, no <code>after</code>, no Connection types. The Mina daemon's GraphQL was written before Pothos and modern Relay tooling matured; it is path-of-least-resistance for that era, not a deliberate convention choice.</li>
+<li><strong>Zeko sequencer</strong>: a fork of the Mina daemon schema with extra Zeko-specific fields. Same shape, same lack of Connection types.</li>
+<li><strong>zeko-ui actions API</strong> (<code>services/actions/api/src/schema/outer.ts</code>): Pothos without the Relay plugin. <code>outerActions(input: ...): [OuterAction!]!</code>, <code>outerWitnessesFromAuxes(input: ...): [OuterWitness!]!</code>. Built quickly to ship the bridge UI; the existing federated subgraph the explorer will sit alongside.</li>
+<li><strong>zeko-bridge-sdk</strong> (<code>src/queries.ts</code>): range-bounded inputs, flat list outputs. Apollo Client client-side, no <code>relayStylePagination</code>. The canonical SDK that wallets use to talk to Mina archive nodes.</li>
+</ul>
+<h3 id="91-production-references-for-each-shape" tabindex="-1"><a class="header-anchor" href="#91-production-references-for-each-shape">9.1 Production references for each shape</a></h3>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>Production references</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Full Relay</strong> (Node + Connections)</td>
+<td>GitHub API v4, Shopify Admin, Blockscout</td>
+</tr>
+<tr>
+<td><strong>Custom flat</strong> <code>{items, nextCursor, hasMore}</code></td>
+<td>Stripe, Slack (cursor-based), Linear, Mina daemon, Zeko sequencer, zeko-ui actions API, zeko-bridge-sdk</td>
+</tr>
+</tbody>
+</table>
+<h3 id="92-federation-across-heterogeneous-subgraphs" tabindex="-1"><a class="header-anchor" href="#92-federation-across-heterogeneous-subgraphs">9.2 Federation across heterogeneous subgraphs</a></h3>
+<p>The Hive gateway composes types across subgraphs; pagination shape is per-field, not per-gateway. The existing zeko-ui actions API stays flat (existing code, not in scope to rewrite); a new explorer subgraph can adopt Connection types without conflict. The gateway exposes both shapes side-by-side under one endpoint. <code>@shareable PageInfo</code> is a one-line directive on the explorer subgraph — not a compositional burden.</p>
+<h3 id="93-client-support" tabindex="-1"><a class="header-anchor" href="#93-client-support">9.3 Client support</a></h3>
+<p>Both wire shapes are first-class in the clients we use. Neither shape is structurally blocked by any client.</p>
+<table>
+<thead>
+<tr>
+<th>Client</th>
+<th>Relay Connection support</th>
+<th>Custom flat support</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>urql</strong> (<code>@urql/exchange-graphcache</code>)</td>
+<td><code>cursorPagination</code> for Connections; <code>Node.id</code> is the default cache key</td>
+<td><code>simplePagination</code> merges <code>{items, nextCursor}</code> shapes; per-type <code>keyFields</code> required for normalized identity</td>
+</tr>
+<tr>
+<td><strong>Apollo Client</strong></td>
+<td><code>relayStylePagination()</code> helper</td>
+<td>Custom <code>merge</code> field policy; per-type <code>keyFields</code> required</td>
+</tr>
+<tr>
+<td><strong>gql.tada</strong> (used by zeko-ui)</td>
+<td>Shape-agnostic</td>
+<td>Shape-agnostic</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="10-recommendation" tabindex="-1"><a class="header-anchor" href="#10-recommendation">10. Recommendation</a></h2>
+<p><strong>Adopt Approach A — full Relay (Connection types + <code>Node</code> interface) — across all three GraphQL APIs.</strong> Use natural-key root queries (<code>transaction(hash:)</code>, <code>bridgeOperation(aux:, auxSequence:)</code>, <code>account(publicKey:)</code>) alongside <code>node(id:)</code> for refetch. Every indexed row carries a ULID primary key that serves as both the SurrealDB record ID and the GraphQL <code>Node.id</code>.</p>
+<p>The decision rests on five observations:</p>
+<ol>
+<li>
+<p><strong>Once ULID is the DB primary key, the structural objection to Approach A dissolves.</strong> The global ID's inner ID is the database record key — the standard Pothos <code>base64(&quot;Type:ULID&quot;)</code> envelope is just the type-tagged wire format every Relay client already expects. There is no second synthetic key competing with the natural ones; natural keys remain queryable via dedicated root fields. The two coexist cleanly — same pattern GitHub uses (<code>node(id:)</code> for refetch, typed root queries for human lookup).</p>
+</li>
+<li>
+<p><strong><code>Node.id</code> is the default normalized-cache identity in both Apollo and urql graphcache.</strong> Approach A inherits client-side row identity, subscription patching, and Apollo <code>relayStylePagination</code> for free (§6.4, §6.5). Approach B works equivalently but requires per-type <code>keyFields</code> configuration the frontend maintains in sync with the API schema. The cost of Approach A's convention is paid once at the API; the cost of Approach B's deviation is paid at every client integration.</p>
+</li>
+<li>
+<p><strong>The public API in Milestone 4 must be approachable for the broader GraphQL ecosystem.</strong> Connection types are what every modern GraphQL client, IDE plugin, codegen tool, and learning resource defaults to. Adopting the convention removes a learning step for every third-party developer; the alternative pays that cost N times across the consumer population (§8).</p>
+</li>
+<li>
+<p><strong>Performance differences are small and net roughly neutral.</strong> Approach B saves ~5–10% post-gzip wire size; Approach A inherits cache identity and subscription patching for free. Neither dominates (§6).</p>
+</li>
+<li>
+<p><strong>The Pothos plugin handles edge cases the custom shape would re-derive.</strong> Cursor inversion under <code>last</code> / <code>before</code>, edge nullability, <code>pageInfo</code> synthesis, federation <code>@shareable PageInfo</code> directives — all are plugin-managed in A. A custom shape re-implements each per query if the same capabilities are ever needed.</p>
+</li>
+</ol>
+<p>The <code>Node</code>-interface complaint that drove earlier Mina-ecosystem GraphQL APIs toward flat lists no longer applies once the database commits to ULID record IDs. The Mina daemon's flat-list convention is a legacy of pre-modern-Relay tooling; the explorer is a new API and is not bound to inherit it. Heterogeneous subgraph styles compose under the Hive gateway without conflict — the existing zeko-ui actions API stays flat, the explorer adopts Connection types, both work behind one endpoint (§9.2).</p>
+<p>Approach B is rejected because its only structural advantage — single-level access path — is offset by per-type cache configuration and a wider gap to the convention third-party tooling expects. Its ecosystem-alignment argument (matches the Mina daemon shape) does not outweigh M4's broader public-API positioning.</p>
+<h3 id="101-why-no-hybrid-middle-was-considered" tabindex="-1"><a class="header-anchor" href="#101-why-no-hybrid-middle-was-considered">10.1 Why no &quot;hybrid&quot; middle was considered</a></h3>
+<p>A &quot;hybrid&quot; shape would adopt Connection wrappers (<code>edges</code>, <code>node</code>, <code>pageInfo</code>) without adopting <code>Node</code> and global IDs. Documentation surveys of GitHub, Shopify, Stripe, Linear, Slack, Blockscout, Mina, and Zeko found zero production adopters. The shape exists in <code>@pothos/plugin-relay</code> (<code>builder.connectionObject</code>) but has no real-world deployment. Adopting an unvalidated shape adds the worst of both options: the verbosity of Relay's edge wrappers without the cache-identity payoff that comes from <code>Node</code>. Not worth considering.</p>
+<hr>
+<h2 id="11-project-wide-conventions-proposed" tabindex="-1"><a class="header-anchor" href="#11-project-wide-conventions-proposed">11. Project-wide conventions (proposed)</a></h2>
+<p>Across the Explorer, Bridge, and Contract Registry APIs:</p>
+<ol>
+<li><strong>Every indexed row carries a ULID primary key</strong>, assigned at insert time by the indexer. SurrealDB record IDs use this ULID directly (<code>bridge_operation:01HYZ...</code>); the GraphQL <code>Node.id</code> is the standard Pothos envelope <code>base64(&quot;Type:&lt;ulid&gt;&quot;)</code> over that same ULID. The inner ID never diverges from the database record key.</li>
+<li><strong>Two query shapes, picked by the data:</strong>
+<ul>
+<li><strong>Range-bounded reads</strong> (action witnesses, block ranges, event windows): <code>someThing(input: { from?, to?, max? }): [SomeThing!]!</code>. Flat list, range-bounded args. Matches the existing zeko-ui actions API convention 1:1.</li>
+<li><strong>Open-ended cursor reads</strong> (transactions, bridge op history, zkApp events): <code>someThing(filter…, first: Int = 20, after: String): SomeThingConnection</code>. Returns the standard Relay shape (<code>edges</code>, <code>node</code>, <code>pageInfo</code>).</li>
+</ul>
+</li>
+<li><strong>Every paginated type implements <code>Node</code>.</strong> <code>id: ID!</code> is the row's ULID. The schema exposes <code>node(id: ID!): Node</code> as the polymorphic refetch root.</li>
+<li><strong>Single-row lookups also use natural keys.</strong> <code>transaction(hash: String!)</code>, <code>account(publicKey: String!)</code>, <code>bridgeOperation(aux: String!, auxSequence: Int!)</code>. Natural-key lookups and <code>node(id:)</code> coexist.</li>
+<li><strong>Pagination args.</strong> Forward (<code>first: Int = 20, after: String</code>) is the modelled flow. Server clamps <code>first</code>/<code>last</code> to 100. <code>last</code>/<code>before</code> are accepted because <code>resolveCursorConnection</code> handles them for free; we don't artificially reject them (§7).</li>
+<li><strong>Cursors are opaque.</strong> Version-prefixed base64-JSON of the keyset sort tuple. Clients MUST round-trip unchanged.</li>
+<li><strong><code>PageInfo</code> is shareable across federated subgraphs</strong> via the <code>@shareable</code> directive.</li>
+<li><strong>Subscriptions emit single nodes</strong>, not pages. SurrealDB live queries push deltas keyed by <code>Node.id</code>; the client cache patches in place via its <code>__typename + id</code> index.</li>
+<li><strong><code>totalCount</code> is opt-in per field</strong> when a use case justifies it; not a default convention.</li>
+</ol>
+<p>Pothos <code>t.connection</code> keeps the per-type cost constant — no project-local helper is required.</p>
+<hr>
+<h2 id="12-edge-cases" tabindex="-1"><a class="header-anchor" href="#12-edge-cases">12. Edge cases</a></h2>
+<h3 id="121-aux-collision-and-fifo-sequence" tabindex="-1"><a class="header-anchor" href="#121-aux-collision-and-fifo-sequence">12.1 Aux collision and FIFO sequence</a></h3>
+<p>Per spike 002, <code>(aux, aux_sequence)</code> is the composite key for <code>bridge_operation</code> because <code>aux</code> is a Poseidon hash that is not unique. The <code>bridgeOperations</code> cursor encodes both fields. The POC fixture simulates this (50 ops across 5 aux strings, FIFO sequence) and the parity test confirms ordering matches across both approaches.</p>
+<h3 id="122-rollback-during-pagination" tabindex="-1"><a class="header-anchor" href="#122-rollback-during-pagination">12.2 Rollback during pagination</a></h3>
+<p>A consumer mid-pagination may request <code>after = X</code> for a row that was rolled back since the previous page. The keyset predicate skips the missing row (the cursor encodes the sort key, not the row identity). The client sees a smaller-than-expected last page, which is fine.</p>
+<p>If a row's status changes between pages (e.g. <code>submitted → completed</code>), the row appears in any subsequent listing under its current status. Pagination is unaffected because the sort key is <code>submit_block_height</code> / <code>submit_timestamp</code>, not <code>status</code>. The subscription channel emits a <code>{id, status}</code> delta; clients with the row in cache patch in place (§6.5).</p>
+<h3 id="123-cursor-across-schema-migrations" tabindex="-1"><a class="header-anchor" href="#123-cursor-across-schema-migrations">12.3 Cursor across schema migrations</a></h3>
+<p>The 1-byte version prefix in the cursor encoding lets a v1 decoder remain in service while the resolver emits v2 cursors. The resolver tries the current decoder first and falls back for older bytes during the transition window.</p>
+<h3 id="124-federation-hive-gateway" tabindex="-1"><a class="header-anchor" href="#124-federation-hive-gateway">12.4 Federation (Hive gateway)</a></h3>
+<p><code>PageInfo</code> is the federation-shareable type — a one-line <code>@shareable</code> directive on the subgraph schema. Each subgraph's connection types are subgraph-private; the <code>Node</code> interface is also subgraph-scoped (each subgraph implements <code>node(id:)</code> over its own types).</p>
+<h3 id="125-sse-freshness" tabindex="-1"><a class="header-anchor" href="#125-sse-freshness">12.5 SSE freshness</a></h3>
+<p>The <code>_meta</code> freshness envelope sits on every query response, including paginated ones. Pagination cursors are unaffected by freshness.</p>
+<h3 id="126-totalcount" tabindex="-1"><a class="header-anchor" href="#126-totalcount">12.6 <code>totalCount</code></a></h3>
+<p>A precise count needs a full <code>COUNT(*)</code> query — expensive on growing tables, rarely useful in a block explorer. Omitted from v1; added per-field when a UI element justifies it.</p>
+<hr>
+<h2 id="13-deliverables-checklist" tabindex="-1"><a class="header-anchor" href="#13-deliverables-checklist">13. Deliverables checklist</a></h2>
+<table>
+<thead>
+<tr>
+<th>Deliverable from <code>README.md</code></th>
+<th>Where it lives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Schema examples for both approaches</td>
+<td>§3.2, §3.3 (worked SDL) + <a href="./poc/schema-a-full-relay.graphql"><code>./poc/schema-a-full-relay.graphql</code></a>, <a href="./poc/schema-b-custom.graphql"><code>./poc/schema-b-custom.graphql</code></a> (full SDL output)</td>
+</tr>
+<tr>
+<td>Pothos implementation sketch per approach</td>
+<td>§3.2, §3.3 + <a href="./poc/src/"><code>./poc/src/</code></a> (working code)</td>
+</tr>
+<tr>
+<td>SurrealDB cursor strategy</td>
+<td>§5</td>
+</tr>
+<tr>
+<td>Pagination capability and performance analysis</td>
+<td>§6</td>
+</tr>
+<tr>
+<td>Recommendation with justification</td>
+<td>§10 (with milestone context in §8)</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Question from <code>README.md</code></th>
+<th>Answer</th>
+<th>Section</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1. Who are the primary API consumers? Which shape is most ergonomic?</td>
+<td>MCP agents, bridge UI, explorer frontend (urql / gql.tada). Public API consumers in M4. Approach A is the default-on path for normalized cache identity and polymorphic refetch.</td>
+<td>§2, §8</td>
+</tr>
+<tr>
+<td>Q2. Does the explorer frontend use Apollo Client?</td>
+<td>No — <code>@urql/vue</code>. urql graphcache uses the same <code>__typename + id</code> cache identity as Apollo, so <code>Node.id</code> benefits transfer.</td>
+<td>§2</td>
+</tr>
+<tr>
+<td>Q3. How does Pothos handle cursor-based pagination without the Relay plugin?</td>
+<td>A page wrapper via <code>objectRef.implement</code> plus a resolver that reads <code>limit + 1</code> and computes <code>hasMore</code>. ~10 lines per list query. Documented for completeness; not the recommended path.</td>
+<td>§4</td>
+</tr>
+<tr>
+<td>Q4. How are SurrealDB cursors implemented?</td>
+<td>Opaque base64-url JSON of the keyset sort tuple, with a 1-byte version prefix. Sort tuples per query, ending in a strictly-unique tie-breaker. ULID primary keys enable record-ID range queries for ingestion-ordered cursors.</td>
+<td>§5</td>
+</tr>
+<tr>
+<td>Q5. Is backward pagination needed?</td>
+<td>No across Milestones 1–4 — forward is the only modelled flow. The schema accepts the full Relay arg set and <code>resolveCursorConnection</code> handles <code>last</code>/<code>before</code> for free, so we don't artificially reject them.</td>
+<td>§7</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="14-references" tabindex="-1"><a class="header-anchor" href="#14-references">14. References</a></h2>
+<ul>
+<li><strong>Working POC</strong>: <a href="./poc/"><code>./poc/</code></a> — two Pothos schemas + 23 strict-typed assertions (<code>pnpm test</code>) + generated SDL files (<code>pnpm sdl</code>).</li>
+<li>Mina daemon schema (<code>zeko/graphql_schema.json</code>): the Mina/Zeko-shared GraphQL surface — flat lists, <code>bestChain(maxLength:)</code>-style pagination.</li>
+<li>zeko-ui actions API (<code>zeko-ui/services/actions/api/src/schema/outer.ts</code>): existing federated subgraph the explorer composes alongside.</li>
+<li>zeko-bridge-sdk (<code>zeko-bridge-sdk/src/queries.ts</code>): canonical wallet SDK for Mina archive node action queries.</li>
+<li><a href="https://pothos-graphql.dev/docs/plugins/relay">Pothos Relay Plugin</a> — <code>t.connection</code>, <code>resolveCursorConnection</code>, <code>builder.node</code>.</li>
+<li><a href="https://relay.dev/graphql/connections.htm">GraphQL Cursor Connections Specification (Relay)</a>.</li>
+<li><a href="https://www.apollographql.com/docs/graphos/schema-design/guides/relay-style-connections">Apollo Federation: Relay-Style Connections</a> — <code>PageInfo</code> is the federation-shareable type.</li>
+<li><a href="https://commerce.nearform.com/open-source/urql/docs/graphcache/local-resolvers/#pagination">urql graphcache pagination</a>.</li>
+<li><a href="https://www.apollographql.com/docs/react/pagination/cursor-based">Apollo Client cursor-based pagination</a>.</li>
+<li><a href="https://surrealdb.com/docs/surrealql/statements/select">SurrealDB SELECT (LIMIT/START/ORDER BY)</a>.</li>
+<li><a href="https://surrealdb.com/docs/surrealql/datamodel/ids">SurrealDB Record IDs</a>.</li>
+<li><a href="https://arxiv.org/pdf/2509.08969">ULID — Sortable Unique Identifiers (arXiv:2509.08969)</a>.</li>
+<li><code>spikes/002-bridge-correlation/results.md</code> §7 — <code>bridge_operation</code> SurrealDB schema and indexes.</li>
+<li><code>spikes/004-deployment-topology.md</code> — federation gateway placement.</li>
+</ul>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/005-relay-pagination/results.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

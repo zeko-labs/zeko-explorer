@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Addendum: Adding Rollback Events to the Sequencer</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/001-sequencer-connector/addendums/addendum-sequencer-rollbacks.md</div>
+        <h1>Addendum: Adding Rollback Events to the Sequencer</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Lines</strong>41</span><span class="pill"><strong>Sections</strong>6</span><span class="pill"><strong>Tables</strong>1</span><span class="pill"><strong>Code blocks</strong>1</span></div>
+        <nav class="quick-nav"><a href="../README.md">README</a><a href="../results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">290 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="323" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 6</text><rect x="375" y="148" width="54" height="18" rx="9" fill="#34d399"/><text x="375" y="188" fill="#9fb0c7" font-size="13">Tables: 1</text><rect x="443" y="148" width="54" height="18" rx="9" fill="#a78bfa"/><text x="443" y="188" fill="#9fb0c7" font-size="13">Code: 1</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#why-adding-sequencer-rollback-events-is-not-desirable">Why Adding Sequencer Rollback Events Is Not Desirable</a>
+<a class="toc-level-3" href="#no-runtime-rollback-mechanism-exists">No Runtime Rollback Mechanism Exists</a>
+<a class="toc-level-3" href="#complexity-is-high-for-all-paths">Complexity Is High for All Paths</a>
+<a class="toc-level-3" href="#consumer-side-detection-already-works">Consumer-Side Detection Already Works</a>
+<a class="toc-level-2" href="#proposed-rollback-event-schema-for-reference-only">Proposed Rollback Event Schema (For Reference Only)</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="addendum-adding-rollback-events-to-the-sequencer" tabindex="-1"><a class="header-anchor" href="#addendum-adding-rollback-events-to-the-sequencer">Addendum: Adding Rollback Events to the Sequencer</a></h1>
+<p>This addendum explores the theoretical improvement of adding rollback event publishing to the sequencer. After analysis, this is <strong>not recommended</strong> — the complexity is high and the current consumer-side detection design (see results.md Section 5) is sufficient.</p>
+<h2 id="why-adding-sequencer-rollback-events-is-not-desirable" tabindex="-1"><a class="header-anchor" href="#why-adding-sequencer-rollback-events-is-not-desirable">Why Adding Sequencer Rollback Events Is Not Desirable</a></h2>
+<h3 id="no-runtime-rollback-mechanism-exists" tabindex="-1"><a class="header-anchor" href="#no-runtime-rollback-mechanism-exists">No Runtime Rollback Mechanism Exists</a></h3>
+<p>The sequencer has no code path that reverts previously applied L2 state during operation:</p>
+<ul>
+<li>Slot range validation is pre-emptive (reject before apply)</li>
+<li>L1 forks are not detected at runtime</li>
+<li>Expired commit slots cause a fatal crash</li>
+</ul>
+<p>Adding rollback events requires first <strong>building the rollback mechanism itself</strong> — it's not just about publishing an event.</p>
+<h3 id="complexity-is-high-for-all-paths" tabindex="-1"><a class="header-anchor" href="#complexity-is-high-for-all-paths">Complexity Is High for All Paths</a></h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Effort</th>
+<th>Risk</th>
+<th>What it requires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Startup divergence detection</strong></td>
+<td>~50 LOC</td>
+<td>Low</td>
+<td>Compare pre/post-sync hashes. But only catches restarts, not runtime issues. Limited value.</td>
+</tr>
+<tr>
+<td><strong>L1 fork detection</strong></td>
+<td>~500+ LOC</td>
+<td>High</td>
+<td>New L1 monitoring subsystem, L1-to-L2 dependency tracking, L2 state revert capability. Major architectural change.</td>
+</tr>
+<tr>
+<td><strong>Graceful commit expiry</strong></td>
+<td>~200 LOC</td>
+<td>Medium</td>
+<td>Batch state tracking and ledger revert capability. The sequencer doesn't currently support reverting applied transactions.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="consumer-side-detection-already-works" tabindex="-1"><a class="header-anchor" href="#consumer-side-detection-already-works">Consumer-Side Detection Already Works</a></h3>
+<p>The indexer's hash-chain-continuity checking (results.md Section 5) handles all rollback scenarios without any sequencer changes. The only downside is slightly more complex indexer logic and no &quot;reason&quot; field — but the indexer can infer context from the gap pattern.</p>
+<h2 id="proposed-rollback-event-schema-for-reference-only" tabindex="-1"><a class="header-anchor" href="#proposed-rollback-event-schema-for-reference-only">Proposed Rollback Event Schema (For Reference Only)</a></h2>
+<p>If this were ever implemented:</p>
+<pre><code class="language-json">{
+  &quot;common_ancestor_ledger_hash&quot;: &quot;&lt;hash&gt;&quot;,
+  &quot;rolled_back_from_ledger_hash&quot;: &quot;&lt;hash&gt;&quot;,
+  &quot;new_tip_ledger_hash&quot;: &quot;&lt;hash&gt;&quot;,
+  &quot;rolled_back_count&quot;: 3,
+  &quot;detected_at&quot;: &quot;&lt;ISO 8601&gt;&quot;,
+  &quot;reason&quot;: &quot;restart_resync | l1_fork | commit_slot_expired | manual&quot;
+}
+</code></pre>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/001-sequencer-connector/addendums/addendum-sequencer-rollbacks.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 **Status:** Complete
 **Blocking:** Milestone 1 (bridge indexer)
 **Owner:** TBD
-**Results:** [results.md](./results.md)
+**Results:** [results.html](./results.html)
 
 ---
 
