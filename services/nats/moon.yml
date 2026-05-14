@@ -1,0 +1,15 @@
+$schema: "../../.moon/cache/schemas/project.json"
+language: "typescript"
+layer: "library"
+stack: "backend"
+tags: ["nats", "protocol", "messaging"]
+
+dependsOn:
+  - "domain"
+
+tasks:
+  setup-local:
+    command: "./scripts/setup-local.sh"
+    options:
+      cache: false
+      runInCI: false

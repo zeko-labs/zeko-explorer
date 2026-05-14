@@ -1,4 +1,4 @@
-import { NATS_SUBJECTS } from "@zeko/nats-protocol";
+import { NATS_SUBJECTS } from "@zeko/nats";
 
 import type { L1WatcherConfig } from "#config";
 

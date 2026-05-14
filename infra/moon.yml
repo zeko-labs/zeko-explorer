@@ -24,19 +24,25 @@ tasks:
       - "/.prototools"
       - "/package.json"
       - "/pnpm-workspace.yaml"
+    options:
+      runInCI: false
 
   dev:
     command: "./local/docker-desktop/dev.sh"
     options:
       persistent: true
+      runInCI: false
 
   k8s-local-down:
     command: "./local/docker-desktop/down.sh"
+    options:
+      runInCI: false
 
   k8s-local-forward:
     command: "./local/docker-desktop/forward.sh"
     options:
       persistent: true
+      runInCI: false
 
   k8s-local-up:
     command: "./local/docker-desktop/up.sh"
@@ -45,6 +51,8 @@ tasks:
     inputs:
       - "k8s/**/*"
       - "local/docker-desktop/**/*"
+    options:
+      runInCI: false
 
   lint:
     command: "./scripts/k8s-tools/validate.sh"

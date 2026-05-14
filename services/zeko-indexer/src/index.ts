@@ -1,5 +1,5 @@
-import { SURREALKIT_PROJECT_DIR } from "@zeko/db";
-import { NATS_SUBJECTS } from "@zeko/nats-protocol";
+import { SURREALKIT_PROJECT_DIR } from "@zeko/database";
+import { NATS_SUBJECTS } from "@zeko/nats";
 
 console.log(
   JSON.stringify(

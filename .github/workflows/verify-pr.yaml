@@ -1,0 +1,32 @@
+name: Verify PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  validate-pr-title:
+    name: Valid title
+    permissions: write-all
+    runs-on: warp-ubuntu-latest-x64-2x
+    steps:
+      - name: Validate PR title
+        uses: ytanikin/PRConventionalCommits@1.1.0
+        with:
+          task_types: '["feat","fix","docs","test","ci","refactor","perf","chore","revert","release"]'
+          add_label: true
+          custom_labels: '{"feat":"feature","fix":"fix","docs":"documentation","test":"test","ci":"CI/CD","refactor":"refactor","perf":"performance","chore":"chore","revert":"revert","release":"release"}'
+
+  label-conflicts:
+    name: Has conflicts
+    permissions: write-all
+    runs-on: warp-ubuntu-latest-x64-2x
+    steps:
+      - name: Label merge conflicts
+        uses: prince-chrismc/label-merge-conflicts-action@v3
+        with:
+          conflict_label_name: "conflicts"
+          github_token: ${{ github.token }}
+          conflict_comment: |
+            Hi, @${author},
+            this branch has conflicts with the base branch. Please sync it with upstream.

@@ -38,9 +38,9 @@ tasks:
       persistent: true
 
   typecheck:
-    command: "nuxt"
-    args: ["typecheck"]
+    script: "nuxt prepare && tsgo --project tsconfig.json --noEmit"
     inputs:
       - "app/**/*"
       - "nuxt.config.ts"
       - "package.json"
+      - "tsconfig.json"

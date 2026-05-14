@@ -1,5 +1,5 @@
 import type { DaSource } from "@zeko/domain";
-import type { FinalityEvent, SettlementEvent } from "@zeko/nats-protocol";
+import type { FinalityEvent, SettlementEvent } from "@zeko/nats";
 
 export interface BatchDaProjection {
   readonly targetLedgerHash: string;

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  ci:
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+      checks: write
+      statuses: write
+    runs-on: warp-ubuntu-latest-x64-8x
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - run: >
+          moon run
+          :format
+          :lint
+          :typecheck
+          :test
+          tests:acceptance
+          infra:lint
+          contract-registry-api:types
+          hive-gateway:types
+          mcp:types
+
+      - uses: moonrepo/run-report-action@v1
+        if: success() || failure()
+        with:
+          matrix: '{"ci":"ci"}'
+          access-token: ${{ secrets.GITHUB_TOKEN }}

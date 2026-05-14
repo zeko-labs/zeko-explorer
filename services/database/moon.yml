@@ -1,0 +1,15 @@
+$schema: "../../.moon/cache/schemas/project.json"
+language: "typescript"
+layer: "library"
+stack: "backend"
+tags: ["surrealdb", "database"]
+
+dependsOn:
+  - "domain"
+
+tasks:
+  migrate-local:
+    command: "./scripts/migrate-local.sh"
+    options:
+      cache: false
+      runInCI: false

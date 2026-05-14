@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@zeko/db": "workspace:*",
+    "@zeko/database": "workspace:*",
     "@zeko/domain": "workspace:*",
-    "@zeko/nats-protocol": "workspace:*"
+    "@zeko/nats": "workspace:*"
   }
 }

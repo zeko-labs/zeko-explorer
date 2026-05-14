@@ -16,9 +16,9 @@
     "outDir": "dist",
     "paths": {
       "@zeko/contract-schema": ["./packages/contract-schema/src/index.ts"],
-      "@zeko/db": ["./packages/db/src/index.ts"],
+      "@zeko/database": ["./services/database/src/index.ts"],
       "@zeko/domain": ["./packages/domain/src/index.ts"],
-      "@zeko/nats-protocol": ["./packages/nats-protocol/src/index.ts"]
+      "@zeko/nats": ["./services/nats/src/index.ts"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,

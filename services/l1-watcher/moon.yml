@@ -6,7 +6,7 @@ tags: ["kubernetes", "watcher", "nats"]
 
 dependsOn:
   - "domain"
-  - "nats-protocol"
+  - "nats"
 
 tasks:
   dev:

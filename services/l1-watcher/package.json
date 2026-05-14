@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@zeko/domain": "workspace:*",
-    "@zeko/nats-protocol": "workspace:*"
+    "@zeko/nats": "workspace:*"
   }
 }

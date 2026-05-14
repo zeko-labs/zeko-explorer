@@ -21,8 +21,8 @@ RUN moon sync
 RUN pnpm install --prod --frozen-lockfile=false
 
 FROM deps AS runner
-ARG PNPM_FILTER
+ARG MOON_TARGET
 ENV NODE_ENV=production
 ENV PORT=4100
-ENV PNPM_FILTER=${PNPM_FILTER}
-CMD ["sh", "-ceu", "case \"$PNPM_FILTER\" in '@zeko/l1-watcher') node services/l1-watcher/src/index.ts ;; '@zeko/zeko-indexer') node services/zeko-indexer/src/index.ts ;; '@zeko/explorer-api') PORT=4101 node services/explorer-api/src/index.ts ;; '@zeko/bridge-api') PORT=4102 node services/bridge-api/src/index.ts ;; *) echo \"Unknown PNPM_FILTER: $PNPM_FILTER\" >&2; exit 2 ;; esac"]
+ENV MOON_TARGET=${MOON_TARGET}
+CMD ["sh", "-ceu", "case \"${MOON_TARGET}\" in explorer-api) export PORT=4101 ;; bridge-api) export PORT=4102 ;; esac; moon run --no-actions \"${MOON_TARGET}:dev\""]

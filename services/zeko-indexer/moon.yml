@@ -5,9 +5,9 @@ stack: "backend"
 tags: ["kubernetes", "indexer", "nats", "surrealdb"]
 
 dependsOn:
-  - "db"
+  - "database"
   - "domain"
-  - "nats-protocol"
+  - "nats"
 
 tasks:
   dev:

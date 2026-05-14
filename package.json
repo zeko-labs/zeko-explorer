@@ -6,12 +6,12 @@
   "type": "module",
   "devDependencies": {
     "@cucumber/cucumber": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "@biomejs/biome": "catalog:",
     "@types/node": "catalog:",
     "glob": "catalog:",
-    "typescript": "catalog:",
+    "lefthook": "catalog:",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:",
     "wrangler": "catalog:",
     "yaml": "catalog:"
   }
