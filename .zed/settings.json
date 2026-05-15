@@ -44,5 +44,15 @@
       "**/helmfile.d/**/*.yml",
       "**/values*.yaml"
     ]
+  },
+  "lsp": {
+    "cucumber": {
+      "settings": {
+        "cucumber": {
+          "features": ["infra/tests/acceptance/**/*.feature"],
+          "glue": ["infra/tests/acceptance/steps/**/*.ts"]
+        }
+      }
+    }
   }
 }

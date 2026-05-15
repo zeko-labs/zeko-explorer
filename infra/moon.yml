@@ -67,6 +67,23 @@ tasks:
       runFromWorkspaceRoot: true
       runInCI: false
 
+  acceptance:
+    command: "cucumber-js"
+    toolchains: ["javascript"]
+    args:
+      - "--config"
+      - "infra/cucumber.yaml"
+    inputs:
+      - "cucumber.yaml"
+      - "tests/**/*"
+      - "tsconfig.json"
+      - "k8s/**/*"
+      - "local/docker-desktop/**/*"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+    options:
+      runFromWorkspaceRoot: true
+
   lint:
     command: "nu"
     args: ["infra/scripts/k8s-tools/validate.nu"]
@@ -76,5 +93,19 @@ tasks:
       - "k8s/**/*"
       - "scripts/k8s-tools/**/*"
       - "/.prototools"
+    options:
+      runFromWorkspaceRoot: true
+
+  typecheck:
+    command: "tsgo"
+    toolchains: ["javascript"]
+    args:
+      - "--project"
+      - "infra/tsconfig.json"
+      - "--noEmit"
+    inputs:
+      - "tests/**/*.ts"
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
     options:
       runFromWorkspaceRoot: true
