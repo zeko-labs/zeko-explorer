@@ -12,6 +12,8 @@ tasks:
   build:
     command: "tsdown"
     args: ["--config", "tsdown.config.ts"]
+    deps:
+      - "^:build"
     inputs:
       - "@group(sources)"
     outputs:

@@ -11,6 +11,15 @@ tasks:
   migrate-local:
     command: "nu"
     args: ["services/database/scripts/migrate-local.nu"]
+    inputs:
+      - "moon.yml"
+      - "scripts/**/*"
+      - "surrealkit/**/*"
+      - "package.json"
+      - "/.prototools"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+      - "/pnpm-workspace.yaml"
     options:
       cache: false
       runFromWorkspaceRoot: true
