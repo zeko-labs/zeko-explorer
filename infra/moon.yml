@@ -75,7 +75,6 @@ tasks:
     inputs:
       - "k8s/**/*"
       - "scripts/k8s-tools/**/*"
-      - "/tools/validate-yaml.mjs"
       - "/.prototools"
     options:
       runFromWorkspaceRoot: true

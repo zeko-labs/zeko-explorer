@@ -13,12 +13,10 @@ nu ($root_dir | path join "infra/scripts/k8s-tools/install.nu")
 
 mkdir $rendered_dir
 
+yamlfmt -d ($chart_dir | path join "Chart.yaml")
 yamlfmt -d -o kyaml ($chart_dir | path join "values.kyaml") $local_values
-
-node ($root_dir | path join "tools/validate-yaml.mjs") ($chart_dir | path join "Chart.yaml") ($chart_dir | path join "values.kyaml") $local_values
 
 helm lint $chart_dir --values ($chart_dir | path join "values.kyaml") --values $local_values
 helm template zeko-explorer-local $chart_dir --values ($chart_dir | path join "values.kyaml") --values $local_values o> $rendered
 
-node ($root_dir | path join "tools/validate-yaml.mjs") $rendered
 open --raw $rendered | kubeconform -summary -strict
