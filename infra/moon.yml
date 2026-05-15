@@ -7,7 +7,6 @@ tags: ["infra", "kubernetes", "docker"]
 tasks:
   install-k8s-tools:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/scripts/k8s-tools/install.nu"]
     inputs:
       - "scripts/k8s-tools/install.nu"
@@ -18,7 +17,6 @@ tasks:
 
   build-local-images:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/local/docker-desktop/build-local-images.nu"]
     inputs:
       - "/apps/*/src/**/*"
@@ -36,7 +34,6 @@ tasks:
 
   dev:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/local/docker-desktop/dev.nu"]
     options:
       persistent: true
@@ -45,7 +42,6 @@ tasks:
 
   k8s-local-down:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/local/docker-desktop/down.nu"]
     options:
       runFromWorkspaceRoot: true
@@ -53,7 +49,6 @@ tasks:
 
   k8s-local-forward:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/local/docker-desktop/forward.nu"]
     options:
       persistent: true
@@ -62,7 +57,6 @@ tasks:
 
   k8s-local-up:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/local/docker-desktop/up.nu"]
     deps:
       - "infra:build-local-images"
@@ -75,7 +69,6 @@ tasks:
 
   lint:
     command: "nu"
-    toolchains: ["javascript"]
     args: ["infra/scripts/k8s-tools/validate.nu"]
     deps:
       - "infra:install-k8s-tools"

@@ -3,3 +3,9 @@ pnpm = "11.1.1"
 moon = "2.2.4"
 proto = "0.57.0"
 go = "1.26.3"
+
+[plugins]
+nu = "github://hebilicious/proto-nu"
+
+[tools.nu]
+version = "0.112.2"

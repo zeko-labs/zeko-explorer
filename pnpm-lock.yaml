@@ -24,9 +24,6 @@ catalogs:
     lefthook:
       specifier: 2.1.6
       version: 2.1.6
-    nushell:
-      specifier: 0.112.2
-      version: 0.112.2
     nuxt:
       specifier: 4.4.5
       version: 4.4.5
@@ -74,9 +71,6 @@ importers:
       lefthook:
         specifier: 'catalog:'
         version: 2.1.6
-      nushell:
-        specifier: 'catalog:'
-        version: 0.112.2
       tsdown:
         specifier: 'catalog:'
         version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260513.1)
@@ -1218,46 +1212,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@nushell/darwin-arm64@0.112.2':
-    resolution: {integrity: sha512-jeTxJ4cbF0wI/XF2qxAu4uwv24IAoArhoxI0DqQjVZjrXeSJQ0OVUVntugwXvgKiSJR5IlfPvj2IZiMaPelAhw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@nushell/darwin-x64@0.112.2':
-    resolution: {integrity: sha512-G1nQqaRwWJECc/XZ1Uw6PzQts0exM7dtCwXSxZA7Y5Yune9mCjem51bt7iSqwSztGDSsJHMScQ7yUUMLGWbYrw==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@nushell/linux-arm64@0.112.2':
-    resolution: {integrity: sha512-syosu1u4xb+bqO5KNKxr0qgau8Lyh2SGx7ZZ67UVz5bWjPRd4axRHP4YDBucSI+tg0fsoCtcyN7e0iKWI8OVkQ==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@nushell/linux-arm@0.112.2':
-    resolution: {integrity: sha512-UOACFdXMBRB6je2X1aKf1Tp34l8KB9WeiY8+933Mbf07oTAm7YUHwlJqdBvFIX2oGLtqtQoofKDHaQuOD0RWkw==}
-    cpu: [arm]
-    os: [linux]
-
-  '@nushell/linux-riscv64@0.112.2':
-    resolution: {integrity: sha512-MQvgV1A8RXvb2H7j2BkuxnfUawFSTYgkUKsORO3yK4Wkg1pSxPqfglh9HgOM32JCjeoSKAjrJmyqcZvpKynjAQ==}
-    cpu: [riscv64]
-    os: [linux]
-
-  '@nushell/linux-x64@0.112.2':
-    resolution: {integrity: sha512-atMC9KpsLFC/MH1uH4qQvtIH+tomxtEvD5A1Q7fgsTbaBYhlYHm03Qs24sK+kdqOHcQ23ase/FUtRxqAFBwlDQ==}
-    cpu: [x64]
-    os: [linux]
-
-  '@nushell/windows-arm64@0.112.2':
-    resolution: {integrity: sha512-jdq/PaLLe45xwRPQvykT31pZ5sqXSSoQvvHzspPpxhIJVeHLa+i0GpBj3Ftu+4jfO9QGK8UlDbnofPwOro/rBg==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@nushell/windows-x64@0.112.2':
-    resolution: {integrity: sha512-FIC3Zp9sBrogWA6pFuWPNL9YWj2+eYgsWC8qy3XfxSe/K35gnfjCC5Je2KPaE6OrgbketLtPjuujpauo5TD1Ug==}
-    cpu: [x64]
-    os: [win32]
 
   '@nuxt/cli@3.35.2':
     resolution: {integrity: sha512-sCxNnFuYamqippdj+Cj4Nue55yaUvasaneyf2mnowK5/F1TKln/WVqTH18McxQ4baLlIlVapIFovKjJx1L8XMQ==}
@@ -3633,11 +3587,6 @@ packages:
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
 
-  nushell@0.112.2:
-    resolution: {integrity: sha512-CL1Uww/g+PCmO9eHCb1Z73D73VLsa7dXYzX5qbvfNRtQyx3LCU5ofHQ23vQi8SRcB9Tblbj364JzJRMdlE2fUg==}
-    engines: {node: '>=22.0.0', pnpm: '>=10'}
-    hasBin: true
-
   nuxt@4.4.5:
     resolution: {integrity: sha512-MwTf3wyaEIm1U9/T1VKpqg7rGhhrn5Cx2ZS40lwo8GxsiY9xE7UOj5Cg0eAI0fSbJzyXlzdxspytgqWsgL+nIA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -5752,30 +5701,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@nushell/darwin-arm64@0.112.2':
-    optional: true
-
-  '@nushell/darwin-x64@0.112.2':
-    optional: true
-
-  '@nushell/linux-arm64@0.112.2':
-    optional: true
-
-  '@nushell/linux-arm@0.112.2':
-    optional: true
-
-  '@nushell/linux-riscv64@0.112.2':
-    optional: true
-
-  '@nushell/linux-x64@0.112.2':
-    optional: true
-
-  '@nushell/windows-arm64@0.112.2':
-    optional: true
-
-  '@nushell/windows-x64@0.112.2':
-    optional: true
 
   '@nuxt/cli@3.35.2(@nuxt/schema@4.4.5)(cac@6.7.14)(magicast@0.5.2)':
     dependencies:
@@ -8089,17 +8014,6 @@ snapshots:
   nth-check@2.1.1:
     dependencies:
       boolbase: 1.0.0
-
-  nushell@0.112.2:
-    optionalDependencies:
-      '@nushell/darwin-arm64': 0.112.2
-      '@nushell/darwin-x64': 0.112.2
-      '@nushell/linux-arm': 0.112.2
-      '@nushell/linux-arm64': 0.112.2
-      '@nushell/linux-riscv64': 0.112.2
-      '@nushell/linux-x64': 0.112.2
-      '@nushell/windows-arm64': 0.112.2
-      '@nushell/windows-x64': 0.112.2
 
   nuxt@4.4.5(@babel/core@7.29.0)(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@biomejs/biome@2.4.15)(@parcel/watcher@2.5.6)(@types/node@25.7.0)(@vue/compiler-sfc@3.5.34)(cac@6.7.14)(db0@0.3.4)(ioredis@5.10.1)(magicast@0.5.2)(rolldown@1.0.1)(rollup-plugin-visualizer@7.0.1(rolldown@1.0.1)(rollup@4.60.3))(rollup@4.60.3)(srvx@0.11.15)(terser@5.47.1)(vite@7.3.3(@types/node@25.7.0)(jiti@2.7.0)(terser@5.47.1)(yaml@2.9.0))(yaml@2.9.0):
     dependencies:
