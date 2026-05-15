@@ -213,7 +213,6 @@ namespaces
   -> ingest
        -> zeko-indexer
        -> l1-watcher
-       -> da-monitor
        -> backfill
   -> api
        -> explorer-api

@@ -19,7 +19,6 @@ jobs:
       matrix:
         image:
           - l1-watcher
-          - da-monitor
           - zeko-indexer
           - explorer-api
           - bridge-api

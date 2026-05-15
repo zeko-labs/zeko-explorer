@@ -18,7 +18,7 @@ RUN curl -fsSL https://moonrepo.dev/install/proto.sh | bash -s -- --yes \
 
 FROM base AS skeleton
 COPY . .
-RUN moon docker scaffold l1-watcher da-monitor zeko-indexer explorer-api bridge-api
+RUN moon docker scaffold l1-watcher zeko-indexer explorer-api bridge-api
 
 FROM base AS build
 COPY --from=skeleton /app/.moon/docker/configs .

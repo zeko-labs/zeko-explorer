@@ -146,7 +146,7 @@ Recommended order:
 | -5 | Cloudflare Tunnel controller resources |
 | 0 | NATS, SurrealDB, PVCs, service accounts |
 | 5 | NATS stream setup Job, schema migration Job |
-| 10 | indexer, L1 Watcher, DA Monitor, Backfill Service |
+| 10 | indexer, L1 Watcher, Backfill Service |
 | 20 | Explorer API, Bridge API |
 | 30 | Cloudflare Tunnel routes to private subgraph services |
 | 40 | smoke-test Job |

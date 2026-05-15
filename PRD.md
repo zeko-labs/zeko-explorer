@@ -506,7 +506,6 @@ The monorepo is a pure TypeScript + Nuxt project managed with **pnpm workspaces 
 │   │       └── adapters/
 │   │           ├── mina/              # Mina L1 adapter
 │   │           └── ethereum/          # Ethereum L1 adapter (Milestone 4)
-│   ├── da-monitor/                    # TypeScript
 │   ├── zeko-indexer/                  # TypeScript — unified indexer
 │   │   └── src/
 │   │       ├── domain/

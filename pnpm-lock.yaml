@@ -122,12 +122,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/contract-schema
 
-  services/da-monitor:
-    dependencies:
-      '@zeko/nats':
-        specifier: workspace:*
-        version: link:../nats
-
   services/database:
     dependencies:
       '@zeko/domain':

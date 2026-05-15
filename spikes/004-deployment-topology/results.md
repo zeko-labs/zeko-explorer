@@ -86,7 +86,6 @@ Local workloads for `zeko-m-local`:
 | SurrealDB | StatefulSet + PVC | single replica; migrations run as Job |
 | Zeko Indexer | Deployment, 1 replica | consumes local NATS and writes SurrealDB |
 | L1 Watcher | Deployment, disabled in base local values | opt-in integration workload; points at configured Mina endpoints |
-| DA Monitor | Deployment, disabled in base local values | opt-in integration workload; points at configured DA node endpoints |
 | Backfill Service | Deployment, disabled in base local values | opt-in integration workload built from `zeko`; calls configured DA node endpoints |
 | Explorer API | Deployment + Service | reads SurrealDB; supports SSE |
 | Bridge API | Deployment + Service | reads SurrealDB; supports SSE |
@@ -118,7 +117,8 @@ Package-level tests may start only the dependencies they need, for example NATS 
 Local resource target:
 
 - default local mode should fit inside **4 CPU and 6 GB RAM** allocated to Docker Desktop;
-- L1 Watcher, DA Monitor, and Backfill are opt-in profiles;
+- L1 Watcher and Backfill are opt-in profiles;
+- direct DA signature publishing is external to this repo and remains disabled unless DA nodes are configured to publish `zeko.da.signatures`;
 - NATS and SurrealDB use small local memory limits and short local retention;
 - the frontend should normally run as a local Nuxt dev process, not inside Kubernetes;
 - CI should not require Docker Desktop Kubernetes or a full local cluster. Keep CI focused on unit tests, type checks, package-level integration tests with only the dependencies they need, image builds, and deploy-time smoke jobs against real environments.
@@ -132,7 +132,6 @@ All server-side workloads that run in Kubernetes must be built through GitHub Ac
 Kubernetes workload images:
 
 - `l1-watcher`;
-- `da-monitor`;
 - `zeko-indexer`;
 - `explorer-api`;
 - `bridge-api`;
@@ -153,6 +152,7 @@ Not container images:
 - Hive Gateway: built by CI and deployed as a Cloudflare Worker;
 - Contract Registry API: built by CI and deployed as a Cloudflare Worker;
 - MCP Server: built by CI and deployed as a Cloudflare Worker;
+- DA Monitor: superseded by Spike 007. Baseline DA status is derived in `zeko-indexer`, and optional direct DA signatures are published by DA nodes instead of a standalone explorer-owned monitor.
 The rule is: Kubernetes workloads use OCI images; Cloudflare workloads use Wrangler artifacts; repo scripts do not need images unless they run inside Kubernetes.
 
 Registry decision:
@@ -290,7 +290,6 @@ packages/
   contract-schema/
 apps/
   l1-watcher/
-  da-monitor/
   zeko-indexer/
   explorer-api/
   bridge-api/
@@ -401,7 +400,7 @@ Flux owns:
 - explorer-owned SurrealDB;
 - ExternalSecret resources;
 - Cloudflare Tunnel controller and private service routes;
-- Zeko Indexer, L1 Watcher, DA Monitor, Backfill Service;
+- Zeko Indexer, L1 Watcher, Backfill Service;
 - Explorer API and Bridge API;
 - setup Jobs, CronJobs, and smoke-test Jobs.
 
@@ -537,7 +536,6 @@ Backups:
 | SurrealDB | StatefulSet | 1 active |
 | Zeko Indexer | Deployment | 1 active replica; leader election before more |
 | L1 Watcher | Deployment | 1 active replica per network |
-| DA Monitor | Deployment | 1 active replica per network |
 | Backfill Service | Deployment | 1 replica first |
 | Explorer API | Deployment | 1 in `zeko-m-local` and `zeko-m-alphanet`; 2+ in `zeko-m-devnet` and `zeko-m-mainnet` |
 | Bridge API | Deployment | 1 in `zeko-m-local` and `zeko-m-alphanet`; 2+ in `zeko-m-devnet` and `zeko-m-mainnet` |
@@ -615,7 +613,7 @@ Deployment consequence: the backfill pod needs outbound TCP reachability from Ku
 DA network plan:
 
 - store per-network DA node host:port list in Kubernetes config, sourced from GitHub Actions secrets/Infisical or generated environment values;
-- allow egress from only the Backfill and DA Monitor pods to those DA node addresses;
+- allow egress from only the Backfill pod to those DA node addresses;
 - if private routing exists between Hetzner networks, use it;
 - otherwise use a WireGuard/Tailscale tunnel or a firewall-restricted public DA RPC endpoint;
 - expose the Backfill GraphQL API only as a private ClusterIP Service for the indexer.
@@ -624,9 +622,9 @@ DA network plan:
 
 L1 Watcher connects outbound to L1 live/archive endpoints and publishes `zeko.l1.*` events into NATS.
 
-### DA Monitor
+### Direct DA Signatures
 
-DA Monitor connects outbound to DA endpoints and publishes `zeko.da.*` events into NATS.
+There is no standalone explorer-owned DA Monitor. Spike 007 supersedes the earlier monitor concept: baseline DA status is derived inside `zeko-indexer` from proved finality and L1 settlement signals, while optional direct `zeko.da.signatures` messages are published by DA nodes and consumed by the indexer.
 
 ### Bridge Migration
 

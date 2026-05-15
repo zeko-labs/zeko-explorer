@@ -5,7 +5,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 TARGETS=(
   "l1-watcher"
-  "da-monitor"
   "zeko-indexer"
   "explorer-api"
   "bridge-api"
