@@ -9,8 +9,6 @@ let rendered = ($rendered_dir | path join "zeko-explorer.rendered.kyaml")
 
 $env.PATH = ([$bin_dir] ++ $env.PATH)
 
-nu ($root_dir | path join "infra/scripts/k8s-tools/install.nu")
-
 mkdir $rendered_dir
 
 yamlfmt -d ($chart_dir | path join "Chart.yaml")

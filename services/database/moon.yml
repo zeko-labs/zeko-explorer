@@ -10,8 +10,7 @@ dependsOn:
 tasks:
   migrate-local:
     command: "nu"
-    args: ["services/database/scripts/migrate-local.nu"]
+    args: ["scripts/migrate-local.nu"]
     options:
       cache: false
-      runFromWorkspaceRoot: true
       runInCI: false

@@ -1,7 +1,7 @@
 default:
   paths:
-    - "infra/tests/acceptance/**/*.feature"
+    - "tests/acceptance/**/*.feature"
   import:
-    - "infra/tests/acceptance/steps/**/*.ts"
+    - "tests/acceptance/steps/**/*.ts"
   format:
     - "progress"

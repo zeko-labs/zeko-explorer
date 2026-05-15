@@ -30,53 +30,54 @@ fileGroups:
 tasks:
   install-k8s-tools:
     command: "nu"
-    args: ["infra/scripts/k8s-tools/install.nu"]
+    args: ["scripts/k8s-tools/install.nu"]
+    inputs:
+      - "scripts/k8s-tools/install.nu"
+      - "/.prototools"
+    outputs:
+      - "/.moon/cache/tools/bin/helm"
+      - "/.moon/cache/tools/bin/kubeconform"
+      - "/.moon/cache/tools/bin/yamlfmt"
     options:
-      cache: false
-      runFromWorkspaceRoot: true
+      runInCI: true
 
   build-local-images:
     command: "nu"
-    args: ["infra/local/docker-desktop/build-local-images.nu"]
+    args: ["local/docker-desktop/build-local-images.nu"]
     options:
       cache: false
-      runFromWorkspaceRoot: true
       runInCI: false
 
   dev:
     command: "nu"
-    args: ["infra/local/docker-desktop/dev.nu"]
+    args: ["local/docker-desktop/dev.nu"]
     options:
       cache: false
       persistent: true
-      runFromWorkspaceRoot: true
       runInCI: false
 
   k8s-local-down:
     command: "nu"
-    args: ["infra/local/docker-desktop/down.nu"]
+    args: ["local/docker-desktop/down.nu"]
     options:
       cache: false
-      runFromWorkspaceRoot: true
       runInCI: false
 
   k8s-local-forward:
     command: "nu"
-    args: ["infra/local/docker-desktop/forward.nu"]
+    args: ["local/docker-desktop/forward.nu"]
     options:
       cache: false
       persistent: true
-      runFromWorkspaceRoot: true
       runInCI: false
 
   k8s-local-up:
     command: "nu"
-    args: ["infra/local/docker-desktop/up.nu"]
+    args: ["local/docker-desktop/up.nu"]
     deps:
       - "infra:build-local-images"
     options:
       cache: false
-      runFromWorkspaceRoot: true
       runInCI: false
 
   acceptance:
@@ -84,32 +85,26 @@ tasks:
     toolchains: ["javascript"]
     args:
       - "--config"
-      - "infra/cucumber.yaml"
+      - "cucumber.yaml"
     inputs:
       - "@group(acceptance)"
       - "@group(workspaceDeps)"
-    options:
-      runFromWorkspaceRoot: true
 
   lint:
     command: "nu"
-    args: ["infra/scripts/k8s-tools/validate.nu"]
+    args: ["scripts/k8s-tools/validate.nu"]
     deps:
       - "infra:install-k8s-tools"
     inputs:
       - "@group(k8s)"
-    options:
-      runFromWorkspaceRoot: true
 
   typecheck:
     command: "tsgo"
     toolchains: ["javascript"]
     args:
       - "--project"
-      - "infra/tsconfig.json"
+      - "tsconfig.json"
       - "--noEmit"
     inputs:
       - "@group(testTypes)"
       - "@group(workspaceDeps)"
-    options:
-      runFromWorkspaceRoot: true
