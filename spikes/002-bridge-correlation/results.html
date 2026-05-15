@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 002: Bridge Operation L1 ↔ L2 Correlation — Results</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/002-bridge-correlation/results.md</div>
+        <h1>Spike 002: Bridge Operation L1 ↔ L2 Correlation — Results</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Status</strong>Complete</span><span class="pill"><strong>Date</strong>2026-04-08</span><span class="pill"><strong>Lines</strong>705</span><span class="pill"><strong>Sections</strong>39</span><span class="pill"><strong>Tables</strong>8</span><span class="pill"><strong>Code blocks</strong>12</span></div>
+        <nav class="quick-nav"><a href="./README.md">README</a><a href="./results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">5030 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="284" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 39</text><rect x="336" y="148" width="58" height="18" rx="9" fill="#34d399"/><text x="336" y="188" fill="#9fb0c7" font-size="13">Tables: 8</text><rect x="408" y="148" width="87" height="18" rx="9" fill="#a78bfa"/><text x="408" y="188" fill="#9fb0c7" font-size="13">Code: 12</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#1-existing-bridge-architecture-analysis">1. Existing Bridge Architecture Analysis</a>
+<a class="toc-level-3" href="#indexer-servicesactionsindexer">Indexer (services/actions/indexer/)</a>
+<a class="toc-level-3" href="#api-servicesactionsapi">API (services/actions/api/)</a>
+<a class="toc-level-3" href="#database-postgresql-via-drizzle-orm">Database (PostgreSQL via Drizzle ORM)</a>
+<a class="toc-level-3" href="#known-issues">Known Issues</a>
+<a class="toc-level-3" href="#key-files">Key Files</a>
+<a class="toc-level-2" href="#2-correlation-key-aux-confirmed">2. Correlation Key: aux Confirmed</a>
+<a class="toc-level-3" href="#how-aux-flows-through-a-deposit">How aux flows through a deposit</a>
+<a class="toc-level-3" href="#how-aux-flows-through-a-withdrawal">How aux flows through a withdrawal</a>
+<a class="toc-level-3" href="#aux-is-not-unique-collision-handling">aux is NOT unique — collision handling</a>
+<a class="toc-level-2" href="#3-user-public-key-extraction">3. User Public Key Extraction</a>
+<a class="toc-level-3" href="#source-1-zekol1bridge-events-nats-subject-primary">Source 1: zeko.l1.bridge-events NATS subject (primary)</a>
+<a class="toc-level-3" href="#source-2-inner-action-fields-supplementary">Source 2: Inner action fields (supplementary)</a>
+<a class="toc-level-3" href="#data-flow">Data flow</a>
+<a class="toc-level-2" href="#4-cancel-deposit-observability">4. Cancel Deposit Observability</a>
+<a class="toc-level-3" href="#ocaml-contract-analysis">OCaml contract analysis</a>
+<a class="toc-level-3" href="#what-cancel-deposit-does-on-chain">What cancel deposit DOES on-chain</a>
+<a class="toc-level-3" href="#how-the-indexer-detects-cancellation">How the indexer detects cancellation</a>
+<a class="toc-level-2" href="#5-bridge-operation-lifecycle">5. Bridge Operation Lifecycle</a>
+<a class="toc-level-3" href="#what-the-indexer-observes-per-nats-stream">What the indexer observes per NATS stream</a>
+<a class="toc-level-3" href="#the-core-problem-this-solves-web-415">The core problem this solves (WEB-415)</a>
+<a class="toc-level-3" href="#deposit-lifecycle-how-each-state-transition-works">Deposit lifecycle — how each state transition works</a>
+<a class="toc-level-3" href="#withdrawal-lifecycle-how-each-state-transition-works">Withdrawal lifecycle — how each state transition works</a>
+<a class="toc-level-3" href="#commit-to-bridge-operation-association-algorithm">Commit-to-bridge-operation association algorithm</a>
+<a class="toc-level-3" href="#ui-to-indexer-state-mapping">UI-to-Indexer state mapping</a>
+<a class="toc-level-2" href="#6-system-integration-data-flow">6. System Integration — Data Flow</a>
+<a class="toc-level-3" href="#how-bridge-indexing-fits-in-the-overall-system">How bridge indexing fits in the overall system</a>
+<a class="toc-level-3" href="#message-ordering-and-partial-records">Message ordering and partial records</a>
+<a class="toc-level-3" href="#rollback-handling-in-the-new-system">Rollback handling in the new system</a>
+<a class="toc-level-2" href="#7-surrealdb-schema">7. SurrealDB Schema</a>
+<a class="toc-level-3" href="#tables">Tables</a>
+<a class="toc-level-3" href="#graph-edges">Graph edges</a>
+<a class="toc-level-3" href="#key-queries">Key queries</a>
+<a class="toc-level-2" href="#8-bridge-graphql-api">8. Bridge GraphQL API</a>
+<a class="toc-level-3" href="#graphql-types">GraphQL types</a>
+<a class="toc-level-3" href="#queries">Queries</a>
+<a class="toc-level-3" href="#what-changes-in-the-bridge-sdkuicli">What changes in the bridge SDK/UI/CLI</a>
+<a class="toc-level-2" href="#9-dependencies-on-other-spikes">9. Dependencies on Other Spikes</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="spike-002-bridge-operation-l1-l2-correlation-results" tabindex="-1"><a class="header-anchor" href="#spike-002-bridge-operation-l1-l2-correlation-results">Spike 002: Bridge Operation L1 ↔ L2 Correlation — Results</a></h1>
+<p><strong>Status:</strong> Complete
+<strong>Date:</strong> 2026-04-08</p>
+<hr>
+<h2 id="1-existing-bridge-architecture-analysis" tabindex="-1"><a class="header-anchor" href="#1-existing-bridge-architecture-analysis">1. Existing Bridge Architecture Analysis</a></h2>
+<p>The current bridge actions services in <code>zeko-ui/services/actions/</code> provide indexed bridge data to the bridge UI. They consist of two components:</p>
+<h3 id="indexer-servicesactionsindexer" tabindex="-1"><a class="header-anchor" href="#indexer-servicesactionsindexer">Indexer (<code>services/actions/indexer/</code>)</a></h3>
+<p>Polls L1 and L2 archives in parallel on a 15-second loop. Indexes two types of actions:</p>
+<ul>
+<li><strong>Outer actions (L1):</strong> Actions on the Zeko zkApp contract (<code>OUTER_PK</code>). Two kinds:
+<ul>
+<li><code>commit</code> (<code>action[0] === &quot;0&quot;</code>) — batch settlements. Fields: ledger, innerActionState, innerActionStateLength, synchronizedOuterActionState, synchronizedOuterActionStateLength, slotRange.</li>
+<li><code>witness</code> (<code>action[0] === &quot;1&quot;</code>) — bridge proofs. Fields: <strong>aux</strong> (<code>action[1]</code>), slotRange.</li>
+</ul>
+</li>
+<li><strong>Inner actions (L2):</strong> Actions on the inner account (<code>INNER_PK</code>). All are witness-type. Fields: <strong>aux</strong> (<code>action[1]</code>).</li>
+</ul>
+<p>Fork detection uses state chain validation — <code>beforeActionState</code> of action N must equal <code>afterActionState</code> of action N-1. On fork, actions from the divergence point onward are deleted and re-inserted.</p>
+<h3 id="api-servicesactionsapi" tabindex="-1"><a class="header-anchor" href="#api-servicesactionsapi">API (<code>services/actions/api/</code>)</a></h3>
+<p>Cloudflare Worker with Pothos GraphQL. Five queries:</p>
+<table>
+<thead>
+<tr>
+<th>Query</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>outerWitnessesFromAuxes(auxes)</code></td>
+<td>L1 witnesses matching given aux values</td>
+<td><code>api/src/schema/outer.ts:40-58</code></td>
+</tr>
+<tr>
+<td><code>innerWitnessesFromAuxes(auxes)</code></td>
+<td>L2 inner actions matching given aux values</td>
+<td><code>api/src/schema/inner.ts:22-35</code></td>
+</tr>
+<tr>
+<td><code>outerActions(beforeState, afterState?)</code></td>
+<td>Outer action chain traversal by state range</td>
+<td><code>api/src/schema/outer.ts:61-130</code></td>
+</tr>
+<tr>
+<td><code>innerActions(beforeState, afterState?)</code></td>
+<td>Inner action chain traversal by state range</td>
+<td><code>api/src/schema/inner.ts:38-88</code></td>
+</tr>
+<tr>
+<td><code>commitAsePastSlot(slot)</code></td>
+<td>Last commit before slot + subsequent actions</td>
+<td><code>api/src/schema/outer.ts:132-202</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="database-postgresql-via-drizzle-orm" tabindex="-1"><a class="header-anchor" href="#database-postgresql-via-drizzle-orm">Database (PostgreSQL via Drizzle ORM)</a></h3>
+<p><strong>Source:</strong> <code>api/drizzle/schema.ts</code></p>
+<p>Four tables:</p>
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Primary Key</th>
+<th>Key Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>outer_actions</code></td>
+<td><code>after_state</code></td>
+<td>kind, index, block_height, timestamp, txn_hash, fields, slot_range, marked_as_canonical_at</td>
+</tr>
+<tr>
+<td><code>commit_actions</code></td>
+<td><code>after_state</code> (FK → outer_actions)</td>
+<td>ledger, inner_action_state, inner_action_state_length, synchronized_outer_action_state</td>
+</tr>
+<tr>
+<td><code>witness_actions</code></td>
+<td><code>after_state</code> (FK → outer_actions)</td>
+<td><strong>aux</strong> (indexed)</td>
+</tr>
+<tr>
+<td><code>inner_actions</code></td>
+<td><code>after_state</code></td>
+<td>index, block_height, timestamp, txn_hash, fields, <strong>aux</strong> (indexed)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="known-issues" tabindex="-1"><a class="header-anchor" href="#known-issues">Known Issues</a></h3>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No per-user indexing</strong></td>
+<td>Everything indexed by action state/index/aux. No &quot;bridge ops for wallet X&quot; query.</td>
+</tr>
+<tr>
+<td><strong>Full archive scans</strong></td>
+<td>Bridge SDK calls <code>findDeposits(pk)</code> / <code>findWithdrawals(pk)</code> which fetch all user actions from the archive.</td>
+</tr>
+<tr>
+<td><strong>Client-side correlation</strong></td>
+<td>The bridge SDK (not the API) correlates L1/L2 via aux. Correlation logic lives in the browser.</td>
+</tr>
+<tr>
+<td><strong>No bridge_operation concept</strong></td>
+<td>Only raw actions exist. No unified record representing a complete bridge operation.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-files" tabindex="-1"><a class="header-anchor" href="#key-files">Key Files</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zeko-ui/services/actions/indexer/src/modules/outer.ts</code></td>
+<td>L1 action extraction, aux at <code>action[1]</code> for witnesses</td>
+</tr>
+<tr>
+<td><code>zeko-ui/services/actions/indexer/src/modules/inner.ts</code></td>
+<td>L2 action extraction, aux at <code>action[1]</code></td>
+</tr>
+<tr>
+<td><code>zeko-ui/services/actions/api/drizzle/schema.ts</code></td>
+<td>PostgreSQL schema definition</td>
+</tr>
+<tr>
+<td><code>zeko-ui/services/actions/api/src/schema/outer.ts</code></td>
+<td>Outer actions GraphQL queries</td>
+</tr>
+<tr>
+<td><code>zeko-ui/services/actions/api/src/schema/inner.ts</code></td>
+<td>Inner actions GraphQL queries</td>
+</tr>
+<tr>
+<td><code>zeko-bridge-sdk/src/utils.ts</code></td>
+<td><code>depositAux()</code> / <code>withdrawalAux()</code> Poseidon hash computation</td>
+</tr>
+<tr>
+<td><code>zeko-bridge-sdk/src/index.ts</code></td>
+<td><code>findDeposits()</code>, <code>finalizeDeposit()</code>, <code>prevNextDeposit</code> ordering</td>
+</tr>
+<tr>
+<td><code>zeko-ui/apps/bridge-ui/machines/bridgeOperation.ts</code></td>
+<td>UI XState state machine</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="2-correlation-key-aux-confirmed" tabindex="-1"><a class="header-anchor" href="#2-correlation-key-aux-confirmed">2. Correlation Key: <code>aux</code> Confirmed</a></h2>
+<p>The <code>aux</code> field IS the correlation key between L1 and L2 bridge actions. Verified through complete code tracing across both TypeScript and OCaml codebases.</p>
+<h3 id="how-aux-flows-through-a-deposit" tabindex="-1"><a class="header-anchor" href="#how-aux-flows-through-a-deposit">How <code>aux</code> flows through a deposit</a></h3>
+<ol>
+<li>User submits deposit on L1. The user creates a signed <code>AccountUpdate</code> on their OWN public key with actions: <code>[recipient1, recipient2, amount, timeout, holderAccount1, holderAccount2, outerPk1, outerPk2]</code> (<code>zeko-bridge-sdk/src/index.ts:301-311</code>). This is emitted on the <strong>user's PK</strong>, not the zkApp contract PK.</li>
+<li><code>depositAux()</code> computes a Poseidon hash: <code>Poseidon.hashWithPrefix(&quot;Deposit_params - qFB3jXP*)&quot;, [Field(0), ...holderAccountL1.toFields(), ...amount.toFields(), ...recipient.toFields(), ...timeout.toFields()])</code> (<code>zeko-bridge-sdk/src/utils.ts:78-86</code>).</li>
+<li>The sequencer processes the deposit and creates an L1 outer witness action via <code>rule_action_witness</code> (<code>zeko/src/app/zeko/circuits/rule_action_witness.ml:22,32</code>). This rule emits actions on the <strong>Zeko zkApp contract</strong> (<code>OUTER_PK</code>) with <code>action[1] = aux</code>.</li>
+<li>Indexer extracts <code>aux: item.action[1].toString()</code> for witness-kind actions (<code>indexer/src/modules/outer.ts:72</code>). Stored in <code>witness_actions.aux</code>.</li>
+<li>On L2, inner action carries <code>action[1]</code> as the same aux value (<code>indexer/src/modules/inner.ts:52</code>). Stored in <code>inner_actions.aux</code>.</li>
+<li>API correlates via <code>queryOuterWitnessesFromAuxes()</code> and <code>queryInnerWitnessesFromAuxes()</code> — given the same aux, these return the L1 and L2 sides of the same bridge operation.</li>
+</ol>
+<h3 id="how-aux-flows-through-a-withdrawal" tabindex="-1"><a class="header-anchor" href="#how-aux-flows-through-a-withdrawal">How <code>aux</code> flows through a withdrawal</a></h3>
+<ol>
+<li>User submits withdrawal on L2. Action fields: <code>[recipient1, recipient2, amount]</code> (<code>zeko-bridge-sdk/src/index.ts:560-563</code>).</li>
+<li><code>withdrawalAux()</code> computes: <code>Poseidon.hashWithPrefix(&quot;Withdrawal_params - qFB3jXP*)&quot;, [Field(0), ...amount.toFields(), ...recipient.toFields()])</code> (<code>zeko-bridge-sdk/src/utils.ts:88-94</code>).</li>
+<li>L2 inner action carries <code>action[1] = aux</code>. On finalization, the sequencer emits an L1 outer witness via <code>rule_action_witness</code> with matching aux on <code>OUTER_PK</code>.</li>
+</ol>
+<h3 id="aux-is-not-unique-collision-handling" tabindex="-1"><a class="header-anchor" href="#aux-is-not-unique-collision-handling"><code>aux</code> is NOT unique — collision handling</a></h3>
+<p><strong>Deposit aux</strong> is deterministic from <code>(holderAccountL1, amount, recipient, timeout)</code>. Two identical deposits from the same holder produce the same aux.</p>
+<p><strong>Withdrawal aux</strong> is deterministic from <code>(amount, recipient)</code>. Even fewer inputs — repeated withdrawals of the same amount to the same recipient always collide.</p>
+<p>The on-chain protocol disambiguates via sequential counters stored in the helper account's zkApp state:</p>
+<ul>
+<li><strong><code>prevNextDeposit</code></strong> — <code>helperAccount.zkappState[0]</code> on L2, tracks consumed deposit index (<code>zeko-bridge-sdk/src/index.ts:421-445</code>).</li>
+<li><strong><code>prevNextWithdrawal</code></strong> — <code>helperAccount.zkappState[1]</code> on L2, tracks consumed withdrawal index (<code>zeko-bridge-sdk/src/index.ts:618-641</code>).</li>
+<li><strong><code>prevNextCancelledDeposit</code></strong> — <code>helperAccountL1.zkappState[0]</code> on L1, tracks cancelled deposit index (<code>zeko-bridge-sdk/src/utils.ts:417-420</code>).</li>
+</ul>
+<p>Matching is done in FIFO order: the counters establish which operations have been consumed, and the next matching aux in sequence is the correct one.</p>
+<p><strong>Implication for the new indexer:</strong> Use <code>(aux, aux_sequence)</code> as the composite unique key for <code>bridge_operation</code>. When creating a bridge operation, assign <code>aux_sequence = count of existing records with the same aux</code>. When the second side arrives, match to the lowest <code>aux_sequence</code> record missing that side (FIFO). This mirrors the on-chain counter semantics.</p>
+<hr>
+<h2 id="3-user-public-key-extraction" tabindex="-1"><a class="header-anchor" href="#3-user-public-key-extraction">3. User Public Key Extraction</a></h2>
+<p>The indexer watches zkApp contract PKs (<code>OUTER_PK</code>, <code>INNER_PK</code>), not individual user PKs. But <code>bridge_operation</code> records need <code>sender</code>/<code>recipient</code> for per-user queries. There are two data sources:</p>
+<h3 id="source-1-zekol1bridge-events-nats-subject-primary" tabindex="-1"><a class="header-anchor" href="#source-1-zekol1bridge-events-nats-subject-primary">Source 1: <code>zeko.l1.bridge-events</code> NATS subject (primary)</a></h3>
+<p>The L1 Watcher publishes deposit/withdrawal events to <code>zeko.l1.bridge-events</code> (PRD Section 5.2.2). The L1 Watcher has access to both the L1 live node and L1 archive, and can observe user-level transactions.</p>
+<p>For deposits, the user's <code>submitDeposit</code> creates a signed <code>AccountUpdate</code> on the <strong>user's own public key</strong> that emits actions with all deposit parameters (<code>zeko-bridge-sdk/src/index.ts:301-311</code>):</p>
+<pre><code class="language-typescript">const transferrer = AccountUpdate.createSigned(recipient);
+transferrer.balance.subInPlace(amount);
+transferrer.body.actions = Actions.pushAction(transferrer.body.actions, [
+  ...recipient.toFields(),     // user PK (2 fields)
+  ...amount.toFields(),        // deposit amount
+  ...timeout.toFields(),       // timeout slot
+  ...holderAccountL1.toFields(), // holder account (2 fields)
+  ...this.outerPk.toFields(),  // zkApp contract PK (2 fields)
+]);
+</code></pre>
+<p>The L1 Watcher can observe these user-level actions and extract: the user's PK (the signer), the amount, timeout, holder account, and the target Zeko zkApp. It can then compute <code>depositAux()</code> from these fields, establishing the correlation key.</p>
+<p>For withdrawals, the user's <code>submitWithdrawal</code> emits actions on the user's own PK with <code>[recipient1, recipient2, amount]</code> (<code>zeko-bridge-sdk/src/index.ts:560-563</code>). The L1 Watcher can observe the finalization transaction on L1 which includes withdrawal params and the user's PK.</p>
+<p>The exact schema for <code>zeko.l1.bridge-events</code> messages is undefined — it depends on spike 006 (L1 Watcher). But the available data is deterministic: the L1 Watcher can extract user PKs, amounts, and compute aux from on-chain data. The bridge event message should include at minimum: <code>{ userPk, type (&quot;deposit&quot;|&quot;withdrawal&quot;), aux, amount, recipient, blockHeight, txHash }</code>.</p>
+<h3 id="source-2-inner-action-fields-supplementary" tabindex="-1"><a class="header-anchor" href="#source-2-inner-action-fields-supplementary">Source 2: Inner action fields (supplementary)</a></h3>
+<p>Inner actions on L2 carry fields that encode bridge parameters. For deposits: <code>inner_actions.fields</code> contains the deposit params from which <code>recipient</code> can be parsed. For withdrawals: fields contain <code>[recipient1, recipient2, amount]</code>. This provides a backup path if <code>zeko.l1.bridge-events</code> data is delayed.</p>
+<h3 id="data-flow" tabindex="-1"><a class="header-anchor" href="#data-flow">Data flow</a></h3>
+<pre><code>User submits deposit on L1 (action on user's PK)
+    │
+    ├─► L1 Watcher observes user tx → publishes to zeko.l1.bridge-events
+    │     { userPk, type: &quot;deposit&quot;, aux, amount, recipient, timeout, blockHeight, txHash }
+    │
+    └─► L1 archive records outer witness action on OUTER_PK
+          L1 Watcher observes → publishes to zeko.l1.outer-actions
+            { kind: &quot;witness&quot;, aux, slotRange, afterState, ... }
+
+Zeko Indexer:
+  1. Receives zeko.l1.bridge-events → creates bridge_operation with sender/recipient
+  2. Receives zeko.l1.outer-actions (witness) → links outer_action to bridge_operation via aux
+  3. Receives zeko.l2.transactions (inner action) → links inner_action to bridge_operation via aux
+</code></pre>
+<hr>
+<h2 id="4-cancel-deposit-observability" tabindex="-1"><a class="header-anchor" href="#4-cancel-deposit-observability">4. Cancel Deposit Observability</a></h2>
+<h3 id="ocaml-contract-analysis" tabindex="-1"><a class="header-anchor" href="#ocaml-contract-analysis">OCaml contract analysis</a></h3>
+<p>Examined <code>rule_bridge_finalize_cancelled_deposit.ml</code> in the Zeko OCaml contracts (<code>zeko/src/app/zeko/circuits/</code>). Key finding:</p>
+<p><strong>Cancel deposit does NOT emit an outer witness action on <code>OUTER_PK</code>.</strong></p>
+<p>The cancel flow creates a <code>witness_outer</code> account update (lines 314-339), but this account update has <strong>no <code>actions</code> field</strong> — only preconditions. It verifies the outer action state but does not emit new actions. The account update tree at line 355-356 shows <code>(witness_outer, [])</code> — included as a precondition witness, not an action emitter.</p>
+<p>For comparison, <code>rule_action_witness.ml</code> (the rule that produces normal deposit/withdrawal witness actions) DOES set <code>actions</code> on the account update at line 32. The cancel rule explicitly does not.</p>
+<h3 id="what-cancel-deposit-does-on-chain" tabindex="-1"><a class="header-anchor" href="#what-cancel-deposit-does-on-chain">What cancel deposit DOES on-chain</a></h3>
+<ol>
+<li><strong>L2 mutation:</strong> User calls <code>cancelDepositMutation</code> on the L2 sequencer (<code>zeko-ui/packages/graphql/src/zeko.ts:85-91</code>), which returns a proof forest.</li>
+<li><strong>L1 transaction:</strong> User submits the proof forest as an L1 transaction. The contract:
+<ul>
+<li>Verifies the deposit was accepted and is now being rejected.</li>
+<li>Advances <code>prevNextCancelledDeposit</code> (helper account zkApp state[0]) — <code>rule_bridge_finalize_cancelled_deposit.ml:289-302</code>.</li>
+<li>Returns the deposit amount to the user (balance_change negate at line 348-349).</li>
+<li>Checks (via precondition) that the outer action state matches — but emits NO new actions.</li>
+</ul>
+</li>
+<li><strong>Events:</strong> The cancel rule emits NO events. Compare with <code>rule_bridge_finalize_withdrawal.ml</code> which DOES emit events (line 256) containing <code>(withdrawal_index, withdrawal_params)</code>.</li>
+</ol>
+<h3 id="how-the-indexer-detects-cancellation" tabindex="-1"><a class="header-anchor" href="#how-the-indexer-detects-cancellation">How the indexer detects cancellation</a></h3>
+<p>Since cancel produces no outer action on <code>OUTER_PK</code>, the indexer cannot detect it from outer action streams alone. Two detection mechanisms:</p>
+<ol>
+<li>
+<p><strong><code>zeko.l1.bridge-events</code>:</strong> The L1 Watcher can observe cancel deposit L1 transactions. The cancel transaction interacts with the Zeko zkApp contract (it includes <code>witness_outer</code> as a child account update with the contract's PK). The L1 Watcher sees this transaction and can publish a cancel event to <code>zeko.l1.bridge-events</code>. The event includes the user's PK and the advanced <code>prevNextCancelledDeposit</code> counter value.</p>
+</li>
+<li>
+<p><strong><code>prevNextCancelledDeposit</code> counter polling:</strong> The indexer (or L1 Watcher) can periodically read <code>helperAccountL1.zkappState[0]</code>. When this counter advances, a deposit was cancelled. The cancelled deposit is identified by its FIFO position: <code>getMinResolvedDepositIndex = max(prevNextDeposit, prevNextCancelledDeposit)</code> (<code>zeko-ui/packages/bridge-sdk/src/index.ts:610-613</code>).</p>
+</li>
+</ol>
+<p>The L1 Watcher approach is preferred because it provides real-time detection and the user's PK. The counter polling approach is a fallback for consistency verification.</p>
+<hr>
+<h2 id="5-bridge-operation-lifecycle" tabindex="-1"><a class="header-anchor" href="#5-bridge-operation-lifecycle">5. Bridge Operation Lifecycle</a></h2>
+<p>The indexer observes on-chain events <strong>after the fact</strong>, not user intent. This is fundamentally different from the UI state machine (<code>bridgeOperation.ts</code>), which tracks user interactions.</p>
+<h3 id="what-the-indexer-observes-per-nats-stream" tabindex="-1"><a class="header-anchor" href="#what-the-indexer-observes-per-nats-stream">What the indexer observes per NATS stream</a></h3>
+<table>
+<thead>
+<tr>
+<th>NATS Subject</th>
+<th>What the indexer receives</th>
+<th>What it writes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zeko.l1.bridge-events</code></td>
+<td>Deposit submissions, withdrawal finalizations, cancel events — with user PK and full params</td>
+<td><code>bridge_operation</code> creation with <code>sender</code>/<code>recipient</code>/<code>aux</code>. This is the canonical deposit submission fact (WEB-415).</td>
+</tr>
+<tr>
+<td><code>zeko.l1.outer-actions</code></td>
+<td>Commit and witness actions from <code>OUTER_PK</code></td>
+<td><code>outer_action</code> records. Witnesses carry <code>aux</code>.</td>
+</tr>
+<tr>
+<td><code>zeko.l2.transactions</code></td>
+<td>L2 transactions (containing inner actions on <code>INNER_PK</code>)</td>
+<td><code>inner_action</code> records with <code>aux</code>.</td>
+</tr>
+<tr>
+<td><code>zeko.l1.rollbacks</code></td>
+<td>L1 fork events</td>
+<td>Revert affected outer_actions, cascade to bridge_operations.</td>
+</tr>
+<tr>
+<td><code>zeko.l2.transactions</code> (hash chain break)</td>
+<td>Consumer-side L2 rollback detection</td>
+<td>Revert affected inner_actions, cascade to bridge_operations.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-core-problem-this-solves-web-415" tabindex="-1"><a class="header-anchor" href="#the-core-problem-this-solves-web-415">The core problem this solves (WEB-415)</a></h3>
+<p>The current bridge rebuilds deposit history by scanning wallet-specific L1 archive actions on page load (<code>findDeposits(pk)</code> in <code>zeko-bridge-sdk/src/index.ts:328-396</code>). This makes bootstrap expensive and causes unnecessary requests across archive, sequencer, and actions services. The actions indexer already provides most of the data needed for withdrawals, commits, and witnesses — but it does <strong>not</strong> index the original L1 deposit submission itself. Because that canonical deposit fact is missing, the bridge cannot answer &quot;show deposits for wallet X&quot; from indexed data alone.</p>
+<p>The solution: the L1 Watcher detects deposit submissions on L1 and publishes them to <code>zeko.l1.bridge-events</code>. The Zeko Indexer consumes these events and creates <code>bridge_operation</code> records indexed by user PK. The bridge UI/SDK/CLI query the Bridge GraphQL API for <code>bridgeOperations(publicKey)</code> instead of scanning the archive.</p>
+<h3 id="deposit-lifecycle-how-each-state-transition-works" tabindex="-1"><a class="header-anchor" href="#deposit-lifecycle-how-each-state-transition-works">Deposit lifecycle — how each state transition works</a></h3>
+<pre><code>                                       ┌─────────────┐
+                                       │  ROLLED_BACK │
+                                       └──────▲───────┘
+                                              │ (L1 fork or L2 hash chain break)
+                                              │
+┌───────────┐    ┌──────────────┐    ┌────────┴──┐    ┌───────────┐
+│ SUBMITTED ├───►│ L1_WITNESSED ├───►│ COMMITTED ├───►│ COMPLETED │
+└───────────┘    └──────────────┘    └─────┬─────┘    └───────────┘
+                                           │
+                                           ▼
+                                    ┌──────────┐    ┌───────────┐
+                                    │ TIMED_OUT├───►│ CANCELLED │
+                                    └──────────┘    └───────────┘
+</code></pre>
+<p><strong><code>SUBMITTED</code></strong> — The L1 Watcher detects the user's deposit submission transaction on L1 and publishes to <code>zeko.l1.bridge-events</code>. The user's <code>submitDeposit</code> creates a signed <code>AccountUpdate</code> on the user's own PK that emits actions with all deposit params (<code>zeko-bridge-sdk/src/index.ts:301-311</code>). The L1 Watcher observes this transaction, extracts the user PK (the signer), amount, timeout, holder account, and computes <code>depositAux()</code> from the fields. The indexer creates the <code>bridge_operation</code> record with <code>sender</code>, <code>recipient</code>, <code>amount</code>, <code>aux</code>, <code>timeout_slot</code>, <code>holder_account_l1</code>, and the submission tx hash/block height. <strong>This is the canonical deposit submission fact</strong> — the record the bridge UI queries to show &quot;your deposits&quot; without archive scanning.</p>
+<p><strong><code>L1_WITNESSED</code></strong> — An outer witness action with this deposit's <code>aux</code> appears on <code>OUTER_PK</code> via <code>zeko.l1.outer-actions</code>. The indexer matches the witness to the existing <code>bridge_operation</code> by <code>(aux, aux_sequence)</code> and links the <code>outer_action</code> via an <code>l1_action_link</code> graph edge. This proves the deposit was accepted by the sequencer and a bridge proof was submitted.</p>
+<p><strong><code>COMMITTED</code></strong> — A commit action is indexed from <code>zeko.l1.outer-actions</code>. The indexer determines which deposits this commit covers by walking the inner action state chain (see &quot;Commit-to-bridge-operation association&quot; below). All covered deposits transition to <code>COMMITTED</code>.</p>
+<p><strong><code>COMPLETED</code></strong> — An inner action with matching <code>aux</code> is indexed from <code>zeko.l2.transactions</code>. The indexer creates an <code>inner_action</code> record and links it to the <code>bridge_operation</code>. The deposit is now finalized on L2 — the user has received their funds.</p>
+<p><strong><code>TIMED_OUT</code></strong> — Any deposit in <code>SUBMITTED</code>, <code>L1_WITNESSED</code>, or <code>COMMITTED</code> status where <code>timeout_slot &lt; current_l1_slot</code> and no L2 finalization exists transitions to <code>TIMED_OUT</code>. The current L1 slot is available from the L1 Watcher's settlement events and outer actions (which carry slot information). This check runs on every new <code>zeko.l1.outer-actions</code> or <code>zeko.l1.settlements</code> message, not on a separate polling timer.</p>
+<p><strong><code>CANCELLED</code></strong> — Detected via <code>zeko.l1.bridge-events</code> when the L1 Watcher observes a cancel deposit L1 transaction (see Section 4). The <code>prevNextCancelledDeposit</code> counter advancement identifies which deposit was cancelled by FIFO position.</p>
+<p><strong><code>ROLLED_BACK</code></strong> — Two paths:</p>
+<ul>
+<li><strong>L1 fork:</strong> <code>zeko.l1.rollbacks</code> event invalidates the outer witness or commit action. The indexer removes the affected <code>outer_action</code> records and recalculates bridge_operation status based on remaining data.</li>
+<li><strong>L2 hash chain break:</strong> Consumer-side detection on <code>zeko.l2.transactions</code> (PRD Section 7.5). If the inner action that completed a deposit is in the rolled-back range, the <code>inner_action</code> is removed and the bridge_operation reverts to its previous status.</li>
+</ul>
+<h3 id="withdrawal-lifecycle-how-each-state-transition-works" tabindex="-1"><a class="header-anchor" href="#withdrawal-lifecycle-how-each-state-transition-works">Withdrawal lifecycle — how each state transition works</a></h3>
+<pre><code>┌───────────┐    ┌──────────────┐    ┌───────────┐    ┌──────────────┐    ┌───────────┐
+│ SUBMITTED ├───►│ L2_WITNESSED ├───►│ COMMITTED ├───►│ DELAY_PASSED ├───►│ COMPLETED │
+└───────────┘    └──────────────┘    └─────┬─────┘    └──────────────┘    └───────────┘
+                                           │
+                                           ▼
+                                    ┌─────────────┐
+                                    │ ROLLED_BACK │
+                                    └─────────────┘
+</code></pre>
+<p><strong><code>SUBMITTED</code></strong> — The user submits a withdrawal on L2. The L2 transaction is indexed from <code>zeko.l2.transactions</code>, and the inner action on <code>INNER_PK</code> with <code>aux</code> is extracted. At this point the indexer creates the <code>bridge_operation</code> with <code>sender</code>/<code>recipient</code> parsed from the inner action fields (<code>[recipient1, recipient2, amount]</code>), computes <code>withdrawalAux()</code>, and records the L2 tx hash. For withdrawals, <code>SUBMITTED</code> and <code>L2_WITNESSED</code> happen in the same message since the user's L2 submission IS the inner action.</p>
+<p><strong><code>L2_WITNESSED</code></strong> — Same event as <code>SUBMITTED</code> for withdrawals. The inner action with this withdrawal's <code>aux</code> on <code>INNER_PK</code> is the canonical evidence. Separate from <code>SUBMITTED</code> conceptually because for deposits, the submission (user's L1 tx) and the witness (outer action on OUTER_PK) are distinct events.</p>
+<p><strong><code>COMMITTED</code></strong> — An L1 commit action's <code>innerActionState</code> covers this withdrawal's inner action (see association algorithm below). The withdrawal is now part of a settled batch.</p>
+<p><strong><code>DELAY_PASSED</code></strong> — The on-chain withdrawal delay has elapsed: <code>current_l1_slot &gt; commit.slotRangeUpper + withdrawal_delay</code>. Detected when processing new slot information from <code>zeko.l1.outer-actions</code> or <code>zeko.l1.settlements</code>. The finalize withdrawal contract enforces this via a <code>valid_while</code> precondition with <code>lower = slot + withdrawal_delay</code> (<code>rule_bridge_finalize_withdrawal.ml:197-200</code>). The withdrawal delay value is a known constant.</p>
+<p><strong><code>COMPLETED</code></strong> — An outer witness with matching <code>aux</code> appears on <code>OUTER_PK</code> via <code>zeko.l1.outer-actions</code>. This means the user has finalized the withdrawal on L1 (called <code>finalizeWithdrawal</code>, which triggers <code>rule_action_witness</code> to emit the witness action). The <code>rule_bridge_finalize_withdrawal.ml</code> also emits events <code>(withdrawal_index, withdrawal_params)</code> on the main account update (line 256), providing additional verification data.</p>
+<p><strong><code>ROLLED_BACK</code></strong> — Same two paths as deposits: L1 fork via <code>zeko.l1.rollbacks</code>, or L2 hash chain break for inner actions.</p>
+<h3 id="commit-to-bridge-operation-association-algorithm" tabindex="-1"><a class="header-anchor" href="#commit-to-bridge-operation-association-algorithm">Commit-to-bridge-operation association algorithm</a></h3>
+<p>When a commit action is indexed from <code>zeko.l1.outer-actions</code>, the indexer must determine which bridge operations it covers:</p>
+<ol>
+<li>Read the commit's <code>innerActionState</code> and <code>innerActionStateLength</code> from its fields (<code>outer.ts:54-62</code>).</li>
+<li>Query <code>inner_action</code> records: walk backward from <code>innerActionState</code> through the <code>before_state</code>/<code>after_state</code> chain for <code>innerActionStateLength</code> steps. This yields the set of inner actions included in this commit.</li>
+<li>Collect all <code>aux</code> values from these inner actions.</li>
+<li>Match each <code>aux</code> to its <code>bridge_operation</code> via <code>(aux, aux_sequence)</code> lookup (FIFO order).</li>
+<li>Update matched bridge_operations: set <code>commit_action_state</code>, transition status to <code>COMMITTED</code>.</li>
+<li>Create the <code>l1_action_link</code> graph edge from the <code>outer_action</code> (commit) to each affected <code>bridge_operation</code>.</li>
+</ol>
+<p>This is O(N) where N = <code>innerActionStateLength</code>, executed once per commit. The inner action state chain is already indexed in SurrealDB, so the walk is a series of indexed lookups.</p>
+<h3 id="ui-to-indexer-state-mapping" tabindex="-1"><a class="header-anchor" href="#ui-to-indexer-state-mapping">UI-to-Indexer state mapping</a></h3>
+<table>
+<thead>
+<tr>
+<th>UI State</th>
+<th>Indexer State</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SUBMIT_DEPOSIT</code></td>
+<td><code>SUBMITTED</code></td>
+<td>L1 Watcher detects user's deposit tx → <code>zeko.l1.bridge-events</code></td>
+</tr>
+<tr>
+<td><code>PENDING_DEPOSIT</code></td>
+<td><code>L1_WITNESSED</code></td>
+<td>Outer witness on OUTER_PK confirms sequencer accepted deposit</td>
+</tr>
+<tr>
+<td><code>TO_FINALIZE</code> (deposit)</td>
+<td><code>COMMITTED</code></td>
+<td>Commit covers this deposit, user can finalize on L2</td>
+</tr>
+<tr>
+<td><code>FINALIZE_DEPOSIT</code></td>
+<td><code>COMPLETED</code></td>
+<td>L2 inner action indexed</td>
+</tr>
+<tr>
+<td><code>CAN_CANCEL</code></td>
+<td><code>TIMED_OUT</code></td>
+<td>Slot past timeout, no finalization</td>
+</tr>
+<tr>
+<td><code>CANCEL_DEPOSIT</code></td>
+<td><code>CANCELLED</code></td>
+<td>Detected via <code>zeko.l1.bridge-events</code> (cancel tx on L1)</td>
+</tr>
+<tr>
+<td><code>SUBMIT_WITHDRAWAL</code></td>
+<td><code>SUBMITTED</code></td>
+<td>L2 inner action indexed from <code>zeko.l2.transactions</code></td>
+</tr>
+<tr>
+<td><code>PENDING_WITHDRAWAL</code></td>
+<td><code>L2_WITNESSED</code> → <code>COMMITTED</code></td>
+<td>Inner action exists, waiting for commit</td>
+</tr>
+<tr>
+<td><code>TO_FINALIZE</code> (withdrawal)</td>
+<td><code>DELAY_PASSED</code></td>
+<td>Commit + delay elapsed</td>
+</tr>
+<tr>
+<td><code>FINALIZE_WITHDRAWAL</code></td>
+<td><code>COMPLETED</code></td>
+<td>L1 outer witness indexed</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6-system-integration-data-flow" tabindex="-1"><a class="header-anchor" href="#6-system-integration-data-flow">6. System Integration — Data Flow</a></h2>
+<h3 id="how-bridge-indexing-fits-in-the-overall-system" tabindex="-1"><a class="header-anchor" href="#how-bridge-indexing-fits-in-the-overall-system">How bridge indexing fits in the overall system</a></h3>
+<p>The bridge indexing pipeline is a subset of the unified Zeko Indexer (PRD Section 5.2.5). It does not run as a separate service. The same TypeScript indexer process that handles explorer data (transactions, accounts, batches) also handles bridge data.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│                          NATS JetStream                              │
+│                                                                      │
+│  zeko.l1.outer-actions ──┐                                           │
+│  zeko.l1.bridge-events ──┼── zeko-l1 stream (subjects: zeko.l1.&gt;)   │
+│  zeko.l1.rollbacks ──────┤                                           │
+│  zeko.l1.settlements ────┘                                           │
+│                                                                      │
+│  zeko.l2.transactions ───── zeko-l2 stream (subjects: zeko.l2.&gt;)    │
+│  zeko.l2.finality ───────┘                                           │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Zeko Indexer (TypeScript)                        │
+│                                                                      │
+│  Durable consumers (one per stream, at-least-once delivery):         │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐     │
+│  │ Bridge consumers:                                            │     │
+│  │                                                              │     │
+│  │ zeko.l1.outer-actions → parse commit/witness → write         │     │
+│  │   outer_action to SurrealDB. If witness: match aux →         │     │
+│  │   link to bridge_operation. If commit: walk inner action     │     │
+│  │   state chain → update covered bridge_operations.            │     │
+│  │                                                              │     │
+│  │ zeko.l1.bridge-events → parse user deposit/withdrawal/cancel │     │
+│  │   → create/update bridge_operation with sender/recipient.    │     │
+│  │   Compute aux from event params. Assign aux_sequence (FIFO). │     │
+│  │                                                              │     │
+│  │ zeko.l2.transactions → extract inner actions on INNER_PK →   │     │
+│  │   write inner_action. Match aux → link to bridge_operation.  │     │
+│  │   Hash chain continuity check for L2 rollback detection.     │     │
+│  │                                                              │     │
+│  │ zeko.l1.rollbacks → revert affected outer_actions →          │     │
+│  │   cascade: recalculate bridge_operation status.              │     │
+│  └─────────────────────────────────────────────────────────────┘     │
+│                                                                      │
+│  Idempotent writes (NATS Msg-Id dedup + SurrealDB upsert by ID)    │
+└───────────────────────────────────┬──────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SurrealDB (single node)                            │
+│                                                                      │
+│  Bridge tables:                                                      │
+│  ┌─────────────┐   ┌─────────────┐   ┌──────────────────┐          │
+│  │outer_action │   │inner_action │   │bridge_operation  │          │
+│  │             │   │             │   │  (indexed by PK) │          │
+│  └──────┬──────┘   └──────┬──────┘   └────────┬─────────┘          │
+│         │                 │                    │                     │
+│         └────l1_action_link────────────────────┘                    │
+│                           └────l2_action_link──┘                    │
+│                                                                      │
+│  Live queries for real-time subscriptions                            │
+└───────────────────────────────────┬──────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   Bridge GraphQL API                                  │
+│                   (TypeScript, Pothos)                                │
+│                                                                      │
+│  Replaces services/actions/api. Serves bridge UI.                    │
+│  Backed by same SurrealDB instance.                                  │
+│  SSE subscriptions via SurrealDB live queries.                       │
+│                                                                      │
+│  Queries:                                                            │
+│  - bridgeOperations(publicKey, type?, status?)                       │
+│  - bridgeOperation(aux, auxSequence)                                 │
+│  - outerActions, innerActions (for low-level action chain queries)   │
+└─────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="message-ordering-and-partial-records" tabindex="-1"><a class="header-anchor" href="#message-ordering-and-partial-records">Message ordering and partial records</a></h3>
+<p>NATS JetStream delivers messages in order within a stream. But events from different streams arrive independently — the L1 outer witness may arrive before or after the L2 inner action.</p>
+<p>The indexer handles this with a <strong>first-side-wins</strong> strategy:</p>
+<ol>
+<li>Whichever NATS message references a bridge operation first creates the <code>bridge_operation</code> record.</li>
+<li>Subsequent messages for the same operation (matched by aux + FIFO sequence) update the existing record.</li>
+<li>Status is recalculated after every update based on which fields are populated.</li>
+</ol>
+<p>For example: a deposit might be created by <code>zeko.l1.bridge-events</code> (with user PK and amount), then updated by <code>zeko.l1.outer-actions</code> (adding L1 witness data), then updated by <code>zeko.l2.transactions</code> (adding L2 completion data).</p>
+<h3 id="rollback-handling-in-the-new-system" tabindex="-1"><a class="header-anchor" href="#rollback-handling-in-the-new-system">Rollback handling in the new system</a></h3>
+<p><strong>L1 fork (via <code>zeko.l1.rollbacks</code>):</strong></p>
+<p>The L1 Watcher detects block orphaning and publishes to <code>zeko.l1.rollbacks</code> with affected block details. The indexer:</p>
+<ol>
+<li>Identifies <code>outer_action</code> records at the affected block heights.</li>
+<li>Deletes those <code>outer_action</code> records and their <code>l1_action_link</code> edges.</li>
+<li>Recalculates status of linked <code>bridge_operation</code> records — e.g., a deposit that was <code>COMMITTED</code> reverts to <code>L1_WITNESSED</code> if only the commit was in the rolled-back block, or to an earlier state if the witness was also rolled back.</li>
+</ol>
+<p><strong>L2 rollback (consumer-side hash chain break on <code>zeko.l2.transactions</code>):</strong></p>
+<p>The indexer checks hash chain continuity on every incoming L2 transaction message (PRD Section 7.5):</p>
+<ul>
+<li><code>M[n].source_ledger_hash</code> must equal <code>M[n-1].target_ledger_hash</code>.</li>
+<li>If <code>M[n].source</code> matches an earlier <code>M[k].target</code>, messages <code>M[k+1]..M[n-1]</code> were rolled back. The indexer reverts <code>inner_action</code> records from those transactions, removes their <code>l2_action_link</code> edges, and recalculates affected <code>bridge_operation</code> status.</li>
+<li>If <code>M[n].source</code> is unknown, it's a gap — the indexer pauses and calls the Backfill Service.</li>
+</ul>
+<p>There is <strong>no <code>zeko.l2.rollbacks</code> NATS stream</strong>. L2 rollback detection is entirely consumer-side.</p>
+<hr>
+<h2 id="7-surrealdb-schema" tabindex="-1"><a class="header-anchor" href="#7-surrealdb-schema">7. SurrealDB Schema</a></h2>
+<h3 id="tables" tabindex="-1"><a class="header-anchor" href="#tables">Tables</a></h3>
+<p>Three tables plus two graph relation tables:</p>
+<p><strong><code>outer_action</code></strong> — flattened from PostgreSQL's <code>outer_actions</code> + <code>commit_actions</code> + <code>witness_actions</code>. Commit-specific and witness-specific fields are optional columns. Record ID: <code>outer_action:⟨after_state⟩</code>.</p>
+<pre><code class="language-surql">DEFINE TABLE outer_action SCHEMAFULL;
+
+DEFINE FIELD after_state       ON outer_action TYPE string;
+DEFINE FIELD before_state      ON outer_action TYPE option&lt;string&gt;;
+DEFINE FIELD kind              ON outer_action TYPE string
+  ASSERT $value IN [&quot;commit&quot;, &quot;witness&quot;];
+DEFINE FIELD index             ON outer_action TYPE int;
+DEFINE FIELD block_height      ON outer_action TYPE int;
+DEFINE FIELD timestamp         ON outer_action TYPE datetime;
+DEFINE FIELD txn_hash          ON outer_action TYPE string;
+DEFINE FIELD fields            ON outer_action TYPE array&lt;string&gt;;
+DEFINE FIELD slot_range_lower  ON outer_action TYPE int;
+DEFINE FIELD slot_range_upper  ON outer_action TYPE int;
+DEFINE FIELD created_at        ON outer_action TYPE datetime DEFAULT time::now();
+DEFINE FIELD marked_as_canonical_at ON outer_action TYPE option&lt;datetime&gt;;
+
+-- Commit-specific (NULL for witnesses)
+DEFINE FIELD ledger                              ON outer_action TYPE option&lt;string&gt;;
+DEFINE FIELD inner_action_state                  ON outer_action TYPE option&lt;string&gt;;
+DEFINE FIELD inner_action_state_length           ON outer_action TYPE option&lt;int&gt;;
+DEFINE FIELD synchronized_outer_action_state     ON outer_action TYPE option&lt;string&gt;;
+DEFINE FIELD synchronized_outer_action_state_length ON outer_action TYPE option&lt;int&gt;;
+
+-- Witness-specific (NULL for commits)
+DEFINE FIELD aux ON outer_action TYPE option&lt;string&gt;;
+
+DEFINE INDEX idx_oa_after_state   ON outer_action FIELDS after_state   UNIQUE;
+DEFINE INDEX idx_oa_before_state  ON outer_action FIELDS before_state;
+DEFINE INDEX idx_oa_index         ON outer_action FIELDS index         UNIQUE;
+DEFINE INDEX idx_oa_aux           ON outer_action FIELDS aux;
+DEFINE INDEX idx_oa_canonical     ON outer_action FIELDS marked_as_canonical_at;
+DEFINE INDEX idx_oa_kind          ON outer_action FIELDS kind;
+DEFINE INDEX idx_oa_block_height  ON outer_action FIELDS block_height;
+</code></pre>
+<p><strong><code>inner_action</code></strong> — from PostgreSQL's <code>inner_actions</code>. Record ID: <code>inner_action:⟨after_state⟩</code>.</p>
+<pre><code class="language-surql">DEFINE TABLE inner_action SCHEMAFULL;
+
+DEFINE FIELD after_state       ON inner_action TYPE string;
+DEFINE FIELD before_state      ON inner_action TYPE option&lt;string&gt;;
+DEFINE FIELD index             ON inner_action TYPE int;
+DEFINE FIELD block_height      ON inner_action TYPE int;
+DEFINE FIELD timestamp         ON inner_action TYPE datetime;
+DEFINE FIELD txn_hash          ON inner_action TYPE string;
+DEFINE FIELD fields            ON inner_action TYPE array&lt;string&gt;;
+DEFINE FIELD created_at        ON inner_action TYPE datetime DEFAULT time::now();
+DEFINE FIELD marked_as_canonical_at ON inner_action TYPE option&lt;datetime&gt;;
+DEFINE FIELD aux               ON inner_action TYPE string;
+
+DEFINE INDEX idx_ia_after_state   ON inner_action FIELDS after_state   UNIQUE;
+DEFINE INDEX idx_ia_before_state  ON inner_action FIELDS before_state;
+DEFINE INDEX idx_ia_index         ON inner_action FIELDS index         UNIQUE;
+DEFINE INDEX idx_ia_aux           ON inner_action FIELDS aux;
+DEFINE INDEX idx_ia_canonical     ON inner_action FIELDS marked_as_canonical_at;
+DEFINE INDEX idx_ia_block_height  ON inner_action FIELDS block_height;
+</code></pre>
+<p><strong><code>bridge_operation</code></strong> — new. Record ID: <code>bridge_operation:⟨{aux}_{aux_sequence}⟩</code>.</p>
+<pre><code class="language-surql">DEFINE TABLE bridge_operation SCHEMAFULL;
+
+-- Identity
+DEFINE FIELD type              ON bridge_operation TYPE string
+  ASSERT $value IN [&quot;deposit&quot;, &quot;withdrawal&quot;];
+DEFINE FIELD status            ON bridge_operation TYPE string
+  ASSERT $value IN [
+    &quot;submitted&quot;, &quot;l1_witnessed&quot;, &quot;l2_witnessed&quot;, &quot;committed&quot;,
+    &quot;delay_passed&quot;, &quot;completed&quot;, &quot;timed_out&quot;, &quot;cancelled&quot;, &quot;rolled_back&quot;
+  ];
+
+-- Correlation key
+DEFINE FIELD aux               ON bridge_operation TYPE string;
+DEFINE FIELD aux_sequence      ON bridge_operation TYPE int DEFAULT 0;
+
+-- User-facing fields
+DEFINE FIELD sender            ON bridge_operation TYPE string;
+DEFINE FIELD recipient         ON bridge_operation TYPE string;
+DEFINE FIELD amount            ON bridge_operation TYPE string;
+
+-- Submission (the canonical fact — WEB-415)
+DEFINE FIELD submit_tx_hash    ON bridge_operation TYPE string;
+DEFINE FIELD submit_block_height ON bridge_operation TYPE int;
+DEFINE FIELD submit_timestamp  ON bridge_operation TYPE datetime;
+
+-- Deposit-specific
+DEFINE FIELD timeout_slot      ON bridge_operation TYPE option&lt;int&gt;;
+DEFINE FIELD holder_account_l1 ON bridge_operation TYPE option&lt;string&gt;;
+
+-- L1 witness side
+DEFINE FIELD l1_witness_action_state ON bridge_operation TYPE option&lt;string&gt;;
+DEFINE FIELD l1_witness_tx_hash ON bridge_operation TYPE option&lt;string&gt;;
+DEFINE FIELD l1_witness_block_height ON bridge_operation TYPE option&lt;int&gt;;
+DEFINE FIELD l1_witness_timestamp ON bridge_operation TYPE option&lt;datetime&gt;;
+DEFINE FIELD l1_slot_range_lower ON bridge_operation TYPE option&lt;int&gt;;
+DEFINE FIELD l1_slot_range_upper ON bridge_operation TYPE option&lt;int&gt;;
+
+-- L2 side
+DEFINE FIELD l2_action_state   ON bridge_operation TYPE option&lt;string&gt;;
+DEFINE FIELD l2_tx_hash        ON bridge_operation TYPE option&lt;string&gt;;
+DEFINE FIELD l2_block_height   ON bridge_operation TYPE option&lt;int&gt;;
+DEFINE FIELD l2_timestamp      ON bridge_operation TYPE option&lt;datetime&gt;;
+
+-- Commit reference
+DEFINE FIELD commit_action_state ON bridge_operation TYPE option&lt;string&gt;;
+
+-- Cancel reference
+DEFINE FIELD cancel_tx_hash    ON bridge_operation TYPE option&lt;string&gt;;
+
+-- Metadata
+DEFINE FIELD created_at        ON bridge_operation TYPE datetime DEFAULT time::now();
+DEFINE FIELD updated_at        ON bridge_operation TYPE datetime DEFAULT time::now();
+
+-- Per-user indexes (the key improvement)
+DEFINE INDEX idx_bo_sender     ON bridge_operation FIELDS sender;
+DEFINE INDEX idx_bo_recipient  ON bridge_operation FIELDS recipient;
+DEFINE INDEX idx_bo_aux        ON bridge_operation FIELDS aux;
+DEFINE INDEX idx_bo_aux_unique ON bridge_operation FIELDS aux, aux_sequence UNIQUE;
+DEFINE INDEX idx_bo_status     ON bridge_operation FIELDS status;
+DEFINE INDEX idx_bo_type_status ON bridge_operation FIELDS type, status;
+DEFINE INDEX idx_bo_sender_type ON bridge_operation FIELDS sender, type;
+DEFINE INDEX idx_bo_recipient_type ON bridge_operation FIELDS recipient, type;
+DEFINE INDEX idx_bo_submit_tx  ON bridge_operation FIELDS submit_tx_hash;
+DEFINE INDEX idx_bo_l1_witness ON bridge_operation FIELDS l1_witness_action_state;
+DEFINE INDEX idx_bo_l2_action  ON bridge_operation FIELDS l2_action_state;
+DEFINE INDEX idx_bo_commit     ON bridge_operation FIELDS commit_action_state;
+DEFINE INDEX idx_bo_created    ON bridge_operation FIELDS created_at;
+</code></pre>
+<h3 id="graph-edges" tabindex="-1"><a class="header-anchor" href="#graph-edges">Graph edges</a></h3>
+<pre><code class="language-surql">DEFINE TABLE l1_action_link TYPE RELATION IN outer_action OUT bridge_operation SCHEMAFULL;
+DEFINE FIELD role ON l1_action_link TYPE string ASSERT $value IN [&quot;witness&quot;, &quot;commit&quot;];
+DEFINE FIELD created_at ON l1_action_link TYPE datetime DEFAULT time::now();
+DEFINE INDEX idx_l1_link_in  ON l1_action_link FIELDS in;
+DEFINE INDEX idx_l1_link_out ON l1_action_link FIELDS out;
+
+DEFINE TABLE l2_action_link TYPE RELATION IN bridge_operation OUT inner_action SCHEMAFULL;
+DEFINE FIELD role ON l2_action_link TYPE string ASSERT $value IN [&quot;mint&quot;, &quot;burn&quot;];
+DEFINE FIELD created_at ON l2_action_link TYPE datetime DEFAULT time::now();
+DEFINE INDEX idx_l2_link_in  ON l2_action_link FIELDS in;
+DEFINE INDEX idx_l2_link_out ON l2_action_link FIELDS out;
+</code></pre>
+<h3 id="key-queries" tabindex="-1"><a class="header-anchor" href="#key-queries">Key queries</a></h3>
+<pre><code class="language-surql">-- Per-user bridge history (replaces findDeposits/findWithdrawals archive scan)
+SELECT * FROM bridge_operation
+WHERE sender = $pk OR recipient = $pk
+ORDER BY created_at DESC LIMIT 20;
+
+-- Full bridge op with linked actions (graph traversal)
+SELECT *,
+  &lt;-l1_action_link&lt;-outer_action AS l1_actions,
+  -&gt;l2_action_link-&gt;inner_action AS l2_actions
+FROM bridge_operation WHERE aux = $aux AND aux_sequence = $seq;
+
+-- Timed-out deposits (for timeout detection)
+SELECT * FROM bridge_operation
+WHERE type = &quot;deposit&quot;
+  AND status IN [&quot;submitted&quot;, &quot;l1_witnessed&quot;, &quot;committed&quot;]
+  AND timeout_slot IS NOT NONE
+  AND timeout_slot &lt; $current_slot;
+
+-- Live query: subscribe to status changes for a user
+LIVE SELECT * FROM bridge_operation WHERE sender = $pk OR recipient = $pk;
+
+-- Action chain queries (for low-level indexer needs)
+SELECT * FROM outer_action WHERE kind = &quot;commit&quot; ORDER BY index;
+SELECT * FROM inner_action WHERE aux = $aux ORDER BY index;
+</code></pre>
+<hr>
+<h2 id="8-bridge-graphql-api" tabindex="-1"><a class="header-anchor" href="#8-bridge-graphql-api">8. Bridge GraphQL API</a></h2>
+<p>The Bridge GraphQL API replaces <code>services/actions/api</code> entirely. The bridge SDK, UI, and CLI will be updated to use the new API. No backward compatibility with the old 5-query interface is needed.</p>
+<h3 id="graphql-types" tabindex="-1"><a class="header-anchor" href="#graphql-types">GraphQL types</a></h3>
+<pre><code class="language-graphql">enum BridgeType { DEPOSIT, WITHDRAWAL }
+enum BridgeStatus {
+  SUBMITTED, L1_WITNESSED, L2_WITNESSED, COMMITTED, DELAY_PASSED,
+  COMPLETED, TIMED_OUT, CANCELLED, ROLLED_BACK
+}
+
+type BridgeOperation {
+  id: ID!
+  type: BridgeType!
+  status: BridgeStatus!
+  aux: String!
+  auxSequence: Int!
+  sender: String!
+  recipient: String!
+  amount: String!
+
+  # Submission (the canonical fact — WEB-415)
+  submitTxHash: String!
+  submitBlockHeight: Int!
+  submitTimestamp: String!
+
+  # Deposit-specific
+  timeoutSlot: Int
+  holderAccountL1: String
+
+  # Witness/commit/completion
+  l1WitnessTxHash: String
+  l1WitnessBlockHeight: Int
+  l1WitnessTimestamp: String
+  l2TxHash: String
+  l2BlockHeight: Int
+  l2Timestamp: String
+  cancelTxHash: String
+
+  # Graph-traversed linked actions
+  l1Actions: [OuterAction!]!
+  l2Actions: [InnerAction!]!
+
+  createdAt: String!
+  updatedAt: String!
+}
+
+type BridgeOperationConnection {
+  edges: [BridgeOperationEdge!]!
+  pageInfo: PageInfo!
+}
+</code></pre>
+<h3 id="queries" tabindex="-1"><a class="header-anchor" href="#queries">Queries</a></h3>
+<pre><code class="language-graphql">type Query {
+  # Primary query — replaces findDeposits/findWithdrawals archive scan
+  bridgeOperations(
+    publicKey: String!
+    type: BridgeType
+    status: BridgeStatus
+    first: Int
+    after: String
+  ): BridgeOperationConnection!
+
+  # Single operation detail with linked actions
+  bridgeOperation(aux: String!, auxSequence: Int!): BridgeOperation
+
+  # Low-level action chain queries (for indexer/debugging)
+  outerActions(afterState: String, limit: Int): [OuterAction!]!
+  innerActions(afterState: String, limit: Int): [InnerAction!]!
+}
+
+type Subscription {
+  # Live updates for a user's bridge operations
+  bridgeOperationUpdated(publicKey: String!): BridgeOperation!
+}
+</code></pre>
+<h3 id="what-changes-in-the-bridge-sdkuicli" tabindex="-1"><a class="header-anchor" href="#what-changes-in-the-bridge-sdkuicli">What changes in the bridge SDK/UI/CLI</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Current behavior</th>
+<th>New behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>findDeposits(pk)</code></td>
+<td>Scans all actions on user's PK from L1 archive</td>
+<td><code>bridgeOperations(pk, type: DEPOSIT)</code></td>
+</tr>
+<tr>
+<td><code>findWithdrawals(pk)</code></td>
+<td>Scans all actions on user's PK from L1 archive</td>
+<td><code>bridgeOperations(pk, type: WITHDRAWAL)</code></td>
+</tr>
+<tr>
+<td><code>prevNextDeposit</code> ordering</td>
+<td>Client-side FIFO matching via on-chain counters</td>
+<td>Server-side <code>aux_sequence</code> already resolved</td>
+</tr>
+<tr>
+<td>Deposit state derivation</td>
+<td>Client combines archive data + indexer data + on-chain state</td>
+<td>Single <code>status</code> field from API</td>
+</tr>
+<tr>
+<td>Bridge bootstrap on page load</td>
+<td>Multiple archive calls per wallet</td>
+<td>Single paginated API call</td>
+</tr>
+<tr>
+<td>Real-time updates</td>
+<td>20s polling (<code>POLL_INTERVAL</code> in <code>bridgeOperation.ts</code>)</td>
+<td>SSE subscription via <code>bridgeOperationUpdated</code></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="9-dependencies-on-other-spikes" tabindex="-1"><a class="header-anchor" href="#9-dependencies-on-other-spikes">9. Dependencies on Other Spikes</a></h2>
+<table>
+<thead>
+<tr>
+<th>Dependency</th>
+<th>What this spike needs</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Spike 006 — L1 Watcher</strong></td>
+<td>Exact schema for <code>zeko.l1.bridge-events</code> and <code>zeko.l1.outer-actions</code> NATS messages. How the L1 Watcher detects user deposit/withdrawal/cancel transactions. How it extracts user PKs and computes aux.</td>
+<td>Not started</td>
+</tr>
+<tr>
+<td><strong>Spike 001 — Sequencer Connector</strong></td>
+<td>NATS message format for <code>zeko.l2.transactions</code> (contains inner actions). Hash chain continuity model for L2 rollback detection.</td>
+<td>Complete</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>zeko.l1.bridge-events</code> schema is the most significant dependency. This spike has established WHAT data must be in those messages (user PK, operation type, aux, amount, recipient, timeout for deposits, block height, tx hash) and WHY (to populate bridge_operation sender/recipient without archive scans). Spike 006 must design HOW the L1 Watcher extracts this data from L1 chain observation.</p>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/002-bridge-correlation/results.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

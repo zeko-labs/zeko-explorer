@@ -32,5 +32,9 @@
       "formatter": { "language_server": { "name": "biome" } },
       "language_servers": ["biome", "!oxc", "!oxlint", "!oxfmt", "..."]
     }
+  },
+  "file_types": {
+    "YAML": ["*.kyaml", "*.kyaml.yaml"],
+    "Dockerfile": ["Dockerfile.*"]
   }
 }

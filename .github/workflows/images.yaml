@@ -17,11 +17,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - l1-watcher
-          - zeko-indexer
-          - explorer-api
-          - bridge-api
+        include:
+          - image: l1-watcher
+            project: services/l1-watcher
+          - image: zeko-indexer
+            project: services/zeko-indexer
+          - image: explorer-api
+            project: services/explorer-api
+          - image: bridge-api
+            project: services/bridge-api
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,7 +52,7 @@ jobs:
           IMAGE: gcr.io/${{ vars.GCP_PROJECT_ID }}/${{ matrix.image }}
         run: |
           docker build \
-            --file "infra/docker/${{ matrix.image }}.Dockerfile" \
+            --file "${{ matrix.project }}/Dockerfile" \
             --tag "${IMAGE}:${GITHUB_SHA}" \
             .
           docker push "${IMAGE}:${GITHUB_SHA}"

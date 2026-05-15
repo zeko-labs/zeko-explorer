@@ -8,9 +8,9 @@ tasks:
   acceptance:
     command: "cucumber-js"
     args:
-      - "acceptance/**/*.feature"
+      - "tests/acceptance/**/*.feature"
       - "--import"
-      - "acceptance/steps/*.mjs"
+      - "tests/acceptance/steps/*.mjs"
       - "--format"
       - "progress"
     inputs:
@@ -18,3 +18,5 @@ tasks:
       - "/infra/**/*"
       - "/package.json"
       - "/pnpm-lock.yaml"
+    options:
+      runFromWorkspaceRoot: true

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Addendum: Archive Sync Performance and the New Architecture</title>
+  <style>
+:root {
+  --bg: #08111f;
+  --panel: #101c2f;
+  --panel-2: #152842;
+  --ink: #e8eef8;
+  --muted: #a8b7cc;
+  --line: #2d405b;
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --violet: #a78bfa;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 31rem),
+    radial-gradient(circle at 88% 8%, rgba(167,139,250,.13), transparent 33rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.62;
+  overflow-x: hidden;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page { width: calc(100% - 40px); max-width: 1200px; margin: 0 auto; padding: 34px 0 78px; }
+.hero, .content-card, .toc {
+  background: linear-gradient(180deg, rgba(16,28,47,.98), rgba(9,20,36,.98));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.23);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 24px; padding: 30px; margin-bottom: 20px; min-width: 0; }
+.hero > *, .layout > * { min-width: 0; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+h1 { margin: 12px 0 12px; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.04; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 80ch; margin: 0; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 13px; }
+.pill strong { color: var(--ink); }
+.quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+.quick-nav a { color: var(--ink); background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.32); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.map { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #081425; display: grid; place-items: center; min-height: 260px; min-width: 0; }
+.map svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 22px; align-items: start; min-width: 0; }
+.toc { position: sticky; top: 18px; padding: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+.toc h2 { font-size: 13px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a, .toc-empty { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.toc-level-3 { padding-left: 24px !important; font-size: 13px !important; }
+.content-card { padding: 30px; overflow: hidden; min-width: 0; }
+.content-card h1 { font-size: 38px; }
+.content-card h2 { margin: 34px 0 14px; font-size: 27px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content-card h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+.content-card h4 { margin: 22px 0 8px; color: var(--cyan); font-size: 16px; }
+.content-card h5, .content-card h6 { color: var(--ink); }
+.content-card h1:first-child { margin-top: 0; }
+p { color: var(--muted); margin: 0 0 14px; }
+ul, ol { color: var(--muted); padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+li > p { margin: 6px 0; }
+strong { color: var(--ink); }
+em { color: #d6e4f5; }
+code { color: #ddd6fe; background: rgba(221,214,254,.08); border: 1px solid rgba(221,214,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; border-radius: 0; }
+.table-wrap { width: 100%; overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; }
+th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--ink); background: rgba(96,165,250,.13); font-size: 13px; }
+td { color: var(--muted); font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+blockquote { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--amber); background: rgba(251,191,36,.08); border-radius: 10px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+img { max-width: 100%; height: auto; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) {
+  .page { width: calc(100% - 24px); max-width: 1200px; padding-top: 18px; }
+  .hero, .layout { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .content-card { padding: 22px; }
+  .hero { padding: 22px; }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">spikes/001-sequencer-connector/addendums/addendum-sync-performance.md</div>
+        <h1>Addendum: Archive Sync Performance and the New Architecture</h1>
+        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <div class="meta"><span class="pill"><strong>Lines</strong>96</span><span class="pill"><strong>Sections</strong>9</span><span class="pill"><strong>Tables</strong>2</span><span class="pill"><strong>Code blocks</strong>1</span></div>
+        <nav class="quick-nav"><a href="../README.md">README</a><a href="../results.html">Results</a></nav>
+      </div>
+      <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
+  <rect width="560" height="260" rx="18" fill="#081425"/>
+  <g stroke="#22344d" opacity=".55"><path d="M0 52H560M0 104H560M0 156H560M0 208H560"/><path d="M70 0V260M140 0V260M210 0V260M280 0V260M350 0V260M420 0V260M490 0V260"/></g>
+  <text x="38" y="58" fill="#e6edf7" font-size="24" font-weight="800">Document map</text>
+  <text x="38" y="92" fill="#9fb0c7" font-size="14">828 words</text>
+  <rect x="38" y="122" width="484" height="70" rx="14" fill="#10233d" stroke="#2b3d57"/>
+  <rect x="38" y="148" width="323" height="18" rx="9" fill="#22d3ee"/><text x="38" y="188" fill="#9fb0c7" font-size="13">Sections: 9</text><rect x="375" y="148" width="72" height="18" rx="9" fill="#34d399"/><text x="375" y="188" fill="#9fb0c7" font-size="13">Tables: 2</text><rect x="461" y="148" width="36" height="18" rx="9" fill="#a78bfa"/><text x="461" y="188" fill="#9fb0c7" font-size="13">Code: 1</text>
+  <text x="38" y="226" fill="#9fb0c7" font-size="13">Generated from markdown for easier reading and navigation.</text>
+</svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc" aria-label="Table of contents">
+        <h2>On This Page</h2>
+        <a class="toc-level-2" href="#the-problem-today">The Problem Today</a>
+<a class="toc-level-2" href="#how-the-new-architecture-eliminates-this-bottleneck">How the New Architecture Eliminates This Bottleneck</a>
+<a class="toc-level-3" href="#real-time-path-sequencer-nats">Real-Time Path (Sequencer → NATS)</a>
+<a class="toc-level-3" href="#bootstrap-path-da-layer-backfill-nats">Bootstrap Path (DA Layer → Backfill → NATS)</a>
+<a class="toc-level-3" href="#estimated-improvement">Estimated Improvement</a>
+<a class="toc-level-3" href="#further-optimization-parallelized-da-fetching">Further Optimization: Parallelized DA Fetching</a>
+<a class="toc-level-3" href="#pre-seeded-nats-streams">Pre-Seeded NATS Streams</a>
+<a class="toc-level-3" href="#indexer-processing-speed">Indexer Processing Speed</a>
+      </aside>
+      <div>
+        <article class="content-card">
+<h1 id="addendum-archive-sync-performance-and-the-new-architecture" tabindex="-1"><a class="header-anchor" href="#addendum-archive-sync-performance-and-the-new-architecture">Addendum: Archive Sync Performance and the New Architecture</a></h1>
+<h2 id="the-problem-today" tabindex="-1"><a class="header-anchor" href="#the-problem-today">The Problem Today</a></h2>
+<p>From the <a href="https://docs.zeko.io/operators/guides/archive-node.html">archive node docs</a>:</p>
+<blockquote>
+<p>Synchronizing will take a long time. At the time of writing Zeko L2 testnet has 1 million transactions and would take at least a week to get it synced.</p>
+</blockquote>
+<p>The current archive relay syncs via this pipeline:</p>
+<pre><code>archive-relay ──poll(30s)──&gt; sequencer GraphQL (unprovedLedgerHash)
+     │
+     └──iter_diffs──&gt; DA layer (binary RPC, chunked)
+     │
+     └──apply to local ledger──&gt; build Mina breadcrumb
+     │
+     └──dispatch──&gt; archive node ──&gt; PostgreSQL
+</code></pre>
+<p>Each of the ~1M transactions must be:</p>
+<ol>
+<li>Fetched from the DA layer via binary RPC (chunked, with <code>interval_size</code> batching)</li>
+<li>Applied to a full local ledger copy (to compute merkle roots and build breadcrumbs)</li>
+<li>Serialized into a Mina <code>Transition_frontier</code> breadcrumb</li>
+<li>Dispatched to a Mina archive node via RPC</li>
+<li>Inserted into PostgreSQL by the archive node</li>
+</ol>
+<p>Steps 2-4 are the bottleneck — maintaining a full ledger copy and building Mina-compatible breadcrumbs is expensive and exists only because the Mina archive node expects data in that format. The Zeko explorer does not need Mina-compatible breadcrumbs.</p>
+<h2 id="how-the-new-architecture-eliminates-this-bottleneck" tabindex="-1"><a class="header-anchor" href="#how-the-new-architecture-eliminates-this-bottleneck">How the New Architecture Eliminates This Bottleneck</a></h2>
+<h3 id="real-time-path-sequencer-nats" tabindex="-1"><a class="header-anchor" href="#real-time-path-sequencer-nats">Real-Time Path (Sequencer → NATS)</a></h3>
+<p>New transactions are published to NATS at the moment they are applied — zero latency, no polling. This path does not involve the DA layer at all for new transactions. The week-long sync problem does not apply to real-time operation.</p>
+<h3 id="bootstrap-path-da-layer-backfill-nats" tabindex="-1"><a class="header-anchor" href="#bootstrap-path-da-layer-backfill-nats">Bootstrap Path (DA Layer → Backfill → NATS)</a></h3>
+<p>For initial bootstrap of the ~1M historical transactions, the backfill service calls <code>Da_layer.Client.iter_diffs</code> and publishes each diff directly to NATS as JSON. Compared to the archive relay:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Archive Relay</th>
+<th>Backfill Service</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fetch diff from DA</td>
+<td>Binary RPC (same)</td>
+<td>Binary RPC (same)</td>
+</tr>
+<tr>
+<td>Apply to local ledger</td>
+<td>Full ledger copy, merkle root computation</td>
+<td><strong>Skipped</strong> — diff already contains all needed data</td>
+</tr>
+<tr>
+<td>Build breadcrumb</td>
+<td>Mina <code>Transition_frontier</code> serialization</td>
+<td><strong>Skipped</strong> — not needed</td>
+</tr>
+<tr>
+<td>Dispatch to archive</td>
+<td>Mina archive node RPC</td>
+<td><strong>Skipped</strong> — not needed</td>
+</tr>
+<tr>
+<td>Store</td>
+<td>PostgreSQL insert via archive node</td>
+<td>NATS publish (append to stream)</td>
+</tr>
+<tr>
+<td>Per-diff overhead</td>
+<td>~5 operations, each blocking</td>
+<td><strong>1 operation</strong> — serialize JSON + NATS publish</td>
+</tr>
+</tbody>
+</table>
+<p>The backfill service skips the three most expensive steps (ledger maintenance, breadcrumb construction, archive dispatch) because NATS just needs the raw diff as JSON. The <code>Da_layer.Diff.V3</code> already has <code>[@@deriving yojson]</code>, so serialization is a single function call.</p>
+<h3 id="estimated-improvement" tabindex="-1"><a class="header-anchor" href="#estimated-improvement">Estimated Improvement</a></h3>
+<p>The DA layer fetch (binary RPC, chunked) is the I/O-bound floor — both approaches must do this. The archive relay adds CPU-bound ledger operations and synchronous archive dispatch on top. Rough breakdown of where time goes in the archive relay:</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Est. Share</th>
+<th>New Architecture</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DA layer fetch (I/O)</td>
+<td>~20%</td>
+<td>Same</td>
+</tr>
+<tr>
+<td>Ledger apply + merkle root</td>
+<td>~30%</td>
+<td>Eliminated</td>
+</tr>
+<tr>
+<td>Breadcrumb construction</td>
+<td>~20%</td>
+<td>Eliminated</td>
+</tr>
+<tr>
+<td>Archive dispatch + PG insert</td>
+<td>~30%</td>
+<td>Replaced with NATS publish (~0%)</td>
+</tr>
+</tbody>
+</table>
+<p>A conservative estimate: the backfill service should process the same 1M transactions in <strong>~1/4 the time</strong> (limited by DA layer fetch speed), bringing a week-long sync down to ~1-2 days. The actual improvement depends on DA layer throughput and network conditions.</p>
+<h3 id="further-optimization-parallelized-da-fetching" tabindex="-1"><a class="header-anchor" href="#further-optimization-parallelized-da-fetching">Further Optimization: Parallelized DA Fetching</a></h3>
+<p>The <code>iter_diffs</code> call processes chunks sequentially. If the DA layer supports multiple concurrent connections, the backfill service could parallelize by:</p>
+<ol>
+<li>Querying the DA layer for known intermediate ledger hashes (e.g., from the L1 commit history)</li>
+<li>Splitting the range into N parallel sub-ranges</li>
+<li>Running N concurrent <code>iter_diffs</code> calls, each publishing to NATS independently</li>
+<li>JetStream deduplication handles any overlaps at range boundaries</li>
+</ol>
+<p>This would further reduce bootstrap time proportionally to the number of parallel workers, limited by DA layer capacity.</p>
+<h3 id="pre-seeded-nats-streams" tabindex="-1"><a class="header-anchor" href="#pre-seeded-nats-streams">Pre-Seeded NATS Streams</a></h3>
+<p>The archive node docs suggest contacting Zeko Labs for pre-synced database checkpoints. The NATS equivalent is simpler: a pre-seeded JetStream data directory.</p>
+<ol>
+<li>Run the backfill service once on a staging machine to populate a NATS stream with all 1M transactions</li>
+<li>Snapshot the JetStream data directory (<code>/data/jetstream/</code>)</li>
+<li>Distribute the snapshot (tar/zip) to new operators</li>
+<li>Operators start NATS with the pre-seeded data directory</li>
+<li>The indexer starts from sequence 1 and processes locally — no DA layer fetch needed</li>
+<li>The sequencer connects and publishes new transactions from current state</li>
+</ol>
+<p>This eliminates the DA layer fetch entirely for new deployments. The NATS data directory is a self-contained, portable representation of the full transaction history.</p>
+<h3 id="indexer-processing-speed" tabindex="-1"><a class="header-anchor" href="#indexer-processing-speed">Indexer Processing Speed</a></h3>
+<p>Once diffs are in NATS (whether from bootstrap or pre-seeded), the indexer processes them locally:</p>
+<ol>
+<li>Read JSON from NATS (local, fast)</li>
+<li>Parse and transform to SurrealDB records</li>
+<li>Insert into SurrealDB</li>
+</ol>
+<p>This is CPU-bound JSON processing + DB writes — no network fetches, no ledger maintenance. The indexer should process 1M transactions in hours, not days, depending on SurrealDB write throughput.</p>
+
+        </article>
+      </div>
+    </section>
+    <footer>Converted from spikes/001-sequencer-connector/addendums/addendum-sync-performance.md</footer>
+  </main>
+  <script>
+    document.querySelectorAll('article table').forEach((table) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrap';
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  </script>
+</body>
+</html>

@@ -18,7 +18,7 @@ RUN curl -fsSL https://moonrepo.dev/install/proto.sh | bash -s -- --yes \
 
 FROM base AS skeleton
 COPY . .
-RUN moon docker scaffold l1-watcher zeko-indexer explorer-api bridge-api
+RUN moon docker scaffold zeko-indexer
 
 FROM base AS build
 COPY --from=skeleton /app/.moon/docker/configs .
@@ -26,12 +26,10 @@ COPY --from=skeleton /app/.prototools ./.prototools
 COPY --from=skeleton /app/tsconfig.base.json ./tsconfig.base.json
 RUN moon docker setup
 COPY --from=skeleton /app/.moon/docker/sources .
-RUN moon run bridge-api:build
+RUN moon run zeko-indexer:build
 RUN moon docker prune
 
 FROM base AS runtime
 ENV NODE_ENV=production
-ENV PORT=4102
-EXPOSE 4102
 COPY --from=build /app /app
-CMD ["node", "services/bridge-api/dist/index.mjs"]
+CMD ["node", "services/zeko-indexer/dist/index.mjs"]

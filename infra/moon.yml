@@ -16,9 +16,9 @@ tasks:
   build-local-images:
     command: "./local/docker-desktop/build-local-images.sh"
     inputs:
-      - "docker/**/*"
       - "/apps/*/src/**/*"
       - "/services/*/src/**/*"
+      - "/services/*/Dockerfile"
       - "/packages/*/src/**/*"
       - "/.moon/**/*"
       - "/.prototools"
