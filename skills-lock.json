@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "codex-review": {
+      "source": "Hebilicious/skills",
+      "sourceType": "github",
+      "skillPath": "codex-review/SKILL.md",
+      "computedHash": "cdb0b73317047888cdedc83fbe6e446075642593d0ef201a3b90268d36d66605"
+    }
+  }
+}
