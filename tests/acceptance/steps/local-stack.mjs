@@ -28,7 +28,7 @@ When("a developer runs {string}", function (command) {
 
 Then("NATS JetStream is running in namespace {string}", function (namespace) {
   assert.equal(namespace, "zeko-m-local");
-  const nats = read("infra/k8s/chart/zeko-explorer/templates/nats.kyaml.yaml");
+  const nats = read("infra/k8s/chart/zeko-explorer/templates/nats.tpl");
   assert.match(nats, /kind:\s+StatefulSet/);
   assert.match(nats, /name:\s+nats/);
   assert.match(nats, /args:\s+\["-js"/);
@@ -36,7 +36,7 @@ Then("NATS JetStream is running in namespace {string}", function (namespace) {
 
 Then("SurrealDB is running in namespace {string}", function (namespace) {
   assert.equal(namespace, "zeko-m-local");
-  const surrealdb = read("infra/k8s/chart/zeko-explorer/templates/surrealdb.kyaml.yaml");
+  const surrealdb = read("infra/k8s/chart/zeko-explorer/templates/surrealdb.tpl");
   assert.match(surrealdb, /kind:\s+StatefulSet/);
   assert.match(surrealdb, /name:\s+surrealdb/);
 });
@@ -61,7 +61,7 @@ Then("the L1 Watcher is disabled unless explicitly enabled", function () {
 });
 
 Then("no DA Monitor workload is created", function () {
-  assert.doesNotMatch(read("infra/k8s/chart/zeko-explorer/templates/apps.kyaml.yaml"), /da-monitor/);
+  assert.doesNotMatch(read("infra/k8s/chart/zeko-explorer/templates/apps.tpl"), /da-monitor/);
 });
 
 Then("{string} reaches the Explorer API", function (binding) {

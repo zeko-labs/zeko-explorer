@@ -34,7 +34,8 @@
     }
   },
   "file_types": {
-    "YAML": ["*.kyaml", "*.kyaml.yaml"],
+    "YAML": ["*.kyaml"],
+    "Plain Text": ["*.tpl"],
     "Dockerfile": ["Dockerfile.*"]
   }
 }

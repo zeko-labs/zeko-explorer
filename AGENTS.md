@@ -7,5 +7,5 @@
 - Use PNPM catalog entries for external JavaScript dependencies.
 - Use Biome for linting and formatting. Do not add ESLint, Prettier, oxlint, or oxfmt.
 - Use `wrangler.jsonc` and generated Wrangler Env types for Cloudflare Workers.
-- Use `.kyaml` for Kubernetes values and templates; validate rendered Helm output.
+- Use `.kyaml` for Kubernetes values. Use `.tpl` for Helm template sources so YAML tooling only parses rendered manifests.
 - Keep `apps/` for consumer surfaces and `services/` for backend services.
