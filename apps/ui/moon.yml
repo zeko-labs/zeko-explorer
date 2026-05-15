@@ -12,6 +12,9 @@ fileGroups:
     - "package.json"
     - "tsconfig.json"
     - "/tsconfig.base.json"
+  workspaceDeps:
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
   tests:
     - "tests/**/*"
     - "app/**/*.test.ts"
@@ -27,9 +30,7 @@ tasks:
     args: ["build"]
     inputs:
       - "@group(sources)"
-      - "/pnpm-lock.yaml"
-      - "/pnpm-workspace.yaml"
-      - "/tsconfig.base.json"
+      - "@group(workspaceDeps)"
     outputs:
       - ".output"
 
@@ -43,6 +44,4 @@ tasks:
     script: "nuxt prepare && tsgo --project tsconfig.json --noEmit"
     inputs:
       - "@group(sources)"
-      - "/pnpm-lock.yaml"
-      - "/pnpm-workspace.yaml"
-      - "/tsconfig.base.json"
+      - "@group(workspaceDeps)"

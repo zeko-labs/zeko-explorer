@@ -11,15 +11,6 @@ tasks:
   setup-local:
     command: "nu"
     args: ["services/nats/scripts/setup-local.nu"]
-    inputs:
-      - "moon.yml"
-      - "scripts/**/*"
-      - "src/**/*"
-      - "package.json"
-      - "/.prototools"
-      - "/package.json"
-      - "/pnpm-lock.yaml"
-      - "/pnpm-workspace.yaml"
     options:
       cache: false
       runFromWorkspaceRoot: true

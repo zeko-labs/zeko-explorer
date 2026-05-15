@@ -7,6 +7,15 @@ tags: ["cloudflare", "mcp"]
 dependsOn:
   - "domain"
 
+fileGroups:
+  workerTypes:
+    - "moon.yml"
+    - "wrangler.jsonc"
+    - "package.json"
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
+
 tasks:
   dev:
     command: "wrangler"
@@ -18,11 +27,6 @@ tasks:
     command: "wrangler"
     args: ["types", "--config", "wrangler.jsonc"]
     inputs:
-      - "moon.yml"
-      - "wrangler.jsonc"
-      - "package.json"
-      - "/package.json"
-      - "/pnpm-lock.yaml"
-      - "/pnpm-workspace.yaml"
+      - "@group(workerTypes)"
     outputs:
       - "worker-configuration.d.ts"

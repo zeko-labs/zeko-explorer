@@ -4,14 +4,33 @@ layer: "automation"
 stack: "infrastructure"
 tags: ["infra", "kubernetes", "docker"]
 
+fileGroups:
+  workspaceDeps:
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
+  k8s:
+    - "moon.yml"
+    - "k8s/**/*"
+    - "scripts/k8s-tools/**/*"
+    - "/.prototools"
+  acceptance:
+    - "moon.yml"
+    - "cucumber.yaml"
+    - "tests/**/*"
+    - "tsconfig.json"
+    - "k8s/**/*"
+    - "local/docker-desktop/**/*"
+  testTypes:
+    - "moon.yml"
+    - "tests/**/*.ts"
+    - "tsconfig.json"
+    - "/tsconfig.base.json"
+
 tasks:
   install-k8s-tools:
     command: "nu"
     args: ["infra/scripts/k8s-tools/install.nu"]
-    inputs:
-      - "moon.yml"
-      - "scripts/k8s-tools/install.nu"
-      - "/.prototools"
     options:
       cache: false
       runFromWorkspaceRoot: true
@@ -19,29 +38,8 @@ tasks:
   build-local-images:
     command: "nu"
     args: ["infra/local/docker-desktop/build-local-images.nu"]
-    inputs:
-      - "/apps/*/app/**/*"
-      - "/apps/*/moon.yml"
-      - "/apps/*/package.json"
-      - "/apps/*/tsconfig.json"
-      - "/apps/*/src/**/*"
-      - "/services/*/moon.yml"
-      - "/services/*/package.json"
-      - "/services/*/src/**/*"
-      - "/services/*/tsconfig.json"
-      - "/services/*/tsdown.config.ts"
-      - "/services/*/Dockerfile"
-      - "/packages/*/moon.yml"
-      - "/packages/*/package.json"
-      - "/packages/*/src/**/*"
-      - "/packages/*/tsconfig.json"
-      - "/.moon/**/*"
-      - "/.prototools"
-      - "/package.json"
-      - "/pnpm-lock.yaml"
-      - "/pnpm-workspace.yaml"
-      - "/tsconfig.base.json"
     options:
+      cache: false
       runFromWorkspaceRoot: true
       runInCI: false
 
@@ -76,10 +74,6 @@ tasks:
     args: ["infra/local/docker-desktop/up.nu"]
     deps:
       - "infra:build-local-images"
-    inputs:
-      - "moon.yml"
-      - "k8s/**/*"
-      - "local/docker-desktop/**/*"
     options:
       cache: false
       runFromWorkspaceRoot: true
@@ -92,14 +86,8 @@ tasks:
       - "--config"
       - "infra/cucumber.yaml"
     inputs:
-      - "moon.yml"
-      - "cucumber.yaml"
-      - "tests/**/*"
-      - "tsconfig.json"
-      - "k8s/**/*"
-      - "local/docker-desktop/**/*"
-      - "/package.json"
-      - "/pnpm-lock.yaml"
+      - "@group(acceptance)"
+      - "@group(workspaceDeps)"
     options:
       runFromWorkspaceRoot: true
 
@@ -109,10 +97,7 @@ tasks:
     deps:
       - "infra:install-k8s-tools"
     inputs:
-      - "moon.yml"
-      - "k8s/**/*"
-      - "scripts/k8s-tools/**/*"
-      - "/.prototools"
+      - "@group(k8s)"
     options:
       runFromWorkspaceRoot: true
 
@@ -124,9 +109,7 @@ tasks:
       - "infra/tsconfig.json"
       - "--noEmit"
     inputs:
-      - "moon.yml"
-      - "tests/**/*.ts"
-      - "tsconfig.json"
-      - "/tsconfig.base.json"
+      - "@group(testTypes)"
+      - "@group(workspaceDeps)"
     options:
       runFromWorkspaceRoot: true
