@@ -9,7 +9,9 @@ dependsOn:
 
 tasks:
   setup-local:
-    command: "./scripts/setup-local.sh"
+    command: "nu"
+    args: ["services/nats/scripts/setup-local.nu"]
     options:
       cache: false
+      runFromWorkspaceRoot: true
       runInCI: false

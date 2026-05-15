@@ -5,6 +5,7 @@
 - Run `moon ...` directly with the Proto shim on `PATH`; do not write `proto run moon ...` into repo commands.
 - Keep tool versions in `.prototools`. Do not duplicate Node or PNPM versions in Moon toolchain config.
 - Use PNPM catalog entries for external JavaScript dependencies.
+- Use Nushell for local automation scripts. Do not add Bash entrypoint scripts.
 - Use Biome for linting and formatting. Do not add ESLint, Prettier, oxlint, or oxfmt.
 - Use `wrangler.jsonc` and generated Wrangler Env types for Cloudflare Workers.
 - Use `.kyaml` for Kubernetes values. Use `.tpl` for Helm template sources so YAML tooling only parses rendered manifests.

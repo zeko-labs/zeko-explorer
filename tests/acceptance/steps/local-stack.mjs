@@ -66,20 +66,20 @@ Then("no DA Monitor workload is created", function () {
 
 Then("{string} reaches the Explorer API", function (binding) {
   assert.equal(binding, "localhost:4101");
-  assert.match(read("infra/local/docker-desktop/forward.sh"), /4101:4101/);
+  assert.match(read("infra/local/docker-desktop/forward.nu"), /4101:4101/);
 });
 
 Then("{string} reaches the Bridge API", function (binding) {
   assert.equal(binding, "localhost:4102");
-  assert.match(read("infra/local/docker-desktop/forward.sh"), /4102:4102/);
+  assert.match(read("infra/local/docker-desktop/forward.nu"), /4102:4102/);
 });
 
 Then("{string} reaches NATS", function (binding) {
   assert.equal(binding, "localhost:4222");
-  assert.match(read("infra/local/docker-desktop/forward.sh"), /4222:4222/);
+  assert.match(read("infra/local/docker-desktop/forward.nu"), /4222:4222/);
 });
 
 Then("{string} reaches SurrealDB", function (binding) {
   assert.equal(binding, "localhost:8000");
-  assert.match(read("infra/local/docker-desktop/forward.sh"), /8000:8000/);
+  assert.match(read("infra/local/docker-desktop/forward.nu"), /8000:8000/);
 });

@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env nu
 
 moon run hive-gateway:dev contract-registry-api:dev mcp:dev ui:dev
