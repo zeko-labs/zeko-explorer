@@ -3,52 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spike 008: Full SurrealDB Schema Results</title>
+  <title>Spike 008 Results: SurrealDB Read Model</title>
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #f4f7fb;
+      --bg: #f6f8fb;
       --panel: #ffffff;
-      --text: #17202a;
-      --muted: #5c6670;
-      --border: #d9dee5;
+      --text: #16202a;
+      --muted: #5f6b76;
+      --border: #d8dee7;
       --accent: #0f766e;
-      --accent-2: #2563eb;
+      --accent-2: #1d4ed8;
       --good: #15803d;
-      --warn: #9a3412;
+      --warn: #a16207;
       --danger: #b91c1c;
       --code: #eef2f7;
-      --shadow: 0 14px 38px rgba(31, 41, 55, .08);
+      --shadow: 0 12px 34px rgba(24, 39, 75, .08);
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #111418;
         --panel: #171b21;
         --text: #eef2f7;
-        --muted: #a8b1bd;
+        --muted: #aab4c0;
         --border: #303741;
         --accent: #5eead4;
         --accent-2: #93c5fd;
         --good: #86efac;
-        --warn: #fdba74;
+        --warn: #facc15;
         --danger: #fca5a5;
         --code: #202630;
-        --shadow: 0 14px 38px rgba(0, 0, 0, .25);
+        --shadow: 0 12px 34px rgba(0, 0, 0, .25);
       }
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at 15% -10%, color-mix(in srgb, var(--accent-2), transparent 82%), transparent 34rem),
-        radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent), transparent 82%), transparent 30rem),
-        var(--bg);
+      background: var(--bg);
       color: var(--text);
       font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .layout {
       display: grid;
-      grid-template-columns: 236px minmax(0, 1fr);
+      grid-template-columns: 230px minmax(0, 1fr);
       gap: 24px;
       max-width: 1440px;
       margin: 0 auto;
@@ -58,305 +55,65 @@
       position: sticky;
       top: 18px;
       align-self: start;
-      background: color-mix(in srgb, var(--panel), transparent 5%);
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
+      padding: 14px;
       box-shadow: var(--shadow);
-      padding: 16px;
     }
     .toc strong {
       display: block;
-      margin-bottom: 10px;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: .05em;
       color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
     }
     .toc a {
       display: block;
-      padding: 7px 8px;
-      border-radius: 6px;
       color: var(--text);
-      font-size: 14px;
-    }
-    .toc a:hover {
-      background: color-mix(in srgb, var(--accent), transparent 88%);
+      padding: 6px 8px;
+      border-radius: 6px;
       text-decoration: none;
     }
-    main {
-      max-width: 1120px;
-      padding: 0 0 64px;
-    }
-    header {
-      margin-bottom: 18px;
-      padding: 28px;
+    .toc a:hover { background: color-mix(in srgb, var(--accent), transparent 88%); }
+    main { max-width: 1120px; padding-bottom: 60px; }
+    header, section {
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      background: linear-gradient(135deg, color-mix(in srgb, var(--panel), var(--accent-2) 8%), var(--panel));
+      border-radius: 12px;
       box-shadow: var(--shadow);
+      padding: 22px;
+      margin-bottom: 18px;
     }
-    h1, h2, h3 { line-height: 1.2; margin: 0; }
-    h1 { font-size: 34px; letter-spacing: 0; }
-    h2 { font-size: 22px; margin-top: 0; }
-    h3 { font-size: 17px; margin-top: 22px; }
+    header { padding: 28px; }
+    h1, h2, h3 { margin: 0; line-height: 1.2; letter-spacing: 0; }
+    h1 { font-size: 34px; }
+    h2 { font-size: 23px; }
+    h3 { font-size: 17px; margin-top: 20px; }
     p { margin: 10px 0; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .meta {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 16px;
-      color: var(--muted);
+    code {
+      background: var(--code);
+      border-radius: 5px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
     }
-    section {
-      scroll-margin-top: 18px;
-      margin-top: 18px;
-      padding: 22px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: color-mix(in srgb, var(--panel), transparent 3%);
-      box-shadow: var(--shadow);
-    }
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap: 18px;
-      align-items: stretch;
-    }
-    .score {
-      display: grid;
-      place-items: center;
-      min-height: 150px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--accent), transparent 90%);
-    }
-    .score b { font-size: 44px; line-height: 1; color: var(--accent); }
-    .score span { color: var(--muted); }
-    .pill {
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 4px 10px;
-      background: var(--panel);
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 14px;
-      margin: 18px 0;
-    }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
+    pre {
+      overflow-x: auto;
+      background: var(--code);
       border-radius: 8px;
-      padding: 16px;
-    }
-    .decision-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin: 16px 0;
-    }
-    .decision-card {
-      position: relative;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 10px;
       padding: 14px;
-      background: var(--panel);
-    }
-    .decision-card::before {
-      content: "";
-      position: absolute;
-      inset: 0 0 auto;
-      height: 4px;
-      background: var(--accent-2);
-    }
-    .decision-card.good::before { background: var(--good); }
-    .decision-card.warn::before { background: var(--warn); }
-    .decision-card.danger::before { background: var(--danger); }
-    .decision-card strong { display: block; margin: 4px 0 6px; }
-    .decision-card small { color: var(--muted); }
-    .flow-list {
-      counter-reset: flow;
-      display: grid;
-      gap: 10px;
-      margin: 16px 0;
-      padding: 0;
-      list-style: none;
-    }
-    .flow-list li {
-      counter-increment: flow;
-      display: grid;
-      grid-template-columns: 34px 1fr;
-      gap: 10px;
-      align-items: start;
       border: 1px solid var(--border);
-      border-radius: 9px;
-      padding: 12px;
-      background: var(--panel);
     }
-    .flow-list li::before {
-      content: counter(flow);
-      display: grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--accent), transparent 84%);
-      color: var(--accent);
-      font-weight: 750;
-    }
-    .bench-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 12px;
-      margin: 16px 0;
-    }
-    .bench-card {
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px;
-      background: var(--panel);
-    }
-    .bench-card header {
-      margin: 0 0 10px;
-      padding: 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      box-shadow: none;
-    }
-    .bench-card .query { display: block; margin-bottom: 5px; font-weight: 700; }
-    .bench-card .reading { color: var(--muted); font-size: 13px; }
-    .bar {
-      position: relative;
-      height: 10px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--border), transparent 15%);
-      overflow: hidden;
-    }
-    .bar span {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    }
-    .bench-metrics {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 12px;
-      margin: 14px 0;
-    }
-    .status-card {
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      padding: 12px;
-      background: var(--panel);
-    }
-    .status-card .state {
-      display: inline-block;
-      margin-bottom: 8px;
-      border-radius: 999px;
-      padding: 3px 8px;
-      background: color-mix(in srgb, var(--good), transparent 86%);
-      color: var(--good);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .status-card .state.fail {
-      background: color-mix(in srgb, var(--danger), transparent 86%);
-      color: var(--danger);
-    }
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin: 18px 0;
-    }
-    .stat {
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px;
-      background: var(--panel);
-    }
-    .stat .num { display: block; font-size: 26px; font-weight: 750; color: var(--accent-2); }
-    .stat .label { color: var(--muted); font-size: 13px; }
-    .callout {
-      border-left: 4px solid var(--accent-2);
-      background: color-mix(in srgb, var(--accent-2), transparent 92%);
-      padding: 12px 14px;
-      border-radius: 8px;
-      margin: 14px 0;
-    }
-    .callout.warn { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn), transparent 92%); }
-    .callout.good { border-left-color: var(--good); background: color-mix(in srgb, var(--good), transparent 92%); }
-    .diagram {
-      width: 100%;
-      min-height: 260px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--panel);
-      margin: 14px 0;
-    }
-    .diagram text { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--text); }
-    .diagram .muted { fill: var(--muted); }
-    .diagram .box { fill: color-mix(in srgb, var(--accent-2), transparent 88%); stroke: var(--border); }
-    .diagram .db { fill: color-mix(in srgb, var(--accent), transparent 88%); stroke: var(--accent); }
-    .diagram .issue { fill: color-mix(in srgb, var(--warn), transparent 86%); stroke: var(--warn); }
-    .diagram .line { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-    details {
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      background: var(--panel);
-      margin: 10px 0;
-      overflow: hidden;
-    }
-    summary {
-      cursor: pointer;
-      padding: 12px 14px;
-      font-weight: 650;
-      color: var(--text);
-    }
-    details[open] summary {
-      border-bottom: 1px solid var(--border);
-      background: color-mix(in srgb, var(--panel), var(--bg) 45%);
-    }
-    details > div { padding: 12px 14px; }
-    .toolbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin: 12px 0;
-    }
-    .toolbar input {
-      width: min(460px, 100%);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 9px 11px;
-      background: var(--panel);
-      color: var(--text);
-      font: inherit;
-    }
-    .card strong { display: block; margin-bottom: 6px; }
+    pre code { padding: 0; background: transparent; }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 14px 0 22px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
+      margin: 14px 0;
+      font-size: 14px;
     }
     th, td {
       border-bottom: 1px solid var(--border);
@@ -369,497 +126,338 @@
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: .04em;
-      background: color-mix(in srgb, var(--panel), var(--bg) 45%);
     }
-    tr:last-child td { border-bottom: 0; }
-    code, pre {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      background: var(--code);
-      border-radius: 5px;
+    ul { padding-left: 20px; }
+    li { margin: 6px 0; }
+    .meta, .summary-grid, .card-grid, .status-grid {
+      display: grid;
+      gap: 12px;
     }
-    code { padding: 1px 4px; }
-    pre {
-      padding: 14px;
-      overflow: auto;
+    .meta {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      margin-top: 18px;
+    }
+    .pill, .metric, .card, .status {
       border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel), var(--bg) 18%);
     }
-    .warning { color: var(--warn); font-weight: 600; }
-    .ok { color: var(--accent); font-weight: 600; }
-    .bad { color: var(--danger); font-weight: 600; }
-    ul { padding-left: 22px; }
-    li { margin: 5px 0; }
-    @media (max-width: 1000px) {
+    .pill { padding: 9px 12px; color: var(--muted); }
+    .summary-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .metric { padding: 14px; }
+    .metric b {
+      display: block;
+      color: var(--accent-2);
+      font-size: 26px;
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .card { padding: 14px; }
+    .card strong { display: block; margin-bottom: 6px; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: color-mix(in srgb, var(--accent), transparent 92%);
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin: 14px 0;
+    }
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: color-mix(in srgb, var(--warn), transparent 92%);
+    }
+    .ok { color: var(--good); font-weight: 700; }
+    .warn-text { color: var(--warn); font-weight: 700; }
+    .status-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .status { padding: 14px; }
+    .status span {
+      display: inline-block;
+      color: var(--panel);
+      background: var(--good);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .status.blocked span { background: var(--warn); color: #111418; }
+    @media (max-width: 900px) {
       .layout { display: block; padding: 14px; }
-      .toc { position: static; margin-bottom: 14px; }
-      .hero-grid, .stat-grid { grid-template-columns: 1fr; }
+      .toc { position: static; margin-bottom: 16px; }
+      h1 { font-size: 28px; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
     }
   </style>
 </head>
 <body>
 <div class="layout">
-<aside class="toc">
-  <strong>Spike 008</strong>
-  <a href="#recommendation">Recommendation</a>
-  <a href="#scale">Scale Boundary</a>
-  <a href="#artifacts">Artifacts</a>
-  <a href="#tables">Tables</a>
-  <a href="#queries">Queries</a>
-  <a href="#bridge-quality">Bridge Data Quality</a>
-  <a href="#indexes">Indexes</a>
-  <a href="#graph">Graph</a>
-  <a href="#migration">Migration</a>
-  <a href="#benchmarks">Benchmarks</a>
-  <a href="#verification">Verification</a>
-  <a href="#confidence">Confidence</a>
-  <a href="#references">References</a>
-</aside>
-<main>
-  <header id="top">
-    <div class="hero-grid">
-      <div>
-        <h1>Spike 008: Full SurrealDB Schema Results</h1>
-        <p>Executable schema, query catalog, data-bearing migrations, Cucumber tests, expanded workload benchmarks, and a clear scale boundary for the Zeko explorer read model.</p>
-        <div class="meta">
-          <span class="pill">Status: implementable spike</span>
-          <span class="pill">Date: 2026-05-14</span>
-          <span class="pill">20 domain tables/views</span>
-          <span class="pill">30 Cucumber scenarios</span>
-        </div>
+  <nav class="toc" aria-label="Contents">
+    <strong>Contents</strong>
+    <a href="#decision">Decision</a>
+    <a href="#artifacts">Artifacts</a>
+    <a href="#tables">Tables</a>
+    <a href="#ids">Record IDs</a>
+    <a href="#indexes">Indexes</a>
+    <a href="#edges">Graph Edges</a>
+    <a href="#search">Search</a>
+    <a href="#time-series">Time Series</a>
+    <a href="#schema">Schema Workflow</a>
+    <a href="#live">Live Queries</a>
+    <a href="#performance">Performance</a>
+    <a href="#implementation">Implementation Notes</a>
+    <a href="#remaining">Remaining Work</a>
+    <a href="#references">References</a>
+  </nav>
+
+  <main>
+    <header>
+      <h1>Spike 008 Results: SurrealDB Read Model</h1>
+      <p>This document is the implementation handoff for the Zeko explorer SurrealDB schema. It answers the questions in the spike README and names the concrete files, tables, indexes, graph edges, query files, and verification commands the implementer should use.</p>
+      <div class="meta">
+        <div class="pill">Status: ready for implementation review</div>
+        <div class="pill">Target: SurrealDB v3</div>
+        <div class="pill">Schema owner: SurrealKit</div>
+        <div class="pill">Scale proof: 100k persisted gate passed</div>
       </div>
-      <div class="score" aria-label="Confidence score">
-        <b>0.88</b>
-        <span>implementation confidence</span>
+    </header>
+
+    <section id="decision">
+      <h2>Decision</h2>
+      <p>Build the explorer read model as a schemafull SurrealDB v3 database managed by SurrealKit. The model uses canonical records for source-of-truth state, enforced graph relation tables where relationships carry metadata, native full-text search indexes, complete keyset cursor tuples, and a SurrealDB table view for the minute-level transaction aggregate.</p>
+      <div class="summary-grid">
+        <div class="metric"><b>20</b>domain tables and relation/view tables</div>
+        <div class="metric"><b>45</b>query files with EXPLAIN comments</div>
+        <div class="metric"><b>30</b>Cucumber scenarios passing</div>
+        <div class="metric"><b>26/26</b>100k benchmark paths passing</div>
       </div>
-    </div>
-  </header>
-
-  <section id="recommendation">
-    <h2>Recommendation</h2>
-    <p>Proceed with a schemafull SurrealDB read model centered on canonical records, typed record links, relation tables, bounded graph traversal, native full-text search, live-query surfaces, and ordinary secondary indexes where <code>EXPLAIN FULL</code> plus benchmarks prove them faster than record-ID ranges. Manual feed/projection tables remain rejected unless evidence proves the native model cannot meet budget.</p>
-    <div class="stat-grid">
-      <div class="stat"><span class="num">20</span><span class="label">domain tables/views</span></div>
-      <div class="stat"><span class="num">136</span><span class="label">Cucumber steps</span></div>
-      <div class="stat"><span class="num">26</span><span class="label">benchmarked query paths</span></div>
-      <div class="stat"><span class="num">0</span><span class="label">remaining "product decision" placeholders</span></div>
-    </div>
-    <div class="grid">
-      <div class="card"><strong>Primary identity</strong>Transaction record IDs still encode the stable sort tuple, but the measured public feed uses canonical <code>idx_tx_connection_order</code> because SurrealDB v3 + SurrealKV made record-ID range scans too slow at 100k.</div>
-      <div class="card"><strong>Feed ordering</strong>Newest-first access uses negative sort keys and full cursor tuples. Query plans and benchmarks decide whether the fastest native path is a record range or a canonical table index.</div>
-      <div class="card"><strong>Account feeds</strong><code>account_transaction</code> is a first-class graph relation with role metadata. Sender, receiver, fee-payer, touched-account, and contract feeds read the relation table, not a hand-maintained feed table.</div>
-      <div class="card"><strong>Native search</strong>Canonical <code>transaction</code>, <code>account</code>, and <code>bridge_operation</code> rows own their search fields and <code>FULLTEXT ANALYZER explorer_search BM25</code> indexes.</div>
-    </div>
-  </section>
-
-  <section id="scale">
-    <h2>Scale Boundary</h2>
-    <div class="callout good">
-      <strong>100k persisted SurrealDB v3 gate passed.</strong> The current canonical schema loaded 100,000 transactions, 100,000 account activity rows, 100,000 bridge operations, and 20,000 accounts through sequential official <code>surreal import</code> chunks into SurrealKV. All 26 measured query paths passed their p95 budgets; worst p95 was <code>transaction-feed-first-page</code> at 37.744ms against a 250ms budget.
-    </div>
-    <p>The benchmark dataset includes accounts, high-volume contract accounts, transactions, account-transaction relation rows, account activity rows, bridge operations with canonical data-quality reason arrays, native full-text search fields, and sampled zkApp event/action rows. The persisted path generates a SurrealKit-compatible load project from the committed schema, applies schema with official SurrealDB v3 <code>surreal import</code>, and loads deterministic data directly into <code>surrealkv:/data/benchmark.db</code>. The accepted Docker tag resolved to <code>3.0.5 for linux on aarch64</code>.</p>
-    <p>The current corrected model has passed schema validation, Cucumber behavior tests, generated per-query EXPLAIN comments, and the 100k persisted benchmark gate. The latest accepted 100k chunked load took 486s total: 2s benchmark data generation, 2s database/schema setup, and 482s data import with indexes plus the declarative time-series table view present. A raw 24-hour aggregation query failed budget at 688.633ms p95; the official table-view model lowered that path below budget. Loader experiments after the accepted run rejected shortcuts rather than changing the model: monolithic Docker import exits 137 at million scale, Docker live chunking avoids the monolithic file but depends on OrbStack staying up, host persisted streaming avoids generated-file disk amplification but this machine lacks disk headroom for the full million persisted store, and memory mode swaps on the 8GB host. The default scale loader is sequential official import chunks; host streaming mode generates and imports one bounded chunk at a time. The harness fails the process when any measured public path exceeds its p95 budget.</p>
-    <details open>
-      <summary>Does a larger dataset require more RAM?</summary>
-      <div>
-        <p>For the Cucumber suite, yes: it intentionally starts SurrealDB with the <code>memory</code> backend, so row count and index count directly increase RAM pressure. For the benchmark proof, no: <code>benchmark:docker:persisted</code> starts Dockerized SurrealDB with persisted <code>surrealkv</code>. RAM still matters for caches, compaction, index maintenance, and query execution, but the records are not held only in process memory.</p>
+      <div class="callout">
+        <strong>Important model constraint:</strong> there are no manually maintained feed tables, search-document tables, bridge quality queue tables, or mutable network-stats projection tables in the accepted schema. If a future change proposes one, it needs an EXPLAIN plan and benchmark evidence proving the native SurrealDB shape cannot meet the budget.
       </div>
-    </details>
-    <details open>
-      <summary>Would Docker solve the in-memory issue?</summary>
-      <div>
-        <p>Docker only solves this when the command also uses a persisted backend. <code>surreal start memory</code> inside Docker is still in-memory. This spike now runs Docker with a mounted volume and <code>surrealkv:/data/benchmark.db</code>, then removes both the container and volume after the run.</p>
+    </section>
+
+    <section id="artifacts">
+      <h2>Implementation Artifacts</h2>
+      <table>
+        <thead><tr><th>Artifact</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td><a href="surrealkit/database/schema/000_schema.surql">surrealkit/database/schema/000_schema.surql</a></td><td>SurrealKit-managed desired schema. This is the source of truth for tables, fields, indexes, events, analyzer, graph relations, and the table view.</td></tr>
+          <tr><td><a href="queries/">queries/</a></td><td>One SurrealQL file per resolver or subscription access path. Query files include generated EXPLAIN comments at the top.</td></tr>
+          <tr><td><a href="harness/reports/explain-current.md">harness/reports/explain-current.md</a></td><td>Full SurrealDB v3 EXPLAIN output for finite query files and compound-query components.</td></tr>
+          <tr><td><a href="harness/features/">harness/features/</a></td><td>Cucumber acceptance tests for schema inventory, query catalog behavior, graph traversal, rollback behavior, watcher state, idempotency, native search, and migration behavior.</td></tr>
+          <tr><td><a href="harness/benchmarks/latest-results.html">harness/benchmarks/latest-results.html</a></td><td>100k persisted benchmark output.</td></tr>
+          <tr><td><a href="harness/benchmarks/import-load-experiments.md">harness/benchmarks/import-load-experiments.md</a></td><td>Summary of accepted and rejected benchmark load paths.</td></tr>
+          <tr><td><a href="surrealkit/migrations/">surrealkit/migrations/</a></td><td>Representative rollout migration files used by the migration behavior test.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="tables">
+      <h2>Table Inventory</h2>
+      <p>The tables below are the complete explorer-owned storage model for Milestone 1. The SurrealKit metadata tables created by the tool are not listed here because application code should not read or write them.</p>
+      <table>
+        <thead><tr><th>Table</th><th>Kind</th><th>Purpose</th><th>Primary access paths</th></tr></thead>
+        <tbody>
+          <tr><td><code>sync_status</code></td><td>mutable status</td><td>Durable ingestion health by source.</td><td><code>source</code> unique lookup, status lists, live sync subscription.</td></tr>
+          <tr><td><code>l1_watcher_cursor</code></td><td>mutable cursor</td><td>L1 watcher recovery point per source/network/provider/cursor kind.</td><td>Unique source tuple and health ordering by provider.</td></tr>
+          <tr><td><code>l1_watcher_block</code></td><td>append-mostly observation</td><td>Recent observed L1 block headers and canonical/orphaned state.</td><td>Network/provider hash, height, and status indexes.</td></tr>
+          <tr><td><code>l1_watcher_published</code></td><td>append-only idempotency log</td><td>Published NATS messages keyed by deterministic <code>Nats-Msg-Id</code>.</td><td><code>msg_id</code> unique lookup and subject timeline.</td></tr>
+          <tr><td><code>account</code></td><td>mutable current state</td><td>Current balance, nonce, delegate, raw zkApp state, activity timestamps, search field.</td><td><code>public_key</code> unique lookup, token/delegate/vkey filters, last activity, full-text search.</td></tr>
+          <tr><td><code>transaction</code></td><td>append-mostly event</td><td>L2 transaction row with natural hash, account links, ledger hashes, rollback fields, search field.</td><td>Global feed, hash lookup, timestamp window, target ledger rollback, full-text search.</td></tr>
+          <tr><td><code>transaction_minute_stats</code></td><td>SurrealDB table view</td><td>Minute buckets for transaction throughput dashboards.</td><td>Range query by <code>minute</code>.</td></tr>
+          <tr><td><code>account_activity</code></td><td>append-only audit log</td><td>Per-account balance/nonce/zkApp state deltas and rollback restoration data.</td><td>Account-local history and target ledger rollback lookup.</td></tr>
+          <tr><td><code>batch</code></td><td>mutable lifecycle row</td><td>L2 batch proof, settlement, L1 finality, and DA summary.</td><td>Batch height, settlement feed, L1 tx lookup, DA status feed.</td></tr>
+          <tr><td><code>da_attestation</code></td><td>append-only observation</td><td>Raw DA provider attestations separate from batch lifecycle state.</td><td>Attestation hash and batch timeline.</td></tr>
+          <tr><td><code>outer_action</code></td><td>append-mostly action</td><td>Normalized OUTER_PK commit/witness action data from L1.</td><td>Action state, previous state, action index, kind/block order, aux, tx hash.</td></tr>
+          <tr><td><code>inner_action</code></td><td>append-mostly action</td><td>Normalized INNER_PK action data parsed from L2 transactions.</td><td>Action state, previous state, aux, transaction/hash order, target ledger rollback.</td></tr>
+          <tr><td><code>zkapp_event</code></td><td>append-only event</td><td>Raw zkApp event fields. Decoding stays in the contract registry layer.</td><td>Emitting account timeline, transaction detail fanout, target ledger rollback.</td></tr>
+          <tr><td><code>zkapp_action</code></td><td>append-only event</td><td>Raw zkApp action fields plus before/after action-state hashes.</td><td>Emitting account timeline, transaction detail fanout, action-state chain, rollback.</td></tr>
+          <tr><td><code>bridge_operation</code></td><td>mutable lifecycle row</td><td>User-facing bridge operation keyed by <code>aux</code>/<code>aux_sequence</code>, status, evidence fields, data quality, search field.</td><td>Sender/recipient histories, natural lookup, status/type feeds, timeout scans, quality issue lists, full-text search.</td></tr>
+          <tr><td><code>account_transaction</code></td><td>enforced relation</td><td>Transaction-to-account graph edge with sender/receiver/fee-payer/touched role metadata.</td><td>Account transaction feeds, role-specific sender/receiver feeds, bounded graph detail.</td></tr>
+          <tr><td><code>batch_transaction</code></td><td>enforced relation</td><td>Batch-to-transaction containment edge with position metadata.</td><td>Batch detail transaction traversal.</td></tr>
+          <tr><td><code>l1_action_link</code></td><td>enforced relation</td><td>Outer action to bridge operation edge with witness/commit role.</td><td>Bridge detail and L1 action correlation.</td></tr>
+          <tr><td><code>l2_action_link</code></td><td>enforced relation</td><td>Bridge operation to inner action edge with mint/burn role.</td><td>Bridge detail and L2 action correlation.</td></tr>
+          <tr><td><code>bridge_transaction_link</code></td><td>enforced relation</td><td>Bridge operation to transaction edge with submit/witness/finalize/cancel/rollback role.</td><td>Bridge detail and transaction detail correlation.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="ids">
+      <h2>Record IDs and Natural Keys</h2>
+      <p>GraphQL resolvers should treat SurrealDB record IDs as the internal node identity and encode them into Relay global IDs. Natural blockchain identifiers remain unique secondary indexes, not ad hoc alternate tables.</p>
+      <div class="card-grid">
+        <div class="card"><strong>Stable identities</strong>Entity rows carry stable IDs assigned by the indexer. The schema also stores natural fields such as <code>hash</code>, <code>public_key</code>, <code>after_state</code>, and <code>aux</code> for unique lookups.</div>
+        <div class="card"><strong>Natural uniqueness</strong><code>transaction.hash</code>, <code>account.public_key</code>, <code>bridge_operation(aux, aux_sequence)</code>, <code>outer_action.after_state</code>, <code>inner_action.after_state</code>, and <code>zkapp_action.action_state</code> are unique indexes.</div>
+        <div class="card"><strong>Pagination keys</strong>Newest-first resolver order is implemented with negative sort fields such as <code>sort_block_height</code>. Cursor predicates include the full sort tuple.</div>
+        <div class="card"><strong>Rollback keys</strong>Rollback-sensitive child rows carry <code>target_ledger_hash</code> and have indexes so the indexer can find and remove affected rows without replaying the whole database.</div>
       </div>
-    </details>
-    <details>
-      <summary>What must happen outside this spike?</summary>
-      <div>
-        <p>Resolve official million-row loading with the full realistic schema and index set intact, then run million-row, 20M, 200M, and 2B-row benchmarks against the pinned production SurrealDB v3 version using persisted storage and production-like memory limits. The benchmark must fail the build on p95 budget violations rather than preserving slow paths as warnings.</p>
+      <p>Do not implement pagination with broad tuple <code>OR</code> predicates or descending raw-height scans. Use the query files as resolver templates.</p>
+    </section>
+
+    <section id="indexes">
+      <h2>Index and Query Plan</h2>
+      <p>Each performance-sensitive query has a committed SurrealQL file and generated EXPLAIN evidence. The GraphQL API should call the same shapes, with parameters bound from resolver arguments.</p>
+      <table>
+        <thead><tr><th>Resolver path</th><th>Query file</th><th>Primary index or plan</th></tr></thead>
+        <tbody>
+          <tr><td>Global transaction feed</td><td><a href="queries/transaction-feed-first-page.surql">transaction-feed-first-page</a>, <a href="queries/transaction-feed.surql">transaction-feed</a></td><td><code>idx_tx_connection_order(sort_block_height, sort_tx_index, hash)</code></td></tr>
+          <tr><td>Transaction lookup/detail</td><td><a href="queries/transaction-by-hash.surql">transaction-by-hash</a>, <a href="queries/transaction-detail-by-hash.surql">transaction-detail-by-hash</a></td><td><code>idx_tx_hash</code>, then bounded relation/child fanout</td></tr>
+          <tr><td>Account lookup and profile</td><td><a href="queries/account-by-public-key.surql">account-by-public-key</a>, <a href="queries/account-profile-overview.surql">account-profile-overview</a></td><td><code>idx_account_public_key</code> plus bounded subqueries</td></tr>
+          <tr><td>Account transaction feeds</td><td><a href="queries/account-transaction-feed-first-page.surql">account-transaction-feed-first-page</a>, <a href="queries/account-transaction-feed.surql">account-transaction-feed</a></td><td><code>idx_account_tx_public_key_all_order</code></td></tr>
+          <tr><td>Sender and receiver transaction feeds</td><td><a href="queries/transactions-by-sender-first-page.surql">transactions-by-sender-first-page</a>, <a href="queries/transactions-by-receiver-first-page.surql">transactions-by-receiver-first-page</a></td><td><code>idx_account_tx_public_key_role_order</code></td></tr>
+          <tr><td>Account activity</td><td><a href="queries/account-activity-first-page.surql">account-activity-first-page</a>, <a href="queries/account-activity-feed.surql">account-activity-feed</a></td><td><code>idx_activity_account_order</code></td></tr>
+          <tr><td>zkApp timelines</td><td><a href="queries/zkapp-events-by-account.surql">zkapp-events-by-account</a>, <a href="queries/zkapp-actions-by-account.surql">zkapp-actions-by-account</a></td><td><code>idx_event_account_order</code>, <code>idx_action_account_order</code></td></tr>
+          <tr><td>Bridge histories</td><td><a href="queries/bridge-operations-by-sender.surql">bridge-operations-by-sender</a>, <a href="queries/bridge-operations-by-recipient-first-page.surql">bridge-operations-by-recipient-first-page</a></td><td><code>idx_bo_sender_order</code>, <code>idx_bo_recipient_order</code></td></tr>
+          <tr><td>Bridge quality issue lists</td><td><a href="queries/bridge-quality-issues-first-page.surql">bridge-quality-issues-first-page</a>, <a href="queries/bridge-quality-issues-by-reason.surql">bridge-quality-issues-by-reason</a></td><td><code>idx_bo_data_quality</code>, <code>idx_bo_quality_primary_reason</code></td></tr>
+          <tr><td>Batch feed/detail</td><td><a href="queries/batch-feed-first-page.surql">batch-feed-first-page</a>, <a href="queries/batch-with-transactions-graph.surql">batch-with-transactions-graph</a></td><td><code>idx_batch_order</code>, then <code>batch_transaction</code> graph traversal</td></tr>
+          <tr><td>Network status</td><td><a href="queries/network-stats-current.surql">network-stats-current</a>, <a href="queries/network-throughput-by-minute.surql">network-throughput-by-minute</a></td><td>COUNT indexes and <code>transaction_minute_stats</code> by minute</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="edges">
+      <h2>Graph Edge Plan</h2>
+      <p>Use graph relations when the relationship has metadata or when a detail page needs bounded traversal. Use indexed table scans for open-ended feeds.</p>
+      <table>
+        <thead><tr><th>Relation table</th><th>Direction</th><th>Metadata</th><th>Resolver use</th></tr></thead>
+        <tbody>
+          <tr><td><code>account_transaction</code></td><td><code>transaction -> account</code></td><td><code>role</code>, <code>amount_delta</code>, compact public key and sort fields</td><td>Account feeds and transaction-account detail graph.</td></tr>
+          <tr><td><code>batch_transaction</code></td><td><code>batch -> transaction</code></td><td><code>position</code></td><td>Batch detail transaction list.</td></tr>
+          <tr><td><code>l1_action_link</code></td><td><code>outer_action -> bridge_operation</code></td><td><code>witness</code> or <code>commit</code></td><td>Bridge detail and action correlation.</td></tr>
+          <tr><td><code>l2_action_link</code></td><td><code>bridge_operation -> inner_action</code></td><td><code>mint</code> or <code>burn</code></td><td>Bridge detail and INNER_PK evidence.</td></tr>
+          <tr><td><code>bridge_transaction_link</code></td><td><code>bridge_operation -> transaction</code></td><td><code>submit</code>, <code>l1_witness</code>, <code>l2_finalize</code>, <code>cancel</code>, <code>rollback</code></td><td>Bridge and transaction detail correlation.</td></tr>
+        </tbody>
+      </table>
+      <p>Relation tables are <code>ENFORCED</code>. Cleanup events delete relation rows when either side is deleted, so rollback and reindex paths have deterministic edge behavior.</p>
+    </section>
+
+    <section id="search">
+      <h2>Search</h2>
+      <p>Search uses SurrealDB native full-text indexes on canonical rows. The API should not introduce a separate search document table.</p>
+      <table>
+        <thead><tr><th>Search path</th><th>Canonical field</th><th>Index</th><th>Query file</th></tr></thead>
+        <tbody>
+          <tr><td>Transactions</td><td><code>transaction.search_text</code></td><td><code>idx_tx_search_text FULLTEXT ANALYZER explorer_search BM25</code></td><td><a href="queries/transactions-search-text.surql">transactions-search-text</a></td></tr>
+          <tr><td>Accounts</td><td><code>account.search_text</code></td><td><code>idx_account_search_text FULLTEXT ANALYZER explorer_search BM25</code></td><td><a href="queries/accounts-search-text.surql">accounts-search-text</a></td></tr>
+          <tr><td>Bridge operations</td><td><code>bridge_operation.search_text</code></td><td><code>idx_bo_search_text FULLTEXT ANALYZER explorer_search BM25</code></td><td><a href="queries/bridge-operations-search-text.surql">bridge-operations-search-text</a></td></tr>
+          <tr><td>Exact identifiers</td><td>Natural identifiers</td><td>Unique natural-key indexes</td><td><a href="queries/search-exact-identifiers.surql">search-exact-identifiers</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="time-series">
+      <h2>Time-Series and Aggregates</h2>
+      <p>Network status is derived from canonical tables. Current totals use SurrealDB COUNT indexes. Recent throughput uses the declarative <code>transaction_minute_stats</code> table view because raw 24-hour grouping over canonical transactions exceeded the dashboard budget at 100k rows.</p>
+      <div class="card-grid">
+        <div class="card"><strong>Current counts</strong><code>network-stats-current.surql</code> reads canonical tables and COUNT indexes. There is no mutable singleton stats table.</div>
+        <div class="card"><strong>Throughput chart</strong><code>transaction_minute_stats</code> is maintained by SurrealDB from canonical <code>transaction</code> rows and indexed by <code>minute</code>.</div>
+        <div class="card"><strong>Future bridge evidence history</strong>If product needs detected/resolved reason history, model it as canonical bridge evidence time-series data first, not as an operator queue projection.</div>
       </div>
-    </details>
-  </section>
+    </section>
 
-  <section id="artifacts">
-    <h2>Artifact Map</h2>
-    <table>
-      <thead><tr><th>Artifact</th><th>Purpose</th></tr></thead>
-      <tbody>
-        <tr><td><a href="surrealkit/">surrealkit/</a></td><td>Explicit SurrealKit project root for schema sync, seeds, and migration proofs.</td></tr>
-        <tr><td><a href="surrealkit/database/schema/000_schema.surql">surrealkit/database/schema/000_schema.surql</a></td><td>Consolidated schemafull SurrealDB desired state with comments and indexes.</td></tr>
-        <tr><td><a href="surrealkit/migrations/">surrealkit/migrations/</a></td><td>SurrealKit-applied rollout SQL proof with existing bridge data and backfills.</td></tr>
-        <tr><td><a href="addendums/production-migration-strategy.html">addendums/production-migration-strategy.html</a></td><td>Production rollout strategy for applying reviewed SurrealKit rollouts across local, testnet/devnet, alphanet, and mainnet stacks.</td></tr>
-        <tr><td><a href="queries/">queries/</a></td><td>One SurrealQL file per resolver/query path, with generated EXPLAIN comments in each file.</td></tr>
-        <tr><td><a href="harness/reports/explain-current.md">harness/reports/explain-current.md</a></td><td>Generated SurrealDB v3 <code>EXPLAIN FULL</code> output for query files and compound-query components.</td></tr>
-        <tr><td><a href="harness/features/">harness/features/</a></td><td>Cucumber acceptance suite against in-memory SurrealDB.</td></tr>
-        <tr><td><a href="harness/benchmarks/generate-benchmark-load.ts">harness/benchmarks/generate-benchmark-load.ts</a></td><td>Generates a SurrealKit-compatible load project plus official <code>surreal import</code> schema/data bundles for large datasets.</td></tr>
-        <tr><td><a href="harness/benchmarks/run-benchmarks.ts">harness/benchmarks/run-benchmarks.ts</a></td><td>Runs query timings after data exists in SurrealDB. In the scale path it does not seed; it only measures the already-loaded database.</td></tr>
-        <tr><td><a href="harness/scripts/docker-persisted-benchmark.sh">harness/scripts/docker-persisted-benchmark.sh</a></td><td>Loads schema and data with official SurrealDB v3 <code>surreal import</code> into persisted SurrealKV, starts Dockerized SurrealDB for query timings, and removes the container and volume on exit.</td></tr>
-      </tbody>
-    </table>
-  </section>
+    <section id="schema">
+      <h2>Schema and Migration Workflow</h2>
+      <p>SurrealKit is the schema management tool for this spike. Application startup should not be responsible for applying ad hoc DDL.</p>
+      <ol>
+        <li>For disposable development databases, run <code>surrealkit sync</code> from <code>spikes/008-surrealdb-schema/surrealkit</code>.</li>
+        <li>For production-like environments, use SurrealKit rollout planning, rollout start, and rollout complete.</li>
+        <li>Use the representative migrations under <code>surrealkit/migrations</code> as the pattern for data-preserving schema changes and backfills.</li>
+        <li>Treat <code>REBUILD INDEX</code>, large backfills, and table-view rebuilds as explicit migration steps for existing production data.</li>
+        <li>Use Surreal Sync only for supported external import/CDC sources such as PostgreSQL archives, JSONL snapshots, or a Kafka bridge. It is not a replacement for the NATS-backed indexer unless the source is actually supported.</li>
+      </ol>
+    </section>
 
-  <section id="tables">
-    <h2>Table Inventory</h2>
-    <p>Status tables are not Relay <code>Node</code> types. Ingestion health is stored in <code>sync_status</code>; network aggregate status is derived from canonical tables with SurrealDB aggregation/count indexes and bounded timestamp scans.</p>
-    <table>
-      <thead><tr><th>Table</th><th>Purpose</th><th>Kind</th><th>Primary ID</th><th>Natural/idempotency key</th><th>Growth</th></tr></thead>
-      <tbody>
-        <tr><td><code>transaction</code></td><td>Sequencer-confirmed L2 transaction rows.</td><td>append-mostly</td><td><code>[sort_block_height, sort_tx_index, hash]</code></td><td><code>hash</code>, <code>sequence_number</code>, <code>(block_height, tx_index)</code></td><td>O(tx)</td></tr>
-        <tr><td><code>account</code></td><td>Current account state.</td><td>mutable current state</td><td>ULID</td><td><code>public_key</code></td><td>O(accounts)</td></tr>
-        <tr><td><code>account_activity</code></td><td>Per-account state transition log and rollback restoration data.</td><td>append-only</td><td>ULID</td><td><code>(transaction, account, activity_index)</code></td><td>O(tx * touched accounts)</td></tr>
-        <tr><td><code>account_transaction</code></td><td>Transaction-account graph relation with role metadata for account and contract transaction feeds.</td><td>relation</td><td>generated</td><td><code>(in, out, role)</code>, <code>(account_public_key, role, sort tuple)</code></td><td>O(tx * touched accounts)</td></tr>
-        <tr><td><code>batch</code></td><td>L2 batch lifecycle, L1 settlement, DA status.</td><td>mutable lifecycle</td><td>ULID</td><td><code>batch_height</code>, <code>(l1_chain, l1_tx_hash)</code></td><td>O(batches)</td></tr>
-        <tr><td><code>da_attestation</code></td><td>Raw DA monitor observations attached to batches.</td><td>append-only</td><td>ULID</td><td><code>attestation_hash</code></td><td>O(batches * attestations)</td></tr>
-        <tr><td><code>outer_action</code></td><td>L1 Zeko zkApp actions: commits and witnesses.</td><td>append-only, rollback deletable</td><td>ULID</td><td><code>after_state</code>, <code>action_index</code></td><td>O(L1 actions)</td></tr>
-        <tr><td><code>inner_action</code></td><td>L2 inner bridge actions.</td><td>append-only, rollback deletable</td><td>ULID</td><td><code>after_state</code>, <code>action_index</code></td><td>O(inner actions)</td></tr>
-        <tr><td><code>zkapp_event</code></td><td>Raw zkApp event rows.</td><td>append-only, rollback deletable</td><td>ULID</td><td><code>(transaction, emitting_account, event_index)</code></td><td>O(events)</td></tr>
-        <tr><td><code>zkapp_action</code></td><td>Raw zkApp reducer action rows.</td><td>append-only, rollback deletable</td><td>ULID</td><td><code>(transaction, emitting_account, action_index)</code>, <code>action_state</code></td><td>O(actions)</td></tr>
-        <tr><td><code>bridge_operation</code></td><td>Unified deposit/withdrawal lifecycle.</td><td>lifecycle mutable</td><td>ULID</td><td><code>(aux, aux_sequence)</code></td><td>O(bridge ops)</td></tr>
-        <tr><td><code>sync_status</code></td><td>Source freshness and consumer lag.</td><td>mutable singleton rows</td><td>source-keyed</td><td><code>source</code></td><td>O(sources)</td></tr>
-        <tr><td><code>l1_watcher_cursor</code></td><td>Durable L1 watcher cursors and source limitations from spike 006.</td><td>mutable cursor rows</td><td>generated</td><td><code>(source, network, provider, cursor_kind)</code></td><td>O(sources)</td></tr>
-        <tr><td><code>l1_watcher_block</code></td><td>Recent canonical/orphaned L1 block window for watcher restart reconciliation.</td><td>append/update window</td><td>ULID/hash</td><td><code>(network, provider, hash)</code></td><td>O(recent L1 blocks)</td></tr>
-        <tr><td><code>l1_watcher_published</code></td><td>Published NATS message ledger for idempotency across restarts.</td><td>append-only</td><td>generated/msg-id</td><td><code>msg_id</code></td><td>O(retained L1 messages)</td></tr>
-        <tr><td><code>batch_transaction</code></td><td>Batch containment graph.</td><td>relation</td><td>generated</td><td><code>(in, position)</code>, <code>out</code></td><td>O(tx)</td></tr>
-        <tr><td><code>l1_action_link</code></td><td><code>outer_action -> bridge_operation</code> bridge correlation.</td><td>relation</td><td>generated</td><td><code>(in, out, role)</code></td><td>O(bridge links)</td></tr>
-        <tr><td><code>l2_action_link</code></td><td><code>bridge_operation -> inner_action</code> bridge correlation.</td><td>relation</td><td>generated</td><td><code>(in, out, role)</code></td><td>O(bridge links)</td></tr>
-        <tr><td><code>bridge_transaction_link</code></td><td>Bridge operation to user-facing transaction details.</td><td>relation</td><td>generated</td><td><code>(in, out, role)</code></td><td>O(bridge links)</td></tr>
-      </tbody>
-    </table>
-  </section>
+    <section id="live">
+      <h2>Live Query Plan</h2>
+      <p>The GraphQL APIs should fan out from shared SurrealDB live queries, not create one live query per browser client. Each subscription should send an initial page from the corresponding finite query, then subscribe from a known cursor or timestamp boundary to avoid duplicates.</p>
+      <table>
+        <thead><tr><th>Subscription</th><th>Query file</th><th>Table</th><th>Payload strategy</th></tr></thead>
+        <tbody>
+          <tr><td>New transactions</td><td><a href="queries/live-transaction-feed.surql">live-transaction-feed</a></td><td><code>transaction</code></td><td>Full changed row; API filters against the current page window.</td></tr>
+          <tr><td>Account transaction updates</td><td><a href="queries/live-account-transaction-feed.surql">live-account-transaction-feed</a></td><td><code>account_transaction</code></td><td>Relation row plus role metadata; API resolves linked transaction if required.</td></tr>
+          <tr><td>Bridge operation updates</td><td><a href="queries/live-bridge-operation-feed.surql">live-bridge-operation-feed</a></td><td><code>bridge_operation</code></td><td>Full bridge row for lifecycle and data-quality changes.</td></tr>
+          <tr><td>Indexer/source status</td><td><a href="queries/live-sync-status.surql">live-sync-status</a></td><td><code>sync_status</code></td><td>Full status row for health panels.</td></tr>
+        </tbody>
+      </table>
+    </section>
 
-  <section id="queries">
-    <h2>Query Catalog</h2>
-    <p>Every planned resolver path has its own query file so it can be benchmarked and optimized independently. The full directory also includes zkApp event/action, DA attestation, rollback, sync status, and natural bridge/action lookup files.</p>
-    <div class="toolbar">
-      <input id="queryFilter" type="search" placeholder="Filter query catalog by file, resolver, or note">
-    </div>
-    <table id="queryTable">
-      <thead><tr><th>Query file</th><th>Resolver/use</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td><a href="queries/transaction-feed-first-page.surql">transaction-feed-first-page.surql</a></td><td>Global transaction first page.</td><td>Canonical <code>transaction</code> table scan through <code>idx_tx_connection_order</code>; record-ID range candidate was rejected by benchmark.</td></tr>
-        <tr><td><a href="queries/transaction-feed.surql">transaction-feed.surql</a></td><td>Global transaction next page.</td><td>Uses <code>idx_tx_connection_order</code> with a full tuple cursor, not tuple <code>OR</code>.</td></tr>
-        <tr><td><a href="queries/transaction-by-hash.surql">transaction-by-hash.surql</a></td><td>Natural transaction lookup.</td><td>Unique index lookup.</td></tr>
-        <tr><td><a href="queries/account-transaction-feed-first-page.surql">account-transaction-feed-first-page.surql</a>, <a href="queries/account-transaction-feed.surql">account-transaction-feed.surql</a></td><td>All-role account transaction feed.</td><td>Reads <code>account_transaction</code> relation rows with a complete keyset cursor.</td></tr>
-        <tr><td><a href="queries/transactions-by-sender-first-page.surql">transactions-by-sender-first-page.surql</a></td><td>Sender transaction first page.</td><td>Reads <code>account_transaction</code> relation rows filtered by sender role.</td></tr>
-        <tr><td><a href="queries/transactions-by-sender.surql">transactions-by-sender.surql</a></td><td>Sender transaction next page.</td><td>Uses full cursor tuple <code>sort_block_height, sort_tx_index, in</code>.</td></tr>
-        <tr><td><a href="queries/account-by-public-key.surql">account-by-public-key.surql</a></td><td>Natural account lookup.</td><td>Unique public key lookup.</td></tr>
-        <tr><td><a href="queries/account-profile-overview.surql">account-profile-overview.surql</a></td><td>Account profile smoke query.</td><td>Production resolver executes independent subqueries in parallel with per-subfeed budgets.</td></tr>
-        <tr><td><a href="queries/account-activity-first-page.surql">account-activity-first-page.surql</a>, <a href="queries/account-activity-feed.surql">account-activity-feed.surql</a></td><td>Account activity Connection.</td><td>Account-specific history.</td></tr>
-        <tr><td><a href="queries/batch-feed-first-page.surql">batch-feed-first-page.surql</a>, <a href="queries/batch-feed.surql">batch-feed.surql</a></td><td>Batch Connection.</td><td>Low volume.</td></tr>
-        <tr><td><a href="queries/bridge-operations-by-sender-first-page.surql">bridge-operations-by-sender-first-page.surql</a>, <a href="queries/bridge-operations-by-sender.surql">bridge-operations-by-sender.surql</a>, <a href="queries/bridge-operations-by-recipient-first-page.surql">bridge-operations-by-recipient-first-page.surql</a></td><td>Per-user bridge history.</td><td>Sender/recipient indexes.</td></tr>
-        <tr><td><a href="queries/bridge-quality-issues-first-page.surql">bridge-quality-issues-first-page.surql</a>, <a href="queries/bridge-quality-issues-by-reason.surql">bridge-quality-issues-by-reason.surql</a></td><td>Partial/inferred/unrecoverable bridge evidence issues.</td><td>Derives issue rows from canonical <code>bridge_operation.data_quality</code> and primary <code>data_quality_reasons[0]</code>.</td></tr>
-        <tr><td><a href="queries/bridge-operation-by-natural-key.surql">bridge-operation-by-natural-key.surql</a></td><td>Natural bridge lookup by <code>(aux, aux_sequence)</code>.</td><td>Unique lookup.</td></tr>
-        <tr><td><a href="queries/transaction-detail-by-hash.surql">transaction-detail-by-hash.surql</a></td><td>Transaction investigation by hash plus bounded account, batch, bridge, zkApp event/action, and inner-action fanout.</td><td>Benchmarks the common "dig into this transaction" workload.</td></tr>
-        <tr><td><a href="queries/transactions-by-receiver-first-page.surql">transactions-by-receiver-first-page.surql</a></td><td>Smart-contract received transaction feed.</td><td>Reads <code>account_transaction</code> by receiver role.</td></tr>
-        <tr><td><a href="queries/search-exact-identifiers.surql">search-exact-identifiers.surql</a></td><td>Exact search probes.</td><td>Uses canonical unique/natural indexes.</td></tr>
-        <tr><td><a href="queries/transactions-search-text.surql">transactions-search-text.surql</a>, <a href="queries/accounts-search-text.surql">accounts-search-text.surql</a>, <a href="queries/bridge-operations-search-text.surql">bridge-operations-search-text.surql</a></td><td>Native full-text search.</td><td>Uses canonical table <code>FULLTEXT ANALYZER explorer_search BM25</code> indexes.</td></tr>
-        <tr><td><a href="queries/live-transaction-feed.surql">live-transaction-feed.surql</a>, <a href="queries/live-account-transaction-feed.surql">live-account-transaction-feed.surql</a>, <a href="queries/live-bridge-operation-feed.surql">live-bridge-operation-feed.surql</a>, <a href="queries/live-sync-status.surql">live-sync-status.surql</a></td><td>GraphQL SSE subscription backing queries.</td><td>SurrealDB <code>LIVE SELECT</code> surfaces paired with initial-page high-water cursors.</td></tr>
-        <tr><td><a href="queries/bridge-operation-detail-graph.surql">bridge-operation-detail-graph.surql</a>, <a href="queries/account-transaction-graph.surql">account-transaction-graph.surql</a>, <a href="queries/batch-with-transactions-graph.surql">batch-with-transactions-graph.surql</a></td><td>Detail graph traversals.</td><td>Bounded graph use.</td></tr>
-        <tr><td><a href="queries/zkapp-events-first-page.surql">zkapp-events-first-page.surql</a>, <a href="queries/zkapp-events-by-account.surql">zkapp-events-by-account.surql</a></td><td>zkApp event Connection.</td><td>Raw fields only.</td></tr>
-        <tr><td><a href="queries/zkapp-actions-first-page.surql">zkapp-actions-first-page.surql</a>, <a href="queries/zkapp-actions-by-account.surql">zkapp-actions-by-account.surql</a></td><td>zkApp action Connection.</td><td>Raw fields plus action-state chain keys.</td></tr>
-        <tr><td><a href="queries/outer-action-by-after-state.surql">outer-action-by-after-state.surql</a>, <a href="queries/inner-action-chain-prev.surql">inner-action-chain-prev.surql</a></td><td>Bridge action chain and commit association.</td><td>Action-state keyed lookups.</td></tr>
-        <tr><td><a href="queries/da-attestations-by-batch.surql">da-attestations-by-batch.surql</a></td><td>DA detail rows for batch pages.</td><td>Provider observations kept separate from batch lifecycle.</td></tr>
-        <tr><td><a href="queries/rollback-rows-by-target-ledger.surql">rollback-rows-by-target-ledger.surql</a></td><td>L2 rollback impact lookup.</td><td>Finds rollback-sensitive rows by ledger hash.</td></tr>
-        <tr><td><a href="queries/l1-watcher-cursor.surql">l1-watcher-cursor.surql</a>, <a href="queries/l1-watcher-published-by-msg-id.surql">l1-watcher-published-by-msg-id.surql</a></td><td>L1 watcher recovery/idempotency.</td><td>Spike 006 consistency.</td></tr>
-        <tr><td><a href="queries/sync-status-by-source.surql">sync-status-by-source.surql</a>, <a href="queries/network-stats-current.surql">network-stats-current.surql</a>, <a href="queries/network-throughput-by-minute.surql">network-throughput-by-minute.surql</a></td><td>Health/meta/status and time-series surfaces.</td><td><code>sync_status</code> rows, native count queries over canonical tables, and declarative <code>transaction_minute_stats</code> table-view buckets.</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section id="parameter-binding">
-    <h2>Parameter Binding</h2>
-    <p>The query runner no longer performs template replacement in SQL bodies. Query files use SurrealQL variables like <code>$limit</code> and <code>$account</code>. The TypeScript harness validates supplied variables and prepends typed <code>LET</code> bindings. Record IDs use a branded <code>record("table:id")</code> helper.</p>
-  </section>
-
-  <section id="bridge-quality">
-    <h2>Bridge Data Quality Contract</h2>
-    <div class="callout good">
-      <strong>Decision:</strong> <code>bridge_operation.data_quality</code> and <code>data_quality_reasons</code> are canonical current bridge evidence fields maintained by the TypeScript indexer. Operator issue lists are derived from those fields; no manual issue/feed/projection table is part of the model.
-    </div>
-    <svg class="diagram" viewBox="0 0 980 300" role="img" aria-label="Bridge evidence flow">
-      <defs>
-        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" fill="currentColor"></path>
-        </marker>
-      </defs>
-      <rect class="box" x="25" y="35" width="180" height="54" rx="8"></rect>
-      <text x="115" y="58" text-anchor="middle">zeko.l1.bridge-events</text>
-      <text x="115" y="75" text-anchor="middle" class="muted">deposit / finalize / cancel</text>
-      <rect class="box" x="25" y="123" width="180" height="54" rx="8"></rect>
-      <text x="115" y="146" text-anchor="middle">zeko.l1.outer-actions</text>
-      <text x="115" y="163" text-anchor="middle" class="muted">witness / commit</text>
-      <rect class="box" x="25" y="211" width="180" height="54" rx="8"></rect>
-      <text x="115" y="234" text-anchor="middle">zeko.l2.transactions</text>
-      <text x="115" y="251" text-anchor="middle" class="muted">INNER_PK actions</text>
-      <rect class="db" x="350" y="80" width="210" height="70" rx="10"></rect>
-      <text x="455" y="110" text-anchor="middle">bridge_operation</text>
-      <text x="455" y="130" text-anchor="middle" class="muted">current lifecycle row</text>
-      <rect class="issue" x="350" y="190" width="210" height="70" rx="10"></rect>
-      <text x="455" y="220" text-anchor="middle">derived issue rows</text>
-      <text x="455" y="240" text-anchor="middle" class="muted">from data_quality_reasons</text>
-      <rect class="db" x="710" y="112" width="220" height="74" rx="10"></rect>
-      <text x="820" y="140" text-anchor="middle">GraphQL resolvers</text>
-      <text x="820" y="160" text-anchor="middle" class="muted">history and diagnostics read op</text>
-      <path class="line" d="M205 62 C260 62 290 96 350 108"></path>
-      <path class="line" d="M205 150 C260 150 290 126 350 120"></path>
-      <path class="line" d="M205 238 C265 238 295 145 350 130"></path>
-      <path class="line" d="M455 150 L455 190"></path>
-      <path class="line" d="M560 115 C625 115 650 132 710 142"></path>
-      <path class="line" d="M560 225 C632 225 650 170 710 158"></path>
-    </svg>
-    <details open>
-      <summary>Exact field definitions</summary>
-      <div>
-        <p><code>type</code> is the bridge direction: <code>deposit</code> or <code>withdrawal</code>. <code>status</code> is the current bridge lifecycle state, such as <code>submitted</code>, <code>l1_witnessed</code>, <code>committed</code>, <code>completed</code>, <code>cancelled</code>, or <code>rolled_back</code>.</p>
-        <p><code>data_quality_reasons</code> is the ordered list of currently open reason values for that bridge operation. If product needs detected/resolved per-reason history later, that should be modeled as canonical bridge evidence time-series data, not as a feed/projection shortcut.</p>
+    <section id="performance">
+      <h2>Performance Evidence</h2>
+      <p>The accepted persisted benchmark loaded 20,000 accounts, 100 high-volume contract accounts, 100,000 transactions, 100,000 account activity rows, and 100,000 bridge operations into Dockerized <code>surrealdb/surrealdb:v3</code> with persisted SurrealKV. Schema and deterministic data were loaded through sequential official <code>surreal import</code> chunk files generated from the SurrealKit-managed schema.</p>
+      <div class="summary-grid">
+        <div class="metric"><b>486s</b>total load time</div>
+        <div class="metric"><b>482s</b>data import time</div>
+        <div class="metric"><b>37.744ms</b>worst p95 query timing</div>
+        <div class="metric"><b>250ms</b>budget for the worst path</div>
       </div>
-    </details>
-    <details open>
-      <summary>Maintenance algorithm</summary>
-      <div>
-        <ol>
-          <li>The TypeScript indexer owns <code>data_quality</code>. Operators do not edit it manually, and SurrealDB events do not compute it.</li>
-          <li>On each bridge-affecting message, the indexer upserts the concrete <code>bridge_operation</code> fields proven by that message.</li>
-          <li>The indexer evaluates the required-evidence matrix for the row's current <code>type/status</code>.</li>
-          <li>The indexer writes <code>data_quality</code> and the ordered <code>data_quality_reasons</code> array directly on the canonical <code>bridge_operation</code>.</li>
-          <li>No open reasons means <code>complete</code>; otherwise <code>unrecoverable</code> wins over <code>inferred</code>, which wins over <code>partial</code>.</li>
-          <li>Bridge issue list queries derive rows from <code>bridge_operation</code> using <code>idx_bo_data_quality</code> and <code>idx_bo_quality_primary_reason</code>.</li>
-        </ol>
-      </div>
-    </details>
-    <table>
-      <thead><tr><th>Source</th><th>Exact event</th><th>Exact bridge_operation fields populated</th></tr></thead>
-      <tbody>
-        <tr><td><code>zeko.l1.bridge-events</code></td><td>L1 deposit submission from the user's signed AccountUpdate.</td><td><code>type = "deposit"</code>, <code>sender</code>, <code>recipient</code>, <code>amount</code>, <code>aux</code>, <code>timeout_slot</code>, <code>holder_account_l1</code>, <code>submit_tx_hash</code>, <code>submit_block_height</code>, <code>submit_timestamp</code>, <code>source_network</code>, <code>source_provider</code>.</td></tr>
-        <tr><td><code>zeko.l1.bridge-events</code></td><td>L1 withdrawal finalization.</td><td>Cross-checks withdrawal <code>sender</code>, <code>recipient</code>, and <code>amount</code>; may be linked through <code>l1_witness_tx_hash</code> once finalized.</td></tr>
-        <tr><td><code>zeko.l1.bridge-events</code></td><td>L1 cancel-deposit transaction.</td><td><code>cancel_tx_hash</code>; status becomes <code>cancelled</code> for the matching FIFO deposit.</td></tr>
-        <tr><td><code>zeko.l1.outer-actions</code></td><td>OUTER_PK witness action where <code>action[1] = aux</code>.</td><td><code>l1_witness_action_state</code>, <code>l1_witness_tx_hash</code>, <code>l1_witness_block_height</code>, <code>l1_witness_timestamp</code>, <code>l1_slot_range_lower</code>, <code>l1_slot_range_upper</code>, and <code>l1_action_link(role = "witness")</code>.</td></tr>
-        <tr><td><code>zeko.l1.outer-actions</code></td><td>OUTER_PK commit action containing <code>inner_action_state</code>.</td><td><code>commit_action_state</code> and <code>l1_action_link(role = "commit")</code> after walking the covered <code>inner_action</code> chain.</td></tr>
-        <tr><td><code>zeko.l2.transactions</code></td><td>L2 transaction containing an INNER_PK action where <code>action[1] = aux</code>.</td><td><code>l2_action_state</code>, <code>l2_tx_hash</code>, <code>l2_block_height</code>, <code>l2_timestamp</code>, and <code>l2_action_link</code>. For withdrawals it also supplies <code>sender</code>, <code>recipient</code>, and <code>amount</code> from <code>[recipient1, recipient2, amount]</code>.</td></tr>
-        <tr><td><code>zeko.l1.settlements</code> or new <code>zeko.l1.outer-actions</code> slot data</td><td>Current L1 slot.</td><td>Computes <code>timed_out</code> deposits and <code>delay_passed</code> withdrawals. No source payload is stored directly on <code>bridge_operation</code>.</td></tr>
-        <tr><td><code>zeko.l1.rollbacks</code></td><td>L1 fork invalidating an outer action.</td><td><code>rollback_reason</code>, status recalculation, and invalidated <code>outer_action</code> links removed or relinked.</td></tr>
-        <tr><td>L2 hash-chain break while consuming <code>zeko.l2.transactions</code></td><td>L2 rollback invalidating an inner action.</td><td><code>rollback_reason</code>, status recalculation, and invalidated <code>inner_action</code> links removed or relinked.</td></tr>
-      </tbody>
-    </table>
-    <table>
-      <thead><tr><th>Bridge row</th><th>Required direct evidence</th></tr></thead>
-      <tbody>
-        <tr><td><code>deposit/submitted</code></td><td><code>zeko.l1.bridge-events</code> deposit event.</td></tr>
-        <tr><td><code>deposit/l1_witnessed</code></td><td>Deposit event plus OUTER_PK witness from <code>zeko.l1.outer-actions</code>.</td></tr>
-        <tr><td><code>deposit/committed</code></td><td>Deposit event, OUTER_PK witness, and OUTER_PK commit covering the matching INNER_PK action chain.</td></tr>
-        <tr><td><code>deposit/completed</code></td><td>Deposit committed evidence plus INNER_PK action from <code>zeko.l2.transactions</code>.</td></tr>
-        <tr><td><code>deposit/timed_out</code></td><td>Deposit not completed plus L1 slot data showing <code>timeout_slot &lt; current_l1_slot</code>.</td></tr>
-        <tr><td><code>deposit/cancelled</code></td><td><code>zeko.l1.bridge-events</code> cancel-deposit event.</td></tr>
-        <tr><td><code>withdrawal/submitted</code> / <code>withdrawal/l2_witnessed</code></td><td>INNER_PK action from <code>zeko.l2.transactions</code>.</td></tr>
-        <tr><td><code>withdrawal/committed</code></td><td>Withdrawal INNER_PK action plus OUTER_PK commit covering that inner action.</td></tr>
-        <tr><td><code>withdrawal/delay_passed</code></td><td>Withdrawal committed evidence plus L1 slot data showing <code>current_l1_slot &gt; commit.slot_range_upper + withdrawal_delay</code>.</td></tr>
-        <tr><td><code>withdrawal/completed</code></td><td>OUTER_PK witness from <code>zeko.l1.outer-actions</code>; L1 withdrawal-finalization event from <code>zeko.l1.bridge-events</code> is the user/params cross-check when available.</td></tr>
-      </tbody>
-    </table>
-    <table>
-      <thead><tr><th>Value</th><th>Exact meaning</th><th>Required row behavior</th></tr></thead>
-      <tbody>
-        <tr><td><code>complete</code></td><td>All source messages required by the current <code>type/status</code> row were observed directly and the corresponding fields above are populated.</td><td><code>data_quality_reasons</code> must be empty or <code>NONE</code>.</td></tr>
-        <tr><td><code>partial</code></td><td>At least one required source message is unavailable, but at least one primary anchor exists: <code>submit_tx_hash</code>, <code>l2_tx_hash</code>, or <code>l1_witness_action_state</code>.</td><td>Missing fields stay <code>NONE</code>; <code>data_quality_reasons</code> lists the missing source class.</td></tr>
-        <tr><td><code>inferred</code></td><td>A field above was populated from a named deterministic fallback instead of its primary source.</td><td>Inferred fields may be populated; <code>data_quality_reasons</code> identifies the fallback rule.</td></tr>
-        <tr><td><code>unrecoverable</code></td><td>No source messages are sufficient to tie the operation to <code>(aux, aux_sequence)</code> without guessing.</td><td>The row should not be presented as a normal bridge operation; it is an operator diagnostic.</td></tr>
-      </tbody>
-    </table>
-    <p>V1 reason strings are <code>historical_bridge_events_unavailable</code>, <code>historical_outer_actions_unavailable</code>, <code>historical_inner_actions_unavailable</code>, <code>inferred_from_l1_action_state</code>, and <code>inferred_from_l2_transaction</code>.</p>
-    <p>The committed fixture proves this with <code>aux-shared/1</code>: it is <code>partial</code> and carries <code>data_quality_reasons = ["historical_bridge_events_unavailable"]</code> on the canonical <code>bridge_operation</code>.</p>
-  </section>
+      <table>
+        <thead><tr><th>Path group</th><th>Representative p95</th><th>Budget</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Global transaction feed</td><td><code>37.744ms</code></td><td><code>250ms</code></td><td class="ok">passed</td></tr>
+          <tr><td>Exact transaction/account/bridge lookup</td><td><code>25.478ms</code> to <code>30.400ms</code></td><td><code>100ms</code></td><td class="ok">passed</td></tr>
+          <tr><td>Account and sender/receiver feeds</td><td><code>29.529ms</code> to <code>35.458ms</code></td><td><code>250ms</code></td><td class="ok">passed</td></tr>
+          <tr><td>Account activity and zkApp timelines</td><td><code>30.888ms</code> to <code>34.290ms</code></td><td><code>250ms</code></td><td class="ok">passed</td></tr>
+          <tr><td>Bridge history and quality issue lists</td><td><code>31.394ms</code> to <code>32.924ms</code></td><td><code>250ms</code></td><td class="ok">passed</td></tr>
+          <tr><td>Native full-text search</td><td><code>33.261ms</code> to <code>36.583ms</code></td><td><code>250ms</code></td><td class="ok">passed</td></tr>
+          <tr><td>Minute throughput table view</td><td><code>31.444ms</code></td><td><code>500ms</code></td><td class="ok">passed</td></tr>
+        </tbody>
+      </table>
+      <p>Full per-query results are in <a href="harness/benchmarks/latest-results.html">harness/benchmarks/latest-results.html</a>. Planner evidence is in <a href="harness/reports/explain-current.md">harness/reports/explain-current.md</a>. Load-path trials are summarized in <a href="harness/benchmarks/import-load-experiments.md">harness/benchmarks/import-load-experiments.md</a>.</p>
+    </section>
 
-  <section id="indexes">
-    <h2>Index Plan</h2>
-    <p>Every open-ended GraphQL Connection either walks a SurrealDB record-key range or has an index matching its filter prefix and complete cursor tuple. The benchmark-driven correction is that newest-first high-volume feeds should not rely on descending scans, broad tuple <code>OR</code> predicates, or unmeasured record-ID range assumptions. The indexer computes negative sort-key fields at ingest time.</p>
-    <div class="decision-grid">
-      <div class="decision-card good"><strong>Global transactions</strong><code>idx_tx_connection_order(sort_block_height, sort_tx_index, hash)</code><small>canonical table index; record-ID range candidate failed the 100k gate</small></div>
-      <div class="decision-card good"><strong>Account transaction feeds</strong><code>account_transaction</code> relation indexes over account/role plus full sort tuple<small>relation metadata is canonical, not projected feed state</small></div>
-      <div class="decision-card good"><strong>Transaction investigation</strong><code>hash UNIQUE</code><small>single-row natural lookup before bounded detail fanout</small></div>
-      <div class="decision-card good"><strong>Account activity</strong><code>account, sort_block_height, sort_tx_index, sort_activity_index, id</code><small>profile history stays account-local</small></div>
-      <div class="decision-card good"><strong>Bridge history</strong>public key plus <code>sort_submit_block_height, aux, aux_sequence, id</code><small>sender and recipient history avoid low-cardinality scans</small></div>
-      <div class="decision-card good"><strong>Bridge evidence issues</strong><code>data_quality, sort_submit_block_height, aux, aux_sequence, id</code> and <code>data_quality_reasons[0], sort_submit_block_height, aux, aux_sequence, id</code><small>derived from canonical bridge_operation rows, no issue/feed table</small></div>
-      <div class="decision-card good"><strong>Rollback lookup</strong><code>target_ledger_hash</code> indexes on transaction and child rollback tables<small>component plans are recorded in explain-current.md</small></div>
-      <div class="decision-card"><strong>Native search</strong><code>FULLTEXT ANALYZER explorer_search BM25</code><small>canonical tables use SurrealDB search indexes</small></div>
-      <div class="decision-card"><strong>Batch feed</strong><code>sort_batch_height, id</code><small>low-volume secondary seek</small></div>
-      <div class="decision-card"><strong>Watcher idempotency</strong><code>msg_id UNIQUE</code><small>published NATS messages reject duplicate writes</small></div>
-    </div>
-  </section>
-
-  <section id="graph">
-    <h2>Graph Model</h2>
-    <p>SurrealDB graph relations are used where the edge has semantic metadata or where detail pages need bounded traversal. Connections use composite indexes; detail views use graph traversal.</p>
-    <svg class="diagram" viewBox="0 0 980 300" role="img" aria-label="SurrealDB graph relation model">
-      <defs>
-        <marker id="graphArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" fill="currentColor"></path>
-        </marker>
-      </defs>
-      <rect class="box" x="40" y="52" width="160" height="54" rx="8"></rect>
-      <text x="120" y="84" text-anchor="middle">transaction</text>
-      <rect class="box" x="390" y="52" width="160" height="54" rx="8"></rect>
-      <text x="470" y="84" text-anchor="middle">account</text>
-      <path class="line" style="marker-end:url(#graphArrow)" d="M200 79 L390 79"></path>
-      <text x="295" y="66" text-anchor="middle" class="muted">account_transaction(role)</text>
-
-      <rect class="box" x="40" y="190" width="160" height="54" rx="8"></rect>
-      <text x="120" y="222" text-anchor="middle">batch</text>
-      <path class="line" style="marker-end:url(#graphArrow)" d="M200 217 L390 106"></path>
-      <text x="278" y="171" text-anchor="middle" class="muted">batch_transaction(position)</text>
-
-      <rect class="db" x="655" y="122" width="185" height="58" rx="8"></rect>
-      <text x="747" y="156" text-anchor="middle">bridge_operation</text>
-      <rect class="box" x="655" y="30" width="185" height="54" rx="8"></rect>
-      <text x="747" y="62" text-anchor="middle">outer_action</text>
-      <rect class="box" x="655" y="218" width="185" height="54" rx="8"></rect>
-      <text x="747" y="250" text-anchor="middle">inner_action</text>
-      <path class="line" style="marker-end:url(#graphArrow)" d="M747 84 L747 122"></path>
-      <path class="line" style="marker-end:url(#graphArrow)" d="M747 180 L747 218"></path>
-      <path class="line" style="marker-end:url(#graphArrow)" d="M655 151 C555 151 510 106 470 106"></path>
-      <text x="562" y="141" text-anchor="middle" class="muted">bridge_transaction_link</text>
-    </svg>
-    <div class="decision-grid">
-      <div class="decision-card good"><strong><code>account_transaction</code></strong>Preserves sender, receiver, fee-payer, and touched-account roles without flattening multi-account transactions into duplicated transaction rows.</div>
-      <div class="decision-card good"><strong><code>batch_transaction</code></strong>Batch detail can traverse contained transactions in bounded pages while transaction feeds still use composite indexes.</div>
-      <div class="decision-card good"><strong><code>l1_action_link</code></strong>Models witness and commit roles explicitly because one commit action can cover multiple bridge operations.</div>
-      <div class="decision-card good"><strong><code>l2_action_link</code></strong>Keeps INNER_PK action evidence attached to the bridge operation with a role instead of encoding it as optional columns only.</div>
-      <div class="decision-card good"><strong><code>bridge_transaction_link</code></strong>Separates user-facing transaction detail links from action-chain evidence links.</div>
-    </div>
-  </section>
-
-  <section id="migration">
-    <h2>Migration Strategy</h2>
-    <p>The spike includes a data-bearing migration proof. <a href="surrealkit/migrations/0001_initial_core.surql">0001_initial_core.surql</a> creates a representative pre-spike-006 core schema. <a href="surrealkit/migrations/0002_l1_watcher_and_bridge_quality.surql">0002_l1_watcher_and_bridge_quality.surql</a> adds bridge data quality, the bridge sort key, L1 watcher cursors, published-message idempotency, and the transaction rollback ledger index.</p>
-    <p>The Cucumber scenario applies migration 0001, inserts an existing bridge operation, applies migration 0002, and verifies the row survives with <code>data_quality = "complete"</code>. Migration 0002 also backfills <code>sort_submit_block_height = 0 - submit_block_height</code>, proving the strategy for adding benchmark-driven sort keys to existing data.</p>
-    <div class="callout good">
-      <strong>Production addendum:</strong> apply schema changes to live stacks with reviewed SurrealKit rollouts, not application startup DDL. Promote the same rollout artifact from local validation to the lower live stack, then <code>zeko-m-alphanet</code>, then <code>zeko-m-mainnet</code>. See <a href="addendums/production-migration-strategy.html">Production migration strategy</a>.
-    </div>
-    <ol class="flow-list">
-      <li><div><strong>Fresh environments</strong><br>Run <code>surrealkit sync</code> from <code>surrealkit/</code> against <code>database/schema</code> for test and development databases.</div></li>
-      <li><div><strong>Production rollout</strong><br>Use <code>surrealkit rollout plan</code>, <code>surrealkit rollout start</code>, and <code>surrealkit rollout complete</code> before deploying the indexer/API that writes the new fields.</div></li>
-      <li><div><strong>Audit trail</strong><br>Use SurrealKit's internal rollout metadata instead of a hand-maintained application migration ledger.</div></li>
-      <li><div><strong>Rollback posture</strong><br>Do not rely on down migrations for the read model; rebuild SurrealDB from NATS/R2 snapshots when rollback is required.</div></li>
-      <li><div><strong>Large table changes</strong><br>Treat <code>REBUILD INDEX</code> and backfill jobs as explicit migration steps for existing production-scale tables.</div></li>
-    </ol>
-  </section>
-
-  <section id="benchmarks">
-    <h2>Benchmark Evidence</h2>
-    <div class="callout good">
-      <strong>100k persisted benchmark passed on the corrected model.</strong>
-      On 2026-05-14 the Docker benchmark loaded through sequential official SurrealDB v3 <code>surreal import</code> chunks into <code>surrealdb/surrealdb:v3</code> with persisted SurrealKV. All 26 measured query paths passed p95 budgets; worst p95 was <code>transaction-feed-first-page</code> at 37.744ms.
-    </div>
-    <div class="decision-grid">
-      <div class="decision-card good"><strong>Official chunked import</strong><code>generate-benchmark-load.ts</code> writes bounded SurrealDB v3 import chunks from the SurrealKit-managed schema. Docker imports schema and sequential 20,000-row chunk files into persisted <code>surrealkv:/data/benchmark.db</code> without a monolithic <code>data.surql</code>.</div>
-      <div class="decision-card good"><strong>Measured user paths</strong>The catalog includes global feed, hash lookup, transaction detail, relation-table account feeds, sender feed, smart-contract receiver feed, account activity, bridge sender history, bridge diagnostics, batch feed, and native search.</div>
-      <div class="decision-card warn"><strong>Environment still limits scale</strong>The accepted full-index 100k chunked load is 486s. Million-row loading no longer depends on one giant file, but this machine cannot complete persisted million proof: Docker is capped at 4GB/OrbStack stopped mid-run, and host SurrealKV runs out of disk headroom.</div>
-      <div class="decision-card warn"><strong>Receiver graph coverage</strong>The benchmark data must materialize enough <code>account_transaction</code> receiver edges to prove relation-table feed costs, not just selected sample accounts.</div>
-      <div class="decision-card good"><strong>Hard budgets</strong><code>run-benchmarks.ts</code> throws when any measured path exceeds its p95 budget.</div>
-    </div>
-    <div class="bench-grid">
-      <div class="bench-card">
-        <header><span class="query">Fast direct lookups</span><span class="reading">hash/detail paths</span></header>
-        <div class="bar"><span style="width:8%"></span></div>
-        <div class="bench-metrics"><span>unique index</span><span>bounded fanout</span></div>
-      </div>
-      <div class="bench-card">
-        <header><span class="query">Fast profile subfeeds</span><span class="reading">sender/receiver/activity/bridge</span></header>
-        <div class="bar"><span style="width:7%"></span></div>
-        <div class="bench-metrics"><span>relation feed</span><span>account-local activity</span></div>
-      </div>
-      <div class="bench-card">
-        <header><span class="query">Old outliers redesigned</span><span class="reading">bridge diagnostics and receiver/profile fanout</span></header>
-        <div class="bar"><span style="width:72%"></span></div>
-        <div class="bench-metrics"><span>derived quality rows</span><span>receiver relation feed</span></div>
-      </div>
-    </div>
-    <table>
-      <thead><tr><th>Query</th><th>p95 budget</th><th>Decision</th></tr></thead>
-      <tbody>
-        <tr><td><code>transaction-feed-first-page</code>, <code>transaction-feed</code>, account/sender/receiver feeds</td><td>250ms</td><td><span class="ok">Passed.</span> Global feed reads canonical <code>transaction</code> rows through <code>idx_tx_connection_order</code>; account feeds read indexed <code>account_transaction</code> relation metadata with full cursor tuples.</td></tr>
-        <tr><td><code>transaction-by-hash</code>, <code>batch-feed-first-page</code></td><td>100ms</td><td><span class="ok">Passed.</span> Direct unique/low-volume lookups stayed under budget.</td></tr>
-        <tr><td><code>transaction-detail-by-hash</code></td><td>250ms</td><td><span class="ok">Passed.</span> One natural lookup plus bounded graph/detail fanout.</td></tr>
-        <tr><td><code>bridge-quality-issues-first-page</code>, <code>bridge-quality-issues-by-reason</code></td><td>250ms</td><td><span class="ok">Passed.</span> Derives issue rows from canonical <code>bridge_operation</code> quality fields; issue/feed tables remain rejected.</td></tr>
-        <tr><td><code>transactions-search-text</code>, <code>accounts-search-text</code>, <code>bridge-operations-search-text</code></td><td>250ms</td><td><span class="ok">Passed.</span> Native SurrealDB full-text indexes and search functions.</td></tr>
-        <tr><td><code>network-throughput-by-minute</code></td><td>500ms</td><td><span class="ok">Passed.</span> Raw aggregation failed budget; declarative <code>transaction_minute_stats</code> table view uses <code>idx_tx_minute_stats_minute</code> and measured 31.444ms p95 in the accepted 100k chunked run.</td></tr>
-      </tbody>
-    </table>
-    <p>The benchmark decision is therefore: no public or operator query path is accepted unless the updated harness passes the explicit p95 budget at the selected scale gate, and no new table shape is accepted without corresponding <code>EXPLAIN FULL</code> output.</p>
-  </section>
-
-  <section id="verification">
-    <h2>Verification</h2>
-    <pre><code>cd spikes/008-surrealdb-schema/harness
+    <section id="implementation">
+      <h2>Implementation Notes</h2>
+      <h3>Indexer writes</h3>
+      <ul>
+        <li>Write canonical rows first, then create relation rows with <code>RELATE</code> or relation-table inserts.</li>
+        <li>Populate compact scalar connection keys such as <code>sender_public_key</code>, <code>receiver_public_key</code>, <code>account_public_key</code>, and negative <code>sort_*</code> fields at ingest time.</li>
+        <li>Maintain <code>bridge_operation.data_quality</code> and <code>data_quality_reasons</code> in TypeScript from explicit source evidence. SurrealDB events do not classify bridge quality.</li>
+        <li>On rollback, use <code>target_ledger_hash</code> indexes to find affected transactions, account activity, inner actions, zkApp events, and zkApp actions.</li>
+      </ul>
+      <h3>GraphQL resolvers</h3>
+      <ul>
+        <li>Use the committed query files as resolver templates. Keep cursor arguments as full tuples.</li>
+        <li>Use relation-table feed indexes for account-local feeds. Use graph traversal for bounded detail pages.</li>
+        <li>Do not decode zkApp raw fields in the explorer database. Compose labels from the contract registry API.</li>
+        <li>Use shared live-query workers in the API process and fan out to SSE clients.</li>
+      </ul>
+      <h3>Verification commands</h3>
+      <pre><code>cd spikes/008-surrealdb-schema/harness
 pnpm install
 pnpm run typecheck
-pnpm test
 pnpm run validate:schema
-pnpm run benchmark:docker:persisted</code></pre>
-    <div class="status-grid">
-      <div class="status-card"><span class="state">passed</span><strong>TypeScript</strong><br><code>pnpm run typecheck</code></div>
-      <div class="status-card"><span class="state">passed</span><strong>Cucumber</strong><br>30 scenarios, 136 steps</div>
-      <div class="status-card"><span class="state">passed</span><strong>Schema validation</strong><br>22 tables including relation tables, the declarative time-series view, and SurrealKit metadata in real SurrealDB</div>
-      <div class="status-card"><span class="state">passed</span><strong>EXPLAIN generation</strong><br>Every query file has generated EXPLAIN comments or a documented LIVE/compound-query exception</div>
-      <div class="status-card"><span class="state">passed</span><strong>100k v3 persisted benchmark</strong><br>26/26 query paths passed; worst p95 37.744ms; load time 486s with sequential official import chunks</div>
-      <div class="status-card"><span class="state">blocked</span><strong>Million-row persisted gate</strong><br>Loader shape is fixed, but this machine lacks disk/RAM headroom for full-index persisted million proof</div>
-    </div>
-    <p>The Cucumber suite proves required tables and indexes exist, natural unique keys reject duplicate at-least-once writes, query catalog files execute against real SurrealDB, newest-first feeds are ordered correctly, graph traversals work for account/batch/bridge detail pages, rollback-sensitive child rows can be found and removed by <code>target_ledger_hash</code>, L1 watcher cursor and published-message tables are queryable, aggregate status is derived from canonical tables, and migration 0001 -> 0002 preserves existing bridge data while backfilling new fields.</p>
-  </section>
+pnpm test
+pnpm run explain:queries
+BENCH_ACCOUNT_COUNT=20000 BENCH_TX_COUNT=100000 BENCH_BRIDGE_COUNT=100000 BENCH_ITERATIONS=30 pnpm run benchmark:docker:persisted</code></pre>
+    </section>
 
-  <section id="cross-spike">
-    <h2>Cross-Spike Consistency</h2>
-    <div class="decision-grid">
-      <div class="decision-card good"><strong>Spike 002</strong>Bridge operation natural key <code>(aux, aux_sequence)</code> and action-state chain keys are preserved as unique secondary indexes; Relay-visible primary IDs are ULIDs.</div>
-      <div class="decision-card good"><strong>Spike 003</strong>Raw zkApp event/action fields remain undecoded in <code>zkapp_event</code>, <code>zkapp_action</code>, and account zkApp state.</div>
-      <div class="decision-card good"><strong>Spike 005</strong>Relay identity and keyset pagination are adopted; the hottest feeds use complete cursor tuples and measured native indexes.</div>
-      <div class="decision-card good"><strong>Spike 006 worktree</strong>L1 watcher cursor, block window, published-message idempotency, and partial source limitations are covered by tables, indexes, queries, migration, and Cucumber tests.</div>
-      <div class="decision-card good"><strong>Spike 007</strong>DA monitor state remains isolated in <code>da_attestation</code>; provider payload details are outside this schema/load optimization path.</div>
-      <div class="decision-card good"><strong>PRD 5.2/5.3</strong>Status/stats, rollback fields, bridge lifecycle indexes, and the live-query read-model plan are represented in the schema.</div>
-    </div>
-  </section>
+    <section id="remaining">
+      <h2>Remaining Work</h2>
+      <div class="status-grid">
+        <div class="status"><span>done</span><strong>Schema and query catalog</strong><br>SurrealKit schema, query files, graph edges, native search, table view, live-query files, EXPLAIN comments, and behavior tests are present.</div>
+        <div class="status"><span>done</span><strong>100k persisted proof</strong><br>All measured paths passed with the full index/search/table-view schema in SurrealDB v3.</div>
+        <div class="status blocked"><span>open</span><strong>Million-row persisted proof</strong><br>Run the million gate on a machine or volume with enough disk and memory for the full indexed SurrealKV database and compaction.</div>
+        <div class="status blocked"><span>open</span><strong>API/SSE load test</strong><br>After resolvers exist, load-test GraphQL and shared live-query fan-out. Add query files and budgets for any new resolver filters.</div>
+      </div>
+      <div class="callout warn">
+        <strong>Do not change the model to make the next benchmark easier.</strong> The million-row run should use the full realistic schema and index set. Do not remove indexes, defer indexes, add manual feed/projection tables, create a monolithic import file, or route through another database solely to load test data.
+      </div>
+    </section>
 
-  <section id="confidence">
-    <h2>Confidence and Remaining Work</h2>
-    <p><strong>Confidence: 0.88 after the corrected 100k v3 benchmark passed with official chunked import and the native table-view analytics path.</strong> The schema and resolver query catalog now reflect the desired SurrealDB-native model: canonical records, relation tables, native full-text search, bounded graph detail, declarative time-series aggregation, explicit live-query files, and hard benchmark budgets. The next confidence boundary is the million-row persisted gate on hardware with enough disk headroom.</p>
-    <p>Reasons for that confidence: the schema is executable, query files cover the resolver shapes, Cucumber tests idempotency/graph traversal/rollback/watcher state/data-bearing migration/native search/canonical bridge quality derivation against real SurrealDB, and the benchmark harness now fails on p95 budget violations.</p>
-    <p>Reasons it is not higher: million-row/20M/200M/2B gates still need query-phase results on the corrected v3 model; full-index million loading is now blocked by this local machine's 4GB Docker cap, 8GB RAM, and near-full disk rather than by a monolithic import artifact; live-query/SSE fan-out has query files but not load-test evidence; DA monitor payload details are implementation follow-up outside this schema spike.</p>
-    <div class="bar" aria-label="Confidence 88 percent"><span style="width:88%"></span></div>
-    <div class="decision-grid">
-      <div class="decision-card good"><strong>Done in this spike</strong>Schema, migrations, query catalog, graph usage, bridge quality contract, native search, live-query files, Cucumber tests, and benchmark budgets.</div>
-      <div class="decision-card warn"><strong>Growth scale still required</strong>Sequential official import chunks and host streaming import are implemented. Run million-row, 20M, 200M, and 2B-row benchmarks on production-like persisted storage with enough disk for the full indexed database and compaction.</div>
-      <div class="decision-card good"><strong>Bridge diagnostics decision</strong>Derive operator diagnostics from canonical <code>bridge_operation</code> quality fields; no issue/queue/feed table is accepted without evidence.</div>
-      <div class="decision-card warn"><strong>Planner evidence</strong>Keep <code>EXPLAIN FULL</code> output attached to every optimization decision.</div>
-      <div class="decision-card warn"><strong>Real ingestion</strong>Add Surreal Sync import/CDC proof only for supported sources such as PostgreSQL, JSONL snapshots, or Kafka bridge data; NATS JetStream remains an indexer source unless a supported bridge is introduced.</div>
-      <div class="decision-card warn"><strong>API runtime</strong>Load-test GraphQL/SSE fan-out and add one query file plus benchmark for every new resolver filter found during implementation.</div>
-      <div class="decision-card warn"><strong>DA payload</strong>Final provider payload shape is not a schema-load blocker for this spike.</div>
-    </div>
-  </section>
-
-  <section id="references">
-    <h2>Reference Sources</h2>
-    <ul>
-      <li><a href="https://surrealdb.com/docs/learn/data-models/full-text-search/search-indexes">SurrealDB full-text search indexes</a></li>
-      <li><a href="https://surrealdb.com/docs/learn/data-models/time-series/using-as-time-series-database">SurrealDB as a time-series database</a></li>
-      <li><a href="https://surrealdb.com/docs/learn/data-models/time-series/aggregation-queries">SurrealDB time-series aggregation queries</a></li>
-      <li><a href="https://surrealdb.com/docs/learn/data-models/graph/record-links-vs-graph-relations">SurrealDB record links vs graph relations</a></li>
-      <li><a href="https://surrealdb.com/docs/build/migrating/from-other-databases/from-postgresql">SurrealDB migrating from PostgreSQL</a></li>
-      <li><a href="https://surrealdb.com/docs/learn/schema-management">SurrealDB schema management</a></li>
-      <li><a href="https://surrealdb.com/docs/learn/querying/performance/performance-best-practices">SurrealDB performance best practices</a></li>
-      <li><a href="https://github.com/surrealdb/surrealkit">SurrealKit official migration/schema tool</a></li>
-      <li><a href="https://github.com/surrealdb/surreal-sync">Surreal Sync official import/CDC tool</a></li>
-    </ul>
-  </section>
-</main>
+    <section id="references">
+      <h2>Reference Sources</h2>
+      <ul>
+        <li><a href="https://surrealdb.com/docs/learn/data-models/full-text-search/search-indexes">SurrealDB full-text search indexes</a></li>
+        <li><a href="https://surrealdb.com/docs/learn/data-models/time-series/using-as-time-series-database">SurrealDB as a time-series database</a></li>
+        <li><a href="https://surrealdb.com/docs/learn/data-models/time-series/aggregation-queries">SurrealDB time-series aggregation queries</a></li>
+        <li><a href="https://surrealdb.com/docs/learn/data-models/graph/record-links-vs-graph-relations">SurrealDB record links vs graph relations</a></li>
+        <li><a href="https://surrealdb.com/docs/build/migrating/from-other-databases/from-postgresql">SurrealDB migrating from PostgreSQL</a></li>
+        <li><a href="https://surrealdb.com/docs/learn/schema-management">SurrealDB schema management</a></li>
+        <li><a href="https://surrealdb.com/docs/learn/querying/performance/performance-best-practices">SurrealDB performance best practices</a></li>
+        <li><a href="https://github.com/surrealdb/surrealkit">SurrealKit</a></li>
+        <li><a href="https://github.com/surrealdb/surreal-sync">Surreal Sync</a></li>
+      </ul>
+    </section>
+  </main>
 </div>
-<script>
-  const queryFilter = document.getElementById("queryFilter");
-  const queryTable = document.getElementById("queryTable");
-  if (queryFilter && queryTable) {
-    queryFilter.addEventListener("input", () => {
-      const needle = queryFilter.value.trim().toLowerCase();
-      for (const row of queryTable.tBodies[0].rows) {
-        row.hidden = needle.length > 0 && !row.textContent.toLowerCase().includes(needle);
-      }
-    });
-  }
-</script>
 </body>
 </html>

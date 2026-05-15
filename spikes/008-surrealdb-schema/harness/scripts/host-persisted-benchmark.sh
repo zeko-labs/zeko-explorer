@@ -4,9 +4,7 @@ set -euo pipefail
 SURREAL_BIN="${SPIKE008_SURREAL_BIN:-${HOME}/.cache/zeko-explorer/surreal-v3.0.5/surreal}"
 PORT="${SPIKE008_SURREAL_PORT:-8130}"
 DB="${BENCH_DB_NAME:-bench_surrealkit}"
-STORAGE_ENGINE="${BENCH_STORAGE_ENGINE:-surrealkv}"
 REPORT_DIR="${SPIKE008_REPORT_DIR:-$(pwd)/reports}"
-LOAD_PROJECT_DIR="${BENCH_LOAD_PROJECT_DIR:-${BENCH_SURREALKIT_PROJECT_DIR:-${REPORT_DIR}/benchmark-load}}"
 DATA_DIR="${BENCH_HOST_DATA_DIR:-${REPORT_DIR}/host-benchmark.db}"
 SERVER_PID=""
 
@@ -15,22 +13,9 @@ case "$REPORT_DIR" in
   *) REPORT_DIR="$(pwd)/$REPORT_DIR" ;;
 esac
 
-case "$LOAD_PROJECT_DIR" in
-  /*) ;;
-  *) LOAD_PROJECT_DIR="$(pwd)/$LOAD_PROJECT_DIR" ;;
-esac
-
 case "$DATA_DIR" in
   /*) ;;
   *) DATA_DIR="$(pwd)/$DATA_DIR" ;;
-esac
-
-case "$STORAGE_ENGINE" in
-  surrealkv|rocksdb|memory) ;;
-  *)
-    echo "Unknown BENCH_STORAGE_ENGINE: $STORAGE_ENGINE" >&2
-    exit 2
-    ;;
 esac
 
 if [[ ! -x "$SURREAL_BIN" ]]; then
@@ -38,18 +23,12 @@ if [[ ! -x "$SURREAL_BIN" ]]; then
   exit 2
 fi
 
-if [[ "$STORAGE_ENGINE" == "memory" ]]; then
-  STORAGE_PATH="memory"
-else
-  STORAGE_PATH="${STORAGE_ENGINE}:${DATA_DIR}"
-fi
-
 cleanup() {
   if [[ -n "$SERVER_PID" ]]; then
     kill "$SERVER_PID" >/dev/null 2>&1 || true
     wait "$SERVER_PID" >/dev/null 2>&1 || true
   fi
-  if [[ "$STORAGE_ENGINE" != "memory" && "${BENCH_KEEP_DATA:-0}" != "1" ]]; then
+  if [[ "${BENCH_KEEP_DATA:-0}" != "1" ]]; then
     rm -rf "$DATA_DIR"
   fi
 }
@@ -60,13 +39,7 @@ trap cleanup EXIT
 mkdir -p "$REPORT_DIR"
 
 generated_started_at="$(date +%s)"
-if [[ "${BENCH_STREAM_GENERATE_LOAD:-0}" == "1" ]]; then
-  echo "[benchmark-load] streaming generated chunks directly into SurrealDB"
-elif [[ "${BENCH_SKIP_GENERATE_LOAD:-0}" != "1" ]]; then
-  BENCH_LOAD_PROJECT_DIR="$LOAD_PROJECT_DIR" pnpm run benchmark:generate-load
-else
-  echo "[benchmark-load] reusing generated load project at ${LOAD_PROJECT_DIR}"
-fi
+echo "[benchmark-load] streaming generated chunks directly into SurrealDB"
 generated_at="$(date +%s)"
 
 started_at="$(date +%s)"
@@ -75,7 +48,7 @@ started_at="$(date +%s)"
   --bind "127.0.0.1:${PORT}" \
   --username root \
   --password root \
-  "$STORAGE_PATH" >"${REPORT_DIR}/host-surreal.log" 2>&1 &
+  "surrealkv:${DATA_DIR}" >"${REPORT_DIR}/host-surreal.log" 2>&1 &
 SERVER_PID="$!"
 
 until curl --silent --fail \
@@ -93,67 +66,23 @@ until curl --silent --fail \
 done
 ready_at="$(date +%s)"
 
-if [[ "${BENCH_STREAM_GENERATE_LOAD:-0}" == "1" ]]; then
-  stream_started_at="$(date +%s)"
-  SPIKE008_SURREAL_ENDPOINT="http://127.0.0.1:${PORT}" \
-  SPIKE008_SURREAL_BIN="$SURREAL_BIN" \
-  BENCH_STREAM_WORK_DIR="${REPORT_DIR}/stream-load" \
-  BENCH_DB_NAME="$DB" \
-  pnpm exec tsx benchmarks/stream-benchmark-load.ts
-  synced_at="$stream_started_at"
-  loaded_at="$(date +%s)"
-else
-  "$SURREAL_BIN" import \
-    --log none \
-    --endpoint "http://127.0.0.1:${PORT}" \
-    --namespace spike008 \
-    --database "$DB" \
-    --username root \
-    --password root \
-    "${LOAD_PROJECT_DIR}/database/import/schema-full.surql"
-  synced_at="$(date +%s)"
-
-  seed_count=0
-  for seed_file in "${LOAD_PROJECT_DIR}"/database/import/chunks/*.surql; do
-    seed_count=$((seed_count + 1))
-    if (( seed_count < ${BENCH_IMPORT_START_CHUNK:-1} )); then
-      echo "[benchmark-load] skipping host import chunk ${seed_count}: $(basename "$seed_file")"
-      continue
-    fi
-    echo "[benchmark-load] host import chunk ${seed_count}: $(basename "$seed_file")"
-    "$SURREAL_BIN" import \
-      --log none \
-      --endpoint "http://127.0.0.1:${PORT}" \
-      --namespace spike008 \
-      --database "$DB" \
-      --username root \
-      --password root \
-      "$seed_file"
-    if [[ "${BENCH_DELETE_IMPORTED_CHUNKS:-0}" == "1" ]]; then
-      rm -f "$seed_file"
-    fi
-  done
-  loaded_at="$(date +%s)"
-fi
-indexed_at="$loaded_at"
-load_label="host-surreal-import-chunks"
-if [[ "${BENCH_STREAM_GENERATE_LOAD:-0}" == "1" ]]; then
-  load_label="host-surreal-streaming-import"
-fi
-storage_label="persisted ${STORAGE_ENGINE} path ${DATA_DIR}"
-if [[ "$STORAGE_ENGINE" == "memory" ]]; then
-  storage_label="memory engine"
-fi
+stream_started_at="$(date +%s)"
+SPIKE008_SURREAL_ENDPOINT="http://127.0.0.1:${PORT}" \
+SPIKE008_SURREAL_BIN="$SURREAL_BIN" \
+BENCH_STREAM_WORK_DIR="${REPORT_DIR}/stream-load" \
+BENCH_DB_NAME="$DB" \
+pnpm exec tsx benchmarks/stream-benchmark-load.ts
+loaded_at="$(date +%s)"
 
 SPIKE008_SURREAL_ENDPOINT="http://127.0.0.1:${PORT}" \
-SPIKE008_BENCH_STORAGE="Host ${SURREAL_BIN} with ${storage_label}; schema loaded by official surreal import from SurrealKit-managed schema; data loaded by sequential official surreal import chunk files; full index set enabled during import" \
+SPIKE008_BENCH_STORAGE="Host ${SURREAL_BIN} with persisted SurrealKV path ${DATA_DIR}; schema loaded by official surreal import from SurrealKit-managed schema; data streamed as bounded official surreal import chunk files; full index set enabled during import" \
 BENCH_SKIP_SEED=1 \
 BENCH_DB_NAME="$DB" \
-BENCH_LOAD_METHOD="$load_label" \
+BENCH_LOAD_METHOD="host-surreal-streaming-import" \
 BENCH_LOAD_GENERATE_SECONDS="$((generated_at - generated_started_at))" \
 BENCH_LOAD_DB_READY_SECONDS="$((ready_at - started_at))" \
-BENCH_LOAD_SCHEMA_SECONDS="$((synced_at - ready_at))" \
-BENCH_LOAD_DATA_SECONDS="$((loaded_at - synced_at))" \
-BENCH_LOAD_INDEX_SECONDS="$((indexed_at - loaded_at))" \
-BENCH_LOAD_SECONDS="$((indexed_at - started_at))" \
+BENCH_LOAD_SCHEMA_SECONDS="$((stream_started_at - ready_at))" \
+BENCH_LOAD_DATA_SECONDS="$((loaded_at - stream_started_at))" \
+BENCH_LOAD_INDEX_SECONDS=0 \
+BENCH_LOAD_SECONDS="$((loaded_at - started_at))" \
 pnpm run benchmark

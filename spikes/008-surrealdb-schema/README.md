@@ -15,6 +15,7 @@
 - [`harness/features/`](harness/features/) — Cucumber acceptance suite that runs against in-memory SurrealDB.
 - [`surrealkit/migrations/`](surrealkit/migrations/) — representative SurrealKit-applied rollout SQL with existing data.
 - [`harness/benchmarks/`](harness/benchmarks/) — benchmark runner and latest measured HTML output.
+- [`harness/benchmarks/import-load-experiments.md`](harness/benchmarks/import-load-experiments.md) — summary of accepted and rejected benchmark loading paths.
 
 ## Running the Evidence
 
@@ -60,7 +61,7 @@ pnpm run benchmark:docker:persisted
 
 That run loaded via official `surreal import` directly into Dockerized `surrealdb/surrealdb:v3` with persisted SurrealKV and passed all 26 measured query paths after removing manual feed/projection tables and adding explicit exact lookup, native full-text, zkApp timeline, and time-series aggregate coverage. The latest accepted 100k full-index run uses sequential official import chunks with 20,000-row chunk files and no monolithic `data.surql`: 486s total load, 482s data import, and all 26 query paths passed. Worst p95 was `transaction-feed-first-page` at 37.744ms against a 250ms budget.
 
-A million-transaction gate was attempted with 50k accounts, 1M transactions, 2M `account_transaction` relation edges, 100k account activity rows, 10k zkApp events, 10k zkApp actions, 100k bridge operations, and the full index/search/table-view schema. The monolithic embedded Docker import is rejected: it exited 137 under the local 4GB Docker limit. Docker live chunk import avoided the monolithic file, but OrbStack stopped mid-run. Host SurrealKV chunk import avoided Docker memory limits, but the machine had only ~3.6GB free and SurrealKV hit `No space left on device` during compaction. A streaming host importer now generates one bounded `.surql` chunk, imports it with official `surreal import`, deletes it, and continues; this fixes the harness disk amplification from generated files, but persisted million-row proof is still blocked by local disk capacity. Memory-backed streaming mode was also tested and stopped because the 8GB host began swapping before the million gate. The next scale gate needs a machine/volume with enough disk headroom for the real persisted DB and compaction, not schema shortcuts, index deferral, manual projections, or Kafka/PostgreSQL detours.
+A million-transaction gate was attempted with 50k accounts, 1M transactions, 2M `account_transaction` relation edges, 100k account activity rows, 10k zkApp events, 10k zkApp actions, 100k bridge operations, and the full index/search/table-view schema. The retained next path is `benchmark:host:million:stream` on hardware with enough disk/RAM headroom for the full indexed SurrealKV database and compaction. Rejected loader experiments are summarized in [`harness/benchmarks/import-load-experiments.md`](harness/benchmarks/import-load-experiments.md).
 
 ---
 

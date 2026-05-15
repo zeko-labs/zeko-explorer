@@ -56,10 +56,10 @@ const queryBudgets: Readonly<Record<string, number>> = {
 const db = process.env.BENCH_DB_NAME ?? `bench_${Date.now()}`;
 const storageDescription = process.env.SPIKE008_BENCH_STORAGE ?? (process.env.SPIKE008_SURREAL_ENDPOINT === undefined ? "in-memory local process" : "external SurrealDB endpoint");
 const skipSeed = process.env.BENCH_SKIP_SEED === "1";
-const loadMethod = process.env.BENCH_LOAD_METHOD ?? "local-surrealkit-seed";
+const loadMethod = process.env.BENCH_LOAD_METHOD ?? "local-fixture-seed";
 const importedLoadSeconds =
   process.env.BENCH_LOAD_SECONDS === undefined
-    ? process.env.BENCH_SURREALKIT_SEED_SECONDS === undefined ? undefined : Number(process.env.BENCH_SURREALKIT_SEED_SECONDS)
+    ? undefined
     : Number(process.env.BENCH_LOAD_SECONDS);
 const loadBreakdown = {
   generate: process.env.BENCH_LOAD_GENERATE_SECONDS === undefined ? undefined : Number(process.env.BENCH_LOAD_GENERATE_SECONDS),
