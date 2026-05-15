@@ -24,17 +24,7 @@ jobs:
         with:
           auto-install: true
 
-      - run: >
-          moon run
-          :format
-          :lint
-          :typecheck
-          :test
-          tests:acceptance
-          infra:lint
-          contract-registry-api:types
-          hive-gateway:types
-          mcp:types
+      - run: moon ci --summary normal
 
       - uses: moonrepo/run-report-action@v1
         if: success() || failure()
