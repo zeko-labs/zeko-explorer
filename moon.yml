@@ -1,0 +1,50 @@
+$schema: "./.moon/cache/schemas/project.json"
+id: "root"
+language: "unknown"
+layer: "configuration"
+stack: "unknown"
+tags: ["root"]
+
+fileGroups:
+  scripts:
+    - "moon.yml"
+    - "scripts/**/*.ts"
+    - "scripts/tsconfig.json"
+    - "package.json"
+    - "pnpm-lock.yaml"
+    - "pnpm-workspace.yaml"
+    - "tsconfig.base.json"
+  prd:
+    - "docs/PRD.md"
+    - glob: "docs/PRD.html"
+    - "docs/AGENTS.md"
+    - "scripts/docs/sync-prd.ts"
+    - "package.json"
+    - "pnpm-lock.yaml"
+    - "pnpm-workspace.yaml"
+
+tasks:
+  sync-prd:
+    command: "node"
+    args: ["scripts/docs/sync-prd.ts"]
+    inputs:
+      - "@group(prd)"
+    outputs:
+      - "docs/PRD.md"
+    options:
+      runInCI: false
+
+  check-prd:
+    command: "node"
+    args: ["scripts/docs/sync-prd.ts", "--check"]
+    deps:
+      - "root:typecheck"
+    inputs:
+      - "@group(prd)"
+
+  typecheck:
+    command: "tsgo"
+    toolchains: ["javascript"]
+    args: ["--project", "scripts/tsconfig.json", "--noEmit"]
+    inputs:
+      - "@group(scripts)"

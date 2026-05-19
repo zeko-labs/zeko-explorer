@@ -1,10 +1,13 @@
 $schema: "./cache/schemas/workspace.json"
 
 projects:
-  - "apps/*"
-  - "services/*"
-  - "packages/*"
-  - "infra"
+  sources:
+    root: "."
+  globs:
+    - "apps/*"
+    - "services/*"
+    - "packages/*"
+    - "infra"
 
 vcs:
   client: "git"
