@@ -13,7 +13,7 @@
       "!**/worker-configuration.d.ts",
       "!coverage",
       "!**/coverage",
-      "!spikes"
+      "!docs/spikes"
     ]
   },
   "formatter": {

@@ -11,9 +11,10 @@ allowBuilds:
   workerd: true
 
 catalog:
-  "@cucumber/cucumber": "12.8.3"
-  "@typescript/native-preview": "7.0.0-dev.20260513.1"
   "@biomejs/biome": "2.4.15"
+  "@cucumber/cucumber": "12.8.3"
+  "@kreuzberg/html-to-markdown": "3.4.0"
+  "@typescript/native-preview": "7.0.0-dev.20260513.1"
   "@types/node": "25.7.0"
   glob: "13.0.6"
   lefthook: "2.1.6"
