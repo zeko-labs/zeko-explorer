@@ -1,0 +1,22 @@
+{
+  "name": "@zeko-explorer/spike-008-surrealdb-schema",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "SPIKE008_SURREAL_IMAGE=surrealdb/surrealdb:v3 NODE_OPTIONS='--import tsx' cucumber-js --import 'features/support/*.ts' --import 'features/step_definitions/*.ts'",
+    "benchmark": "SPIKE008_SURREAL_IMAGE=surrealdb/surrealdb:v3 tsx benchmarks/run-benchmarks.ts",
+    "benchmark:generate-load": "tsx benchmarks/generate-benchmark-load.ts",
+    "benchmark:docker:persisted": "bash scripts/docker-persisted-benchmark.sh",
+    "benchmark:docker:million": "BENCH_ACCOUNT_COUNT=50000 BENCH_TX_COUNT=1000000 BENCH_BRIDGE_COUNT=100000 BENCH_ACTIVITY_STRIDE=10 bash scripts/docker-persisted-benchmark.sh",
+    "benchmark:host:million:stream": "BENCH_ACCOUNT_COUNT=50000 BENCH_TX_COUNT=1000000 BENCH_BRIDGE_COUNT=100000 BENCH_ACTIVITY_STRIDE=10 bash scripts/host-persisted-benchmark.sh",
+    "explain:queries": "SPIKE008_SURREAL_IMAGE=surrealdb/surrealdb:v3 tsx benchmarks/explain-queries.ts",
+    "validate:schema": "SPIKE008_SURREAL_IMAGE=surrealdb/surrealdb:v3 tsx scripts/validate-schema.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.3.0",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
