@@ -130,7 +130,7 @@ Each network runs its own sequencer, DA layer, and **full explorer backend stack
 │                     (TypeScript)                                 │
 │                                                                 │
 │  Consumes all streams. Writes:                                  │
-│  • Explorer data: transactions, accounts, batches, stats, ...   │
+│  • Explorer data: transactions, accounts, batches, health, ...  │
 │  • Bridge data: outer_action, inner_action, bridge_operation    │
 │  • zkApp data: events, actions                                  │
 │  • Consumer-side rollback detection (hash chain continuity)     │
@@ -341,11 +341,11 @@ The indexer maintains a `ledger_hash → NATS sequence number` mapping (in-memor
 
 #### 5.2.6 SurrealDB (Single Node)
 
-Graph relations, record links, full-text search, live queries, schemaful mode. **Rebuildable read model** — NATS JetStream is the source of truth.
+Graph relations, record links, full-text search, live queries, schemafull mode. **Rebuildable read model** — NATS JetStream is the source of truth.
 
-**Record IDs:** every indexed row carries a **ULID** primary key assigned at insert time. The ULID is the SurrealDB record ID (`bridge_operation:01HYZ...`), the inner ID inside the GraphQL `Node.id` envelope, and the join key for graph edges. Rationale and full schema strategy: [Spike 005 results](./spikes/005-relay-pagination/results.md) and `spikes/008-surrealdb-schema/`. The bridge tables shown below use composite-key record IDs (`bridge_operation:⟨{aux}_{aux_sequence}⟩`) for backward compatibility with spike 002's correlation work; spike 008 reconciles this against the ULID convention.
+**Record IDs and keys:** public GraphQL identity uses stable SurrealDB record IDs encoded into Relay `Node.id` values. Natural blockchain identifiers remain unique secondary indexes, for example transaction hash, account public key, action state, and bridge `(aux, aux_sequence)`. Paginated queries use explicit indexed sort tuples rather than relying on natural identifiers as ordering keys. Rationale and full schema strategy: [Spike 005 results](./spikes/005-relay-pagination/results.md) and `spikes/008-surrealdb-schema/`.
 
-Schema sync, rollouts, seeding, and declarative tests managed via [SurrealKit](https://github.com/surrealdb/surrealkit). Historical imports or CDC from supported external sources use [Surreal Sync](https://github.com/surrealdb/surreal-sync) where it fits, such as PostgreSQL archive data, JSONL snapshots, or a Kafka bridge. NATS JetStream remains the explorer source of truth unless a supported Surreal Sync source bridge is introduced.
+Schema sync, rollout migrations, seeding, and declarative database tests are managed with [SurrealKit](https://github.com/surrealdb/surrealkit). NATS JetStream remains the explorer source of truth; SurrealDB is a rebuildable read model.
 
 **Live query scaling:** The GraphQL APIs fan out from shared live queries. One `LIVE SELECT` per watched subscription type, not per client. API servers manage per-client filtering and SSE fan-out at the GraphQL layer.
 
@@ -925,8 +925,7 @@ This section summarizes the accepted deployment model. See [Spike 004 results](.
 | NATS | JetStream (rolling retention + R2 archival) | Durable, replay, extensible substrate. Source of truth. |
 | Zeko Indexer | TypeScript | I/O bound. Shared types with APIs. Rust only if perf bottleneck. |
 | Database | SurrealDB (single node) | Graph, record links, FTS, live queries. Rebuildable from NATS. |
-| DB Migrations | SurrealKit | Official SurrealDB schema sync, rollout migration, seeding, and declarative test tooling. |
-| Data Import / CDC | Surreal Sync where source-supported | Official SurrealDB import/CDC tooling for PostgreSQL, JSONL, Kafka, and other supported sources; not a replacement for the NATS-backed indexer without a supported bridge. |
+| DB Migrations | SurrealKit | Schema sync, rollout migrations, seed fixtures, and declarative database tests. |
 | Explorer API | TypeScript, Pothos | Code-first, SSE, full Relay Connections (`Node`, global IDs, `edges`/`pageInfo`) over ULID primary keys. See [Spike 005 results](./spikes/005-relay-pagination/results.md). |
 | Bridge API | TypeScript, Pothos | Separate endpoint, same tech and pagination conventions. |
 | MCP Server | TypeScript, CF Worker | Code-mode + generated SDK. Calls gateway or explicit internal service credentials. |
