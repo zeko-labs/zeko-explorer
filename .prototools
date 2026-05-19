@@ -6,4 +6,4 @@ go = "1.26.3"
 nu = "0.112.2"
 
 [plugins]
-nu = "github://hebilicious/proto-nu"
+nu = "github://Hebilicious/proto-nu@v0.1.0"
