@@ -24,6 +24,9 @@ jobs:
         with:
           auto-install: true
 
+      - name: Install Nu
+        run: proto install nu
+
       - run: moon ci --summary normal
 
       - uses: moonrepo/run-report-action@v1
