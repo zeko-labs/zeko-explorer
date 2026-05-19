@@ -40,8 +40,24 @@ tasks:
     options:
       persistent: true
 
+  prepare:
+    command: "nuxt"
+    args: ["prepare"]
+    inputs:
+      - "@group(sources)"
+      - "@group(workspaceDeps)"
+    outputs:
+      - ".nuxt/tsconfig.json"
+      - ".nuxt/tsconfig.app.json"
+      - ".nuxt/tsconfig.server.json"
+      - ".nuxt/tsconfig.shared.json"
+      - ".nuxt/tsconfig.node.json"
+
   typecheck:
-    script: "nuxt prepare && tsgo --project tsconfig.json --noEmit"
+    command: "tsgo"
+    args: ["--project", "tsconfig.json", "--noEmit"]
+    deps:
+      - "ui:prepare"
     inputs:
       - "@group(sources)"
       - "@group(workspaceDeps)"
