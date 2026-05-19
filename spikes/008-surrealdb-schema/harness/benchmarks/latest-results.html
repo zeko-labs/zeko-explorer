@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike 008 Benchmark Results</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #f6f8fb; color: #17202a; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; }
+    header, section { background: #fff; border: 1px solid #d9dee5; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 14px 38px rgba(31, 41, 55, .08); }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .stat { border: 1px solid #d9dee5; border-radius: 8px; padding: 12px; }
+    .stat b { display: block; color: #2563eb; font-size: 24px; }
+    .ok { color: #047857; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #d9dee5; padding: 9px 10px; text-align: left; }
+    th { color: #5c6670; text-transform: uppercase; font-size: 12px; }
+    code { background: #eef2f7; border-radius: 5px; padding: 1px 4px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Spike 008 Benchmark Results</h1>
+    <p>Accepted 100k persisted SurrealDB v3 gate, recorded 2026-05-14. The million-row gate is intentionally deferred.</p>
+    <div class="stats">
+      <div class="stat"><b>100,000</b>transactions</div>
+      <div class="stat"><b>100,000</b>account activity rows</div>
+      <div class="stat"><b>20,000</b>accounts</div>
+      <div class="stat"><b>100,000</b>bridge operations</div>
+      <div class="stat"><b>486.00s</b>total load time</div>
+      <div class="stat"><b>26/26</b>query paths passed</div>
+    </div>
+    <p>SurrealDB: Docker image <code>surrealdb/surrealdb:v3</code> with persisted SurrealKV, schema and data loaded by official sequential <code>surreal import</code> chunk files generated from the SurrealKit-managed schema. Full index/search/table-view schema was present during import; no manual feed/projection tables were used.</p>
+    <p>Load breakdown: benchmark data generation 2s, database ready 2s, schema apply/import 2s, data import 482s, separate index build 0s. Chunk size: 20,000 rows. Query runner: Node.js over SurrealDB HTTP SQL API after data was loaded.</p>
+  </header>
+  <section>
+    <table>
+      <thead><tr><th>Query</th><th>min ms</th><th>p50 ms</th><th>p95 ms</th><th>budget p95 ms</th><th>max ms</th><th>pass</th></tr></thead>
+      <tbody>
+        <tr><td><code>transaction-feed-first-page</code></td><td>28.996</td><td>31.475</td><td>37.744</td><td>250</td><td>41.578</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transaction-feed</code></td><td>30.021</td><td>32.498</td><td>34.990</td><td>250</td><td>37.010</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transaction-by-hash</code></td><td>22.815</td><td>23.380</td><td>25.478</td><td>100</td><td>30.406</td><td class="ok">PASS</td></tr>
+        <tr><td><code>account-by-public-key</code></td><td>22.243</td><td>24.235</td><td>24.852</td><td>100</td><td>25.736</td><td class="ok">PASS</td></tr>
+        <tr><td><code>bridge-operation-by-natural-key</code></td><td>23.757</td><td>25.900</td><td>30.400</td><td>100</td><td>31.138</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transaction-detail-by-hash</code></td><td>27.774</td><td>30.889</td><td>32.952</td><td>250</td><td>34.024</td><td class="ok">PASS</td></tr>
+        <tr><td><code>account-transaction-feed-first-page</code></td><td>28.172</td><td>28.939</td><td>29.529</td><td>250</td><td>31.751</td><td class="ok">PASS</td></tr>
+        <tr><td><code>account-transaction-feed</code></td><td>28.389</td><td>30.648</td><td>35.458</td><td>250</td><td>35.512</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transactions-by-sender-first-page</code></td><td>27.740</td><td>31.226</td><td>32.968</td><td>250</td><td>33.355</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transactions-by-receiver-first-page</code></td><td>27.707</td><td>29.983</td><td>32.503</td><td>250</td><td>33.062</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transactions-by-sender</code></td><td>27.201</td><td>31.581</td><td>32.798</td><td>250</td><td>33.148</td><td class="ok">PASS</td></tr>
+        <tr><td><code>account-activity-first-page</code></td><td>27.086</td><td>28.025</td><td>30.888</td><td>250</td><td>31.370</td><td class="ok">PASS</td></tr>
+        <tr><td><code>account-activity-feed</code></td><td>26.767</td><td>28.588</td><td>31.642</td><td>250</td><td>32.008</td><td class="ok">PASS</td></tr>
+        <tr><td><code>zkapp-events-first-page</code></td><td>26.776</td><td>29.180</td><td>32.264</td><td>250</td><td>32.483</td><td class="ok">PASS</td></tr>
+        <tr><td><code>zkapp-events-by-account</code></td><td>28.204</td><td>30.253</td><td>33.049</td><td>250</td><td>33.130</td><td class="ok">PASS</td></tr>
+        <tr><td><code>zkapp-actions-first-page</code></td><td>27.911</td><td>31.094</td><td>32.649</td><td>250</td><td>33.106</td><td class="ok">PASS</td></tr>
+        <tr><td><code>zkapp-actions-by-account</code></td><td>30.988</td><td>32.349</td><td>34.290</td><td>250</td><td>48.716</td><td class="ok">PASS</td></tr>
+        <tr><td><code>bridge-operations-by-sender-first-page</code></td><td>26.854</td><td>28.159</td><td>31.671</td><td>250</td><td>32.565</td><td class="ok">PASS</td></tr>
+        <tr><td><code>bridge-operations-by-sender</code></td><td>26.800</td><td>28.002</td><td>31.394</td><td>250</td><td>31.921</td><td class="ok">PASS</td></tr>
+        <tr><td><code>bridge-quality-issues-first-page</code></td><td>27.101</td><td>28.884</td><td>32.924</td><td>250</td><td>33.008</td><td class="ok">PASS</td></tr>
+        <tr><td><code>bridge-quality-issues-by-reason</code></td><td>27.318</td><td>30.562</td><td>32.254</td><td>250</td><td>33.762</td><td class="ok">PASS</td></tr>
+        <tr><td><code>batch-feed-first-page</code></td><td>26.098</td><td>28.925</td><td>29.813</td><td>100</td><td>30.489</td><td class="ok">PASS</td></tr>
+        <tr><td><code>transactions-search-text</code></td><td>29.184</td><td>31.675</td><td>33.261</td><td>250</td><td>33.480</td><td class="ok">PASS</td></tr>
+        <tr><td><code>accounts-search-text</code></td><td>29.793</td><td>31.961</td><td>34.127</td><td>250</td><td>34.179</td><td class="ok">PASS</td></tr>
+        <tr><td><code>bridge-operations-search-text</code></td><td>29.449</td><td>30.754</td><td>36.583</td><td>250</td><td>38.397</td><td class="ok">PASS</td></tr>
+        <tr><td><code>network-throughput-by-minute</code></td><td>28.802</td><td>29.630</td><td>31.444</td><td>500</td><td>33.011</td><td class="ok">PASS</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>

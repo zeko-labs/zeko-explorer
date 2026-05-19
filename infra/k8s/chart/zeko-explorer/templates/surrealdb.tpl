@@ -67,23 +67,18 @@ metadata:
     app.kubernetes.io/name: surrealdb-migrations
     {{- include "zeko-explorer.labels" . | nindent 4 }}
 data:
-  surrealkit.toml: |
-    # SurrealKit project for the Zeko Explorer read model.
-  000_schema.surql: |
-    DEFINE TABLE OVERWRITE batch SCHEMAFULL;
-    DEFINE FIELD network ON batch TYPE string;
-    DEFINE FIELD target_ledger_hash ON batch TYPE string;
-    DEFINE FIELD da_status ON batch TYPE option<string> ASSERT $value IN ['attested'];
-    DEFINE FIELD da_attested_at ON batch TYPE option<datetime>;
-    DEFINE FIELD da_source ON batch TYPE option<string> ASSERT $value IN ['settlement', 'proved', 'da-direct'];
-    DEFINE INDEX idx_batch_target_ledger_hash ON batch FIELDS target_ledger_hash UNIQUE;
-    DEFINE INDEX idx_batch_da_status ON batch FIELDS da_status;
-    DEFINE TABLE pending_da_attestation SCHEMAFULL;
-    DEFINE FIELD ledger_hash ON pending_da_attestation TYPE string;
-    DEFINE FIELD source ON pending_da_attestation TYPE string ASSERT $value IN ['settlement', 'proved', 'da-direct'];
-    DEFINE FIELD attested_at ON pending_da_attestation TYPE option<datetime>;
-    DEFINE FIELD received_at ON pending_da_attestation TYPE datetime;
-    DEFINE INDEX idx_pending_da_hash ON pending_da_attestation FIELDS ledger_hash UNIQUE;
+  surrealkit.toml: |-
+{{ .Files.Get "surrealkit/surrealkit.toml" | indent 4 }}
+  setup.surql: |-
+{{ .Files.Get "surrealkit/database/setup.surql" | indent 4 }}
+  000_schema.surql: |-
+{{ .Files.Get "surrealkit/database/schema/000_schema.surql" | indent 4 }}
+  seed.surql: |-
+{{ .Files.Get "surrealkit/database/seed/seed.surql" | indent 4 }}
+  0001_initial_core.surql: |-
+{{ .Files.Get "surrealkit/migrations/0001_initial_core.surql" | indent 4 }}
+  0002_l1_watcher_and_bridge_quality.surql: |-
+{{ .Files.Get "surrealkit/migrations/0002_l1_watcher_and_bridge_quality.surql" | indent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -112,12 +107,21 @@ spec:
               surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} sync --fail-fast
           volumeMounts:
             - name: migrations
-              mountPath: /work/surrealkit.toml
-              subPath: surrealkit.toml
-            - name: migrations
-              mountPath: /work/database/schema/000_schema.surql
-              subPath: 000_schema.surql
+              mountPath: /work
       volumes:
         - name: migrations
           configMap:
             name: surrealdb-migrations
+            items:
+              - key: surrealkit.toml
+                path: surrealkit.toml
+              - key: setup.surql
+                path: database/setup.surql
+              - key: 000_schema.surql
+                path: database/schema/000_schema.surql
+              - key: seed.surql
+                path: database/seed/seed.surql
+              - key: 0001_initial_core.surql
+                path: migrations/0001_initial_core.surql
+              - key: 0002_l1_watcher_and_bridge_quality.surql
+                path: migrations/0002_l1_watcher_and_bridge_quality.surql

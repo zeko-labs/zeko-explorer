@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Production Migration Strategy</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #5c6670;
+      --border: #d9dee5;
+      --accent: #0f766e;
+      --accent-2: #2563eb;
+      --good: #15803d;
+      --warn: #9a3412;
+      --code: #eef2f7;
+      --shadow: 0 14px 38px rgba(31, 41, 55, .08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111418;
+        --panel: #171b21;
+        --text: #eef2f7;
+        --muted: #a8b1bd;
+        --border: #303741;
+        --accent: #5eead4;
+        --accent-2: #93c5fd;
+        --good: #86efac;
+        --warn: #fdba74;
+        --code: #202630;
+        --shadow: 0 14px 38px rgba(0, 0, 0, .25);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 15% -10%, color-mix(in srgb, var(--accent-2), transparent 82%), transparent 34rem),
+        radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent), transparent 82%), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 64px; }
+    header, section {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--panel), transparent 3%);
+      box-shadow: var(--shadow);
+    }
+    header {
+      padding: 28px;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--panel), var(--accent-2) 8%), var(--panel));
+    }
+    section { margin-top: 18px; padding: 22px; }
+    h1, h2, h3 { line-height: 1.2; margin: 0; letter-spacing: 0; }
+    h1 { font-size: 34px; }
+    h2 { font-size: 22px; margin-bottom: 10px; }
+    h3 { font-size: 17px; margin-top: 18px; }
+    p { margin: 10px 0; color: var(--muted); }
+    strong { color: var(--text); }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--code);
+      border-radius: 5px;
+    }
+    code { padding: 1px 4px; }
+    pre {
+      padding: 14px;
+      overflow: auto;
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: color-mix(in srgb, var(--panel), var(--bg) 45%);
+    }
+    tr:last-child td { border-bottom: 0; }
+    ul, ol { color: var(--muted); padding-left: 22px; }
+    li { margin: 5px 0; }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .nav a, .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--panel);
+    }
+    .card strong { display: block; margin-bottom: 6px; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      background: color-mix(in srgb, var(--accent), transparent 92%);
+      border-radius: 8px;
+    }
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: color-mix(in srgb, var(--warn), transparent 92%);
+    }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Production Migration Strategy</h1>
+      <p>Operational rollout model for SurrealKit migrations across isolated Zeko explorer stacks while production stays live.</p>
+      <div class="meta">
+        <span class="pill">Spike 008 addendum</span>
+        <span class="pill">SurrealKit rollouts</span>
+        <span class="pill">One stack per network</span>
+      </div>
+      <nav class="nav">
+        <a href="../results.html">Results</a>
+        <a href="../surrealkit/">SurrealKit Project</a>
+        <a href="../harness/features/migration.feature">Migration Feature</a>
+      </nav>
+    </header>
+
+    <section id="decision">
+      <h2>Decision</h2>
+      <div class="callout">
+        <strong>Use SurrealKit rollouts for every shared or live database.</strong>
+        <p>Use <code>surrealkit sync</code> only for local, CI, preview, and disposable databases where the database can be reconciled directly to desired state.</p>
+      </div>
+      <p>The indexer and APIs must not apply DDL on startup. Schema changes are a deploy step, visible in Git, run once per target stack, and promoted with the same reviewed rollout artifact from lower environments to mainnet.</p>
+    </section>
+
+    <section id="network-order">
+      <h2>Promotion Order</h2>
+      <ol>
+        <li><strong>Local:</strong> use <code>surrealkit sync</code>, run Cucumber, schema validation, and benchmark smoke tests.</li>
+        <li><strong>Lower live stack:</strong> run the rollout against <code>zeko-m-devnet</code> or the team's current testnet stack.</li>
+        <li><strong>Pre-mainnet:</strong> promote the same rollout artifact to <code>zeko-m-alphanet</code>.</li>
+        <li><strong>Production:</strong> promote the same rollout artifact to <code>zeko-m-mainnet</code>.</li>
+      </ol>
+      <p>Do not regenerate the rollout between stacks. Each network has its own SurrealDB instance, so each stack runs and records the rollout independently.</p>
+    </section>
+
+    <section id="runbook">
+      <h2>Runbook</h2>
+      <pre><code># one time per existing shared database
+surrealkit rollout baseline
+
+# per schema change, from the reviewed desired-state schema
+surrealkit rollout plan --name &lt;change_name&gt;
+surrealkit rollout lint &lt;rollout_id&gt;
+
+# per target network
+surrealkit rollout status
+surrealkit rollout start &lt;rollout_id&gt;
+# deploy compatible indexer/API
+# run smoke checks
+surrealkit rollout complete &lt;rollout_id&gt;</code></pre>
+      <p><code>start</code> is the expansion phase: additive tables, fields, indexes, and compatible backfills. <code>complete</code> is the contract phase: destructive cleanup only after all running code no longer depends on the old shape.</p>
+    </section>
+
+    <section id="compatibility">
+      <h2>Compatibility Rules</h2>
+      <div class="grid">
+        <div class="card"><strong>Add first</strong>New tables, optional fields, indexes, and relation tables land before code depends on them.</div>
+        <div class="card"><strong>Dual-read or dual-write when needed</strong>Renames and shape changes ship through compatibility windows, not single-step destructive changes.</div>
+        <div class="card"><strong>Backfill explicitly</strong>Data-bearing changes, <code>REBUILD INDEX</code>, and large updates are named rollout steps with progress and smoke checks.</div>
+        <div class="card"><strong>Contract last</strong>Drops, required-field tightening, and old-index removal wait until the new code has passed on the target stack.</div>
+      </div>
+    </section>
+
+    <section id="deployment">
+      <h2>Deployment Shape</h2>
+      <table>
+        <thead><tr><th>Concern</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td>Execution</td><td>Run migrations as Kubernetes Jobs in the setup phase, before API and indexer rollout.</td></tr>
+          <tr><td>GitOps</td><td>Use versioned or release-hash job names so Flux can re-run a migration intentionally for each release.</td></tr>
+          <tr><td>Ordering</td><td>NATS and SurrealDB must be healthy first; setup jobs must pass before data-plane workloads are marked healthy.</td></tr>
+          <tr><td>Secrets</td><td>Inject <code>DATABASE_HOST</code>, <code>DATABASE_NAMESPACE</code>, <code>DATABASE_NAME</code>, <code>DATABASE_USER</code>, and <code>DATABASE_PASSWORD</code> from the target network secret.</td></tr>
+          <tr><td>Audit</td><td>Use SurrealKit rollout metadata as the migration ledger instead of inventing an app-level table.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="rollback">
+      <h2>Rollback Posture</h2>
+      <p>Use <code>surrealkit rollout rollback &lt;rollout_id&gt;</code> only while a rollout is still in flight and before contract/destructive completion. After completion, treat the explorer database as a rebuildable read model.</p>
+      <div class="callout warn">
+        <strong>No down-migration dependency.</strong>
+        <p>If a completed production schema change is wrong, stop the bad code, restore from SurrealDB export if appropriate, or rebuild SurrealDB from NATS JetStream and R2 snapshots. NATS remains the source of truth.</p>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <h2>Evidence</h2>
+      <ul>
+        <li><a href="../../../PRD.md">PRD.md</a> defines full stack isolation per network, including separate SurrealDB instances.</li>
+        <li><a href="../../../PRD.md">PRD.md</a> assigns schema sync, rollouts, seeding, and declarative tests to SurrealKit.</li>
+        <li><a href="../../004-deployment-topology/addendums/gitops/flux.md">Flux deployment topology</a> already models SurrealDB migration as a setup Job with health-gated dependencies.</li>
+        <li><a href="../harness/features/migration.feature">Spike 008 migration coverage</a> proves migration 0002 preserves an existing bridge row and backfills <code>sort_submit_block_height</code>.</li>
+        <li><a href="https://surrealdb.com/blog/schema-migrations-in-surrealdb-a-local-dev-workflow">SurrealKit's workflow</a> distinguishes direct <code>sync</code> from staged migration workflows for shared and production databases.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

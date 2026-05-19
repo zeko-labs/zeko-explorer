@@ -1,1 +1,1 @@
--- Local seed data is intentionally empty for the foundation stack.
+-- SurrealKit seed entrypoint. Benchmark seeds are generated into temporary SurrealKit projects.
