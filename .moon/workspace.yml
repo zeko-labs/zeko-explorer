@@ -5,7 +5,6 @@ projects:
   - "services/*"
   - "packages/*"
   - "infra"
-  - "docs"
 
 vcs:
   client: "git"

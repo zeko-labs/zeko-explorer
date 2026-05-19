@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 // The root package entrypoint currently re-exports an extensionless helper path.
 import { convertFile } from "@kreuzberg/html-to-markdown/dist/helpers.js";
 
-const docsDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const rootDir = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+const docsDir = join(rootDir, "docs");
 const htmlPath = join(docsDir, "PRD.html");
 const markdownPath = join(docsDir, "PRD.md");
 const checkOnly = process.argv.includes("--check");
