@@ -226,9 +226,9 @@ surrealkit rollout complete &lt;rollout_id&gt;</code></pre>
     <section id="evidence">
       <h2>Evidence</h2>
       <ul>
-        <li><a href="../../../PRD.md">PRD.md</a> defines full stack isolation per network, including separate SurrealDB instances.</li>
-        <li><a href="../../../PRD.md">PRD.md</a> assigns schema sync, rollouts, seeding, and declarative tests to SurrealKit.</li>
-        <li><a href="../../004-deployment-topology/addendums/gitops/flux.md">Flux deployment topology</a> already models SurrealDB migration as a setup Job with health-gated dependencies.</li>
+        <li><a href="../../../PRD.html">PRD.html</a> defines full stack isolation per network, including separate SurrealDB instances.</li>
+        <li><a href="../../../PRD.html">PRD.html</a> assigns schema sync, rollouts, seeding, and declarative tests to SurrealKit.</li>
+        <li><a href="../../004-deployment-topology/addendums/gitops/flux.html">Flux deployment topology</a> already models SurrealDB migration as a setup Job with health-gated dependencies.</li>
         <li><a href="../harness/features/migration.feature">Spike 008 migration coverage</a> proves migration 0002 preserves an existing bridge row and backfills <code>sort_submit_block_height</code>.</li>
         <li><a href="https://surrealdb.com/blog/schema-migrations-in-surrealdb-a-local-dev-workflow">SurrealKit's workflow</a> distinguishes direct <code>sync</code> from staged migration workflows for shared and production databases.</li>
       </ul>
