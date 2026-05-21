@@ -16,14 +16,14 @@ if (!existsSync(htmlPath)) {
   process.exit(0);
 }
 
-const result = await convertFile(htmlPath);
+const result = await convertFile(htmlPath, { skipImages: true });
 const markdown = `${(result.content ?? "").trimEnd()}\n`;
 
 if (checkOnly) {
   const current = existsSync(markdownPath) ? await readFile(markdownPath, "utf8") : "";
 
   if (current !== markdown) {
-    console.error("docs/PRD.md is out of sync with docs/PRD.html. Run `moon run docs:sync-prd`.");
+    console.error("docs/PRD.md is out of sync with docs/PRD.html. Run `moon run root:sync-prd`.");
     process.exit(1);
   }
 

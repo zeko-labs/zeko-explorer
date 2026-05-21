@@ -20,12 +20,48 @@
         }
       ]
     },
+    "javascript": {
+      "title": "javascript",
+      "description": "Configures and enables the JavaScript toolchain.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/JavaScriptToolchainConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "moon": {
       "title": "moon",
       "description": "Configures moon itself.",
       "allOf": [
         {
           "$ref": "#/definitions/MoonConfig"
+        }
+      ]
+    },
+    "node": {
+      "title": "node",
+      "description": "Configures and enables the Node.js toolchain. Docs: https://moonrepo.dev/docs/config/toolchain#node",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/NodeToolchainConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pnpm": {
+      "title": "pnpm",
+      "description": "Configures and enables the pnpm toolchain. Docs: https://moonrepo.dev/docs/config/toolchain#pnpm",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/PnpmToolchainConfig"
+        },
+        {
+          "type": "null"
         }
       ]
     },
@@ -59,6 +95,95 @@
     "Id": {
       "type": "string"
     },
+    "JavaScriptDependencyVersionFormat": {
+      "description": "Formats that a local workspace package.json dependency version can be.",
+      "type": "string",
+      "enum": [
+        "file",
+        "link",
+        "star",
+        "version",
+        "version-caret",
+        "version-tilde",
+        "workspace",
+        "workspace-caret",
+        "workspace-tilde"
+      ],
+      "markdownDescription": "Formats that a local workspace `package.json` dependency version can be."
+    },
+    "JavaScriptPackageManager": {
+      "description": "The available package managers for JavaScript.",
+      "type": "string",
+      "enum": [
+        "bun",
+        "deno",
+        "npm",
+        "pnpm",
+        "yarn"
+      ]
+    },
+    "JavaScriptToolchainConfig": {
+      "description": "Configures and enables the JavaScript toolchain.",
+      "type": "object",
+      "properties": {
+        "dedupeOnLockfileChange": {
+          "title": "dedupeOnLockfileChange",
+          "description": "Automatically dedupes the lockfile when dependencies have changed. This will run locally after dependencies have been installed.",
+          "default": true,
+          "type": "boolean"
+        },
+        "dependencyVersionFormat": {
+          "title": "dependencyVersionFormat",
+          "description": "The dependency version format to use when syncing projects as workspace dependencies.",
+          "default": "workspace",
+          "allOf": [
+            {
+              "$ref": "#/definitions/JavaScriptDependencyVersionFormat"
+            }
+          ]
+        },
+        "inferTasksFromScripts": {
+          "title": "inferTasksFromScripts",
+          "description": "Automatically infer moon tasks from package.json scripts or deno.json tasks. Some caveats to be aware of:  - Lifecycle (pre, post) scripts are not inferred. - Outputs will be automatically detected (if possible). - Script names that contain : will be converted to -. - Script names that contain dev, start, serve, or preview will be considered local only.",
+          "type": "boolean",
+          "markdownDescription": "Automatically infer moon tasks from `package.json` scripts or `deno.json` tasks. Some caveats to be aware of:  - Lifecycle (pre, post) scripts are not inferred. - Outputs will be automatically detected (if possible). - Script names that contain `:` will be converted to `-`. - Script names that contain `dev`, `start`, `serve`, or `preview` will be considered local only."
+        },
+        "packageManager": {
+          "title": "packageManager",
+          "description": "The package manager to use for installing dependencies, running inferred tasks, and much more.",
+          "default": "npm",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/JavaScriptPackageManager"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rootPackageDependenciesOnly": {
+          "title": "rootPackageDependenciesOnly",
+          "description": "Enforces that only the root package.json can be used for dependencies, which supports the \"one version policy\" pattern.",
+          "type": "boolean",
+          "markdownDescription": "Enforces that only the root `package.json` can be used for dependencies, which supports the \"one version policy\" pattern."
+        },
+        "syncPackageManagerField": {
+          "title": "syncPackageManagerField",
+          "description": "Automatically syncs the configured package manager version to the root packageManager field in package.json.",
+          "default": true,
+          "type": "boolean",
+          "markdownDescription": "Automatically syncs the configured package manager version to the root `packageManager` field in `package.json`."
+        },
+        "syncProjectWorkspaceDependencies": {
+          "title": "syncProjectWorkspaceDependencies",
+          "description": "Automatically syncs moon project-to-project relationships as dependencies for each package.json in the workspace.",
+          "default": true,
+          "type": "boolean",
+          "markdownDescription": "Automatically syncs moon project-to-project relationships as dependencies for each `package.json` in the workspace."
+        }
+      },
+      "additionalProperties": false
+    },
     "MoonConfig": {
       "description": "Configures how and where moon updates will be received.",
       "type": "object",
@@ -78,9 +203,107 @@
       },
       "additionalProperties": false
     },
+    "NodeProfileType": {
+      "description": "The type of profiling operation to use.",
+      "type": "string",
+      "enum": [
+        "cpu",
+        "heap"
+      ]
+    },
+    "NodeToolchainConfig": {
+      "description": "Configures and enables the Node.js toolchain. Docs: https://moonrepo.dev/docs/config/toolchain#node",
+      "type": "object",
+      "properties": {
+        "executeArgs": {
+          "title": "executeArgs",
+          "description": "List of arguments to pass to all node executions, when configured as a task command. Arguments will be appended after the node executable, but before other arguments.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "List of arguments to pass to all `node` executions, when configured as a task `command`. Arguments will be appended after the `node` executable, but before other arguments."
+        },
+        "profileExecution": {
+          "title": "profileExecution",
+          "description": "Enable the v8 profiler for all node executions, when configured as a task command. Note: This should only be temporarily enabled for debugging purposes, and not always enabled!",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NodeProfileType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "markdownDescription": "Enable the v8 profiler for all `node` executions, when configured as a task `command`. Note: This should only be temporarily enabled for debugging purposes, and not always enabled!"
+        },
+        "syncVersionManagerConfig": {
+          "title": "syncVersionManagerConfig",
+          "description": "When version is defined, syncs the version to the chosen config.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NodeVersionManager"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "markdownDescription": "When `version` is defined, syncs the version to the chosen config."
+        },
+        "version": {
+          "title": "version",
+          "description": "Configured version to download and install.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UnresolvedVersionSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "NodeVersionManager": {
+      "description": "The available version managers for Node.js.",
+      "type": "string",
+      "enum": [
+        "nodenv",
+        "nvm"
+      ]
+    },
     "PluginLocator": {
       "description": "Strategies and protocols for locating plugins.",
       "type": "string"
+    },
+    "PnpmToolchainConfig": {
+      "description": "Configures and enables the pnpm toolchain. Docs: https://moonrepo.dev/docs/config/toolchain#pnpm",
+      "type": "object",
+      "properties": {
+        "installArgs": {
+          "title": "installArgs",
+          "description": "List of arguments to append to pnpm install commands. These arguments are inherited by the JavaScript toolchain.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "List of arguments to append to `pnpm install` commands. These arguments are inherited by the JavaScript toolchain."
+        },
+        "version": {
+          "title": "version",
+          "description": "Configured version to download and install.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UnresolvedVersionSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "ProtoConfig": {
       "description": "Configures how moon integrates with proto.",
@@ -102,19 +325,6 @@
       "description": "Configures an individual toolchain.",
       "type": "object",
       "properties": {
-        "inheritAliases": {
-          "title": "inheritAliases",
-          "description": "Inherit aliases (name derived from a manifest) for all projects associated with this toolchain. @since 2.1.0",
-          "default": true,
-          "type": "boolean"
-        },
-        "installDependencies": {
-          "title": "installDependencies",
-          "description": "Run the InstallDependencies actions for each running task when changes to lockfiles and manifests are detected. @since 2.1.0",
-          "default": true,
-          "type": "boolean",
-          "markdownDescription": "Run the `InstallDependencies` actions for each running task when changes to lockfiles and manifests are detected. @since 2.1.0"
-        },
         "plugin": {
           "title": "plugin",
           "description": "Location of the WASM plugin to use.",
