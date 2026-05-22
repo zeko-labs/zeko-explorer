@@ -4,6 +4,8 @@ moon = "2.2.4"
 proto = "0.57.0"
 go = "1.26.3"
 nu = "0.112.2"
+actionlint = "1.7.12"
 
 [plugins]
 nu = "github://Hebilicious/proto-nu@v0.1.0"
+actionlint = "https://raw.githubusercontent.com/Phault/proto-toml-plugins/main/actionlint/plugin.toml"

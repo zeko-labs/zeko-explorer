@@ -4,6 +4,15 @@ layer: "application"
 stack: "frontend"
 tags: ["nuxt", "cloudflare"]
 
+toolchains:
+  typescript:
+    # Nuxt owns this project's tsconfig references through `nuxt prepare`.
+    syncProjectReferences: false
+    syncProjectReferencesToPaths: false
+    includeProjectReferenceSources: false
+    pruneProjectReferences: false
+    routeOutDirToCache: false
+
 fileGroups:
   sources:
     - "app/**/*"

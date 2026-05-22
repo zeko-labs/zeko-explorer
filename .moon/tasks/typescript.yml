@@ -22,9 +22,13 @@ fileGroups:
 tasks:
   build:
     command: "tsgo"
-    args: ["--project", "tsconfig.json"]
+    args: ["--build", "--verbose", "tsconfig.json"]
+    deps:
+      - "^:build"
     inputs:
       - "@group(sources)"
+    options:
+      cache: false
 
   lint:
     command: "biome"
@@ -63,6 +67,10 @@ tasks:
 
   typecheck:
     command: "tsgo"
-    args: ["--project", "tsconfig.json", "--noEmit"]
+    args: ["--build", "--verbose", "tsconfig.json"]
+    deps:
+      - "^:typecheck"
     inputs:
       - "@group(sources)"
+    options:
+      cache: false

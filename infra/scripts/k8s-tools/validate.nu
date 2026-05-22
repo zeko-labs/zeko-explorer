@@ -1,13 +1,10 @@
 #!/usr/bin/env nu
 
 let root_dir = ($env.FILE_PWD | path join "../../.." | path expand)
-let bin_dir = ($root_dir | path join ".moon/cache/tools/bin")
 let chart_dir = ($root_dir | path join "infra/k8s/chart/zeko-explorer")
 let local_values = ($root_dir | path join "infra/k8s/values/local/docker-desktop.kyaml")
 let rendered_dir = ($root_dir | path join ".moon/cache/k8s")
 let rendered = ($rendered_dir | path join "zeko-explorer.rendered.kyaml")
-
-$env.PATH = ([$bin_dir] ++ $env.PATH)
 
 mkdir $rendered_dir
 

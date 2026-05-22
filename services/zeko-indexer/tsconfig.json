@@ -1,7 +1,28 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "../../"
+    "rootDir": "src",
+    "paths": {
+      "@zeko/database": ["../database/src/index.ts"],
+      "@zeko/database/*": ["../database/src/*"],
+      "@zeko/domain": ["../../packages/domain/src/index.ts"],
+      "@zeko/domain/*": ["../../packages/domain/src/*"],
+      "@zeko/nats": ["../nats/src/index.ts"],
+      "@zeko/nats/*": ["../nats/src/*"]
+    },
+    "outDir": "../../.moon/cache/types/services/zeko-indexer",
+    "tsBuildInfoFile": "../../.moon/cache/types/services/zeko-indexer/tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "../../packages/*/src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../../packages/domain"
+    },
+    {
+      "path": "../database"
+    },
+    {
+      "path": "../nats"
+    }
+  ]
 }

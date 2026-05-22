@@ -4,8 +4,24 @@ javascript:
   packageManager: "pnpm"
   inferTasksFromScripts: false
 
+typescript:
+  rootConfigFileName: "tsconfig.json"
+  rootOptionsConfigFileName: "tsconfig.base.json"
+  syncProjectReferences: true
+  syncProjectReferencesToPaths: true
+  includeProjectReferenceSources: false
+  pruneProjectReferences: true
+  routeOutDirToCache: true
+
 node:
   versionFromPrototools: true
 
 pnpm:
   versionFromPrototools: true
+
+go:
+  versionFromPrototools: true
+  bins:
+    - "sigs.k8s.io/yaml/yamlfmt@v1.6.0"
+    - "helm.sh/helm/v4/cmd/helm@v4.2.0"
+    - "github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0"

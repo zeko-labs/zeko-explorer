@@ -2,11 +2,6 @@
 
 let root_dir = ($env.FILE_PWD | path join "../../.." | path expand)
 let namespace = ($env.ZEKO_LOCAL_NAMESPACE? | default "zeko-m-local")
-let tools_dir = ($root_dir | path join ".moon/cache/tools/bin")
-
-$env.PATH = ([$tools_dir] ++ $env.PATH)
-
-nu ($root_dir | path join "infra/scripts/k8s-tools/install.nu")
 
 let context = (kubectl config current-context)
 if not ($context | str contains "docker-desktop") {

@@ -27,6 +27,11 @@ jobs:
       - name: Install Nu
         run: proto install nu
 
+      - name: Install Actionlint
+        run: proto install actionlint
+
+      - run: moon run root:actionlint
+
       - run: moon ci --summary normal
 
       - uses: moonrepo/run-report-action@v1

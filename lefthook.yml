@@ -2,10 +2,12 @@ pre-commit:
   parallel: true
   commands:
     lint-fix:
-      run: moon run :lint-fix
+      run: PATH="$HOME/.proto/shims:$HOME/.proto/bin:$PATH" moon run :lint-fix
       stage_fixed: true
     format-fix:
-      run: moon run :format-fix
+      run: PATH="$HOME/.proto/shims:$HOME/.proto/bin:$PATH" moon run :format-fix
       stage_fixed: true
+    actionlint:
+      run: PATH="$HOME/.proto/shims:$HOME/.proto/bin:$PATH" moon run root:actionlint
     typecheck:
-      run: moon run :typecheck
+      run: PATH="$HOME/.proto/shims:$HOME/.proto/bin:$PATH" moon run :typecheck

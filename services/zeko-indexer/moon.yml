@@ -19,6 +19,10 @@ tasks:
       - "@group(sources)"
     outputs:
       - "dist"
+    options:
+      cache: true
+      mergeArgs: "replace"
+      mergeDeps: "replace"
 
   dev:
     command: "node"

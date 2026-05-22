@@ -1,5 +1,5 @@
 $schema: "../.moon/cache/schemas/project.json"
-language: "unknown"
+language: "go"
 layer: "automation"
 stack: "infrastructure"
 tags: ["infra", "kubernetes", "docker"]
@@ -11,8 +11,10 @@ fileGroups:
     - "/pnpm-workspace.yaml"
   k8s:
     - "moon.yml"
+    - "go.mod"
     - "k8s/**/*"
-    - "scripts/k8s-tools/**/*"
+    - "scripts/k8s-tools/validate.nu"
+    - "/.moon/toolchains.yml"
     - "/.prototools"
   acceptance:
     - "moon.yml"
@@ -28,21 +30,9 @@ fileGroups:
     - "/tsconfig.base.json"
 
 tasks:
-  install-k8s-tools:
-    command: "nu"
-    args: ["scripts/k8s-tools/install.nu"]
-    inputs:
-      - "scripts/k8s-tools/install.nu"
-      - "/.prototools"
-    outputs:
-      - "/.moon/cache/tools/bin/helm"
-      - "/.moon/cache/tools/bin/kubeconform"
-      - "/.moon/cache/tools/bin/yamlfmt"
-    options:
-      runInCI: true
-
   build-local-images:
     command: "nu"
+    toolchains: ["system"]
     args: ["local/docker-desktop/build-local-images.nu"]
     options:
       cache: false
@@ -50,6 +40,7 @@ tasks:
 
   dev:
     command: "nu"
+    toolchains: ["system"]
     args: ["local/docker-desktop/dev.nu"]
     options:
       cache: false
@@ -58,6 +49,7 @@ tasks:
 
   k8s-local-down:
     command: "nu"
+    toolchains: ["go"]
     args: ["local/docker-desktop/down.nu"]
     options:
       cache: false
@@ -65,6 +57,7 @@ tasks:
 
   k8s-local-forward:
     command: "nu"
+    toolchains: ["system"]
     args: ["local/docker-desktop/forward.nu"]
     options:
       cache: false
@@ -73,6 +66,7 @@ tasks:
 
   k8s-local-up:
     command: "nu"
+    toolchains: ["go"]
     args: ["local/docker-desktop/up.nu"]
     deps:
       - "infra:build-local-images"
@@ -92,9 +86,8 @@ tasks:
 
   lint:
     command: "nu"
+    toolchains: ["go"]
     args: ["scripts/k8s-tools/validate.nu"]
-    deps:
-      - "infra:install-k8s-tools"
     inputs:
       - "@group(k8s)"
 
