@@ -37,6 +37,8 @@ tasks:
   build:
     command: "nuxt"
     args: ["build"]
+    deps:
+      - "ui:prepare"
     inputs:
       - "@group(sources)"
       - "@group(workspaceDeps)"

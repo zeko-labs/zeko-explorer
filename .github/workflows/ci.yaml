@@ -9,11 +9,7 @@ on:
 jobs:
   ci:
     permissions:
-      id-token: write
-      contents: write
-      pull-requests: write
-      checks: write
-      statuses: write
+      contents: read
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +29,3 @@ jobs:
       - run: moon run root:actionlint
 
       - run: moon ci --summary normal
-
-      - uses: moonrepo/run-report-action@v1
-        if: success() || failure()
-        with:
-          matrix: '{"ci":"ci"}'
-          access-token: ${{ secrets.GITHUB_TOKEN }}

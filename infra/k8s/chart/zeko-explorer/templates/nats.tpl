@@ -81,6 +81,19 @@ spec:
           command: ["/bin/sh", "-ceu"]
           args:
             - |
-              nats --server nats://nats:4222 stream add zeko-l2 --subjects "zeko.l2.>" --storage file --retention limits --discard old --max-age {{ .Values.nats.maxAge }} --dupe-window 2m --defaults || true
-              nats --server nats://nats:4222 stream add zeko-l1 --subjects "zeko.l1.>" --storage file --retention limits --discard old --max-age {{ .Values.nats.maxAge }} --dupe-window 2m --defaults || true
-              nats --server nats://nats:4222 stream add zeko-health --subjects "zeko.health" --storage file --retention limits --discard old --max-msgs 1000 --defaults || true
+              ensure_stream() {
+                name="$1"
+                subjects="$2"
+                shift 2
+
+                if nats --server nats://nats:4222 stream info "$name" >/dev/null 2>&1; then
+                  echo "NATS stream $name already exists; leaving it unchanged."
+                  return 0
+                fi
+
+                nats --server nats://nats:4222 stream add "$name" --subjects "$subjects" --storage file --retention limits --discard old "$@" --defaults
+              }
+
+              ensure_stream zeko-l2 "zeko.l2.>" --max-age {{ .Values.nats.maxAge }} --dupe-window 2m
+              ensure_stream zeko-l1 "zeko.l1.>" --max-age {{ .Values.nats.maxAge }} --dupe-window 2m
+              ensure_stream zeko-health "zeko.health" --max-msgs 1000
