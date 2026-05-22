@@ -12,46 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    if: github.event_name == 'pull_request'
+  images:
     name: Image ${{ matrix.image }}
-    runs-on: warp-ubuntu-latest-x64-8x
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: l1-watcher
-            project: services/l1-watcher
-          - image: zeko-indexer
-            project: services/zeko-indexer
-          - image: explorer-api
-            project: services/explorer-api
-          - image: bridge-api
-            project: services/bridge-api
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: moonrepo/setup-toolchain@v0
-        with:
-          auto-install: true
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.project }}/Dockerfile
-          push: false
-          provenance: false
-          tags: zeko/${{ matrix.image }}:pr-${{ github.event.pull_request.number }}
-
-  publish:
-    if: github.event_name != 'pull_request'
-    name: Publish image ${{ matrix.image }}
     runs-on: warp-ubuntu-latest-x64-8x
     permissions:
       contents: read
@@ -80,6 +42,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - id: auth
+        if: github.event_name != 'pull_request'
         uses: google-github-actions/auth@v2
         with:
           token_format: access_token
@@ -87,6 +50,7 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: gcr.io
           username: oauth2accesstoken
@@ -95,17 +59,18 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: gcr.io/${{ vars.GCP_PROJECT_ID }}/${{ matrix.image }}
+          images: ${{ github.event_name == 'pull_request' && format('zeko/{0}', matrix.image) || format('gcr.io/{0}/{1}', vars.GCP_PROJECT_ID, matrix.image) }}
           tags: |
-            type=raw,value=${{ github.sha }}
-            type=ref,event=tag
+            type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=${{ github.sha }},enable=${{ github.event_name != 'pull_request' }}
+            type=ref,event=tag,enable=${{ github.event_name != 'pull_request' }}
 
       - id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.project }}/Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

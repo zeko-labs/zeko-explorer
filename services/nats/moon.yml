@@ -1,4 +1,4 @@
-$schema: "../../.moon/cache/schemas/project.json"
+$schema: "https://moonrepo.dev/schemas/project.json"
 language: "typescript"
 layer: "library"
 stack: "backend"

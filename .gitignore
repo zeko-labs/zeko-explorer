@@ -1,9 +1,7 @@
 node_modules/
 dist/
 .DS_Store
-.moon/cache/*
-!.moon/cache/schemas/
-!.moon/cache/schemas/*
+.moon/cache/
 .wrangler/
 .turbo/
 .nuxt/

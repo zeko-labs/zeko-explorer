@@ -1,4 +1,4 @@
-$schema: "./cache/schemas/toolchains.json"
+$schema: "https://moonrepo.dev/schemas/toolchains.json"
 
 javascript:
   packageManager: "pnpm"
@@ -10,7 +10,7 @@ typescript:
   syncProjectReferences: true
   syncProjectReferencesToPaths: true
   includeProjectReferenceSources: false
-  pruneProjectReferences: true
+  pruneProjectReferences: false
   routeOutDirToCache: true
 
 node:

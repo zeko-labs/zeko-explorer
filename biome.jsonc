@@ -27,5 +27,16 @@
     "rules": {
       "recommended": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.vue"],
+      "formatter": {
+        "enabled": true
+      },
+      "linter": {
+        "enabled": true
+      }
+    }
+  ]
 }
