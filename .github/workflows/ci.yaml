@@ -20,6 +20,4 @@ jobs:
         with:
           auto-install: true
 
-      - run: moon run root:actionlint
-
       - run: moon ci --summary normal
