@@ -7,5 +7,5 @@ nu = "0.112.2"
 actionlint = "1.7.12"
 
 [plugins]
-nu = "github://Hebilicious/proto-nu@v0.1.0"
+nu = "https://github.com/Hebilicious/proto-nu/releases/download/v0.1.0/nu_plugin.wasm"
 actionlint = "https://raw.githubusercontent.com/Phault/proto-toml-plugins/main/actionlint/plugin.toml"
