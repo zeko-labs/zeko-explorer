@@ -16,16 +16,11 @@ RUN curl -fsSL https://moonrepo.dev/install/proto.sh | bash -s -- --yes \
   && proto install pnpm \
   && proto install moon
 
-FROM base AS skeleton
-COPY . .
-RUN moon docker scaffold l1-watcher
-
 FROM base AS build
-COPY --from=skeleton /app/.moon/docker/configs .
-COPY --from=skeleton /app/.prototools ./.prototools
-COPY --from=skeleton /app/tsconfig.base.json ./tsconfig.base.json
+COPY ./.moon/docker/configs .
+COPY .prototools ./.prototools
 RUN moon docker setup
-COPY --from=skeleton /app/.moon/docker/sources .
+COPY ./.moon/docker/sources .
 RUN moon run l1-watcher:build
 RUN moon docker prune
 

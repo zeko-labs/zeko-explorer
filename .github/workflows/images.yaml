@@ -63,7 +63,7 @@ jobs:
           }
 
           const matrix = {
-            include: include.map(({ image, project }) => ({ image, project })),
+            include: include.map(({ id, image, project }) => ({ id, image, project })),
           };
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `has-images=${include.length > 0}\n`);
@@ -89,6 +89,9 @@ jobs:
       - uses: moonrepo/setup-toolchain@v0
         with:
           auto-install: true
+
+      - name: Scaffold Docker context
+        run: moon docker scaffold ${{ matrix.id }}
 
       - uses: docker/setup-buildx-action@v3
 
