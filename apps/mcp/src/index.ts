@@ -1,0 +1,9 @@
+export default {
+  fetch(_request: Request, env: Env): Response {
+    return Response.json({
+      component: "mcp",
+      status: "ok",
+      gateway: env.HIVE_GATEWAY_URL,
+    });
+  },
+};

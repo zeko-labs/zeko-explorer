@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zeko Explorer Development Topology</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #020617; color: #f8fafc; font-family: "JetBrains Mono", monospace; }
+    main { width: min(1220px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0; }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: 0; }
+    p { margin: 0 0 18px; color: #94a3b8; font-size: 12px; line-height: 1.5; }
+    .frame { border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #020617; }
+    svg { display: block; width: 100%; height: auto; }
+    footer { color: #64748b; font-size: 10px; text-align: right; margin-top: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>zeko-m-local Development Topology</h1>
+  <p>Docker Desktop Kubernetes runs the explorer stack locally. Wrangler runs Hive Gateway and MCP locally, calling port-forwarded Explorer and Bridge services.</p>
+  <section class="frame">
+    <svg viewBox="0 0 1180 720" role="img" aria-labelledby="title desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="title">zeko-m-local development topology</title>
+      <desc id="desc">Docker Desktop Kubernetes with local NATS, SurrealDB, indexer, private APIs, Hive Gateway and MCP through wrangler, frontend dev server, and optional remote Zeko endpoints.</desc>
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+        </pattern>
+        <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+        </marker>
+        <style>
+          .t{font:700 20px JetBrains Mono,monospace;fill:#f8fafc}
+          .g{font:700 11px JetBrains Mono,monospace;fill:#fbbf24}
+          .l{font:700 12px JetBrains Mono,monospace;fill:#f8fafc}
+          .s{font:500 9px JetBrains Mono,monospace;fill:#cbd5e1}
+          .x{font:500 8px JetBrains Mono,monospace;fill:#94a3b8}
+          .group{fill:rgba(120,53,15,0.08);stroke:#fbbf24;stroke-width:1.5;stroke-dasharray:8 4}
+          .svc{fill:rgba(6,78,59,0.4);stroke:#34d399;stroke-width:1.5}
+          .bus{fill:rgba(251,146,60,0.3);stroke:#fb923c;stroke-width:1.5}
+          .db{fill:rgba(76,29,149,0.4);stroke:#a78bfa;stroke-width:1.5}
+          .edge{fill:rgba(8,51,68,0.4);stroke:#22d3ee;stroke-width:1.5}
+          .ext{fill:rgba(30,41,59,0.5);stroke:#94a3b8;stroke-width:1.5}
+          .line{stroke:#64748b;stroke-width:1.5;fill:none;marker-end:url(#arrow)}
+          .dash{stroke:#fb7185;stroke-width:1.4;stroke-dasharray:5 4;fill:none;marker-end:url(#arrow)}
+        </style>
+      </defs>
+      <rect width="1180" height="720" fill="#020617"/>
+      <rect width="1180" height="720" fill="url(#grid)"/>
+      <text x="36" y="42" class="t">Docker Desktop Kubernetes</text>
+      <text x="36" y="62" class="x">Default local network: zeko-m-local. Workers call port-forwarded Explorer and Bridge APIs.</text>
+
+      <path class="line" d="M 230 520 C 330 510, 360 410, 410 328"/>
+      <path class="line" d="M 738 270 L 840 270"/>
+      <path class="line" d="M 910 332 L 730 438"/>
+      <path class="line" d="M 690 332 L 690 438"/>
+      <path class="line" d="M 690 530 L 690 570"/>
+      <path class="line" d="M 690 628 L 690 655"/>
+      <path class="line" d="M 818 684 L 920 540"/>
+      <path class="line" d="M 818 688 L 920 625"/>
+      <path class="dash" d="M 230 520 C 330 510, 360 410, 410 328"/>
+
+      <rect x="40" y="110" width="230" height="500" rx="12" class="group"/>
+      <text x="155" y="137" class="g" text-anchor="middle">Developer Machine</text>
+      <rect x="72" y="500" width="150" height="54" rx="6" class="ext"/>
+      <text x="147" y="523" class="l" text-anchor="middle">Remote Zeko</text>
+      <text x="147" y="539" class="s" text-anchor="middle">optional endpoints</text>
+
+      <rect x="320" y="110" width="540" height="560" rx="12" class="group"/>
+      <text x="590" y="137" class="g" text-anchor="middle">Namespace zeko-m-local</text>
+
+      <rect x="602" y="220" width="136" height="100" rx="6" class="bus"/>
+      <text x="670" y="250" class="l" text-anchor="middle">NATS</text>
+      <text x="670" y="267" class="s" text-anchor="middle">JetStream</text>
+      <text x="670" y="285" class="x" text-anchor="middle">1 replica</text>
+      <text x="670" y="301" class="x" text-anchor="middle">local PVC</text>
+
+      <rect x="840" y="220" width="136" height="100" rx="6" class="svc"/>
+      <text x="908" y="250" class="l" text-anchor="middle">Indexer</text>
+      <text x="908" y="267" class="s" text-anchor="middle">Deployment</text>
+      <text x="908" y="285" class="x" text-anchor="middle">1 replica</text>
+
+      <rect x="390" y="382" width="120" height="58" rx="6" class="svc"/>
+      <text x="450" y="406" class="l" text-anchor="middle">Watcher</text>
+      <text x="450" y="423" class="s" text-anchor="middle">profile gated</text>
+
+      <rect x="530" y="382" width="120" height="58" rx="6" class="ext"/>
+      <text x="590" y="406" class="l" text-anchor="middle">DA Nodes</text>
+      <text x="590" y="423" class="s" text-anchor="middle">external publishers</text>
+
+      <rect x="670" y="382" width="120" height="58" rx="6" class="svc"/>
+      <text x="730" y="406" class="l" text-anchor="middle">Backfill</text>
+      <text x="730" y="423" class="s" text-anchor="middle">optional</text>
+
+      <rect x="604" y="438" width="172" height="92" rx="6" class="db"/>
+      <text x="690" y="467" class="l" text-anchor="middle">SurrealDB</text>
+      <text x="690" y="484" class="s" text-anchor="middle">StatefulSet</text>
+      <text x="690" y="502" class="x" text-anchor="middle">local PVC, rebuildable</text>
+
+      <rect x="604" y="570" width="172" height="58" rx="6" class="svc"/>
+      <text x="690" y="594" class="l" text-anchor="middle">Private APIs</text>
+      <text x="690" y="611" class="s" text-anchor="middle">Explorer + Bridge</text>
+
+      <rect x="604" y="655" width="172" height="48" rx="6" class="edge"/>
+      <text x="690" y="684" class="l" text-anchor="middle">Port-forwarded APIs</text>
+
+      <rect x="920" y="470" width="184" height="190" rx="12" class="group"/>
+      <text x="1012" y="497" class="g" text-anchor="middle">Local Edge</text>
+      <rect x="954" y="520" width="116" height="48" rx="6" class="edge"/>
+      <text x="1012" y="549" class="l" text-anchor="middle">Wrangler Hive</text>
+      <rect x="954" y="603" width="116" height="48" rx="6" class="edge"/>
+      <text x="1012" y="632" class="l" text-anchor="middle">Nuxt dev</text>
+    </svg>
+  </section>
+  <footer>Spike 004 development diagram.</footer>
+</main>
+</body>
+</html>

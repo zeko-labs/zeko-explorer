@@ -1,0 +1,11 @@
+node = "26.1.0"
+pnpm = "11.1.1"
+moon = "2.2.4"
+proto = "0.57.0"
+go = "1.26.3"
+nu = "0.112.2"
+actionlint = "1.7.12"
+
+[plugins]
+nu = "https://github.com/Hebilicious/proto-nu/releases/download/v0.1.0/nu_plugin.wasm"
+actionlint = "https://raw.githubusercontent.com/Phault/proto-toml-plugins/main/actionlint/plugin.toml"

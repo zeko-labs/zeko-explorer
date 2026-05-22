@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zeko-explorer-contract-registry-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-13",
+  "kv_namespaces": [
+    {
+      "binding": "CONTRACT_SCHEMAS",
+      "id": "preview_contract_schemas",
+      "preview_id": "preview_contract_schemas"
+    }
+  ]
+}

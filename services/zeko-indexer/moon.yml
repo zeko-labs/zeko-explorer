@@ -1,0 +1,35 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "typescript"
+layer: "application"
+stack: "backend"
+tags: ["kubernetes", "indexer", "nats", "surrealdb"]
+
+dependsOn:
+  - "database"
+  - "domain"
+  - "nats"
+
+tasks:
+  build:
+    command: "tsdown"
+    args: ["--config", "tsdown.config.ts"]
+    deps:
+      - "^:build"
+    inputs:
+      - "@group(sources)"
+    outputs:
+      - "dist"
+    options:
+      cache: true
+      mergeArgs: "replace"
+      mergeDeps: "replace"
+
+  dev:
+    command: "node"
+    args: ["src/index.ts"]
+    options:
+      persistent: true
+
+  start:
+    command: "node"
+    args: ["dist/index.mjs"]

@@ -1,0 +1,32 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "typescript"
+layer: "application"
+stack: "backend"
+tags: ["cloudflare", "contract-registry"]
+
+dependsOn:
+  - "contract-schema"
+
+fileGroups:
+  workerTypes:
+    - "moon.yml"
+    - "wrangler.jsonc"
+    - "package.json"
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
+
+tasks:
+  dev:
+    command: "wrangler"
+    args: ["dev", "--local", "--port", "8788"]
+    options:
+      persistent: true
+
+  types:
+    command: "wrangler"
+    args: ["types", "--config", "wrangler.jsonc"]
+    inputs:
+      - "@group(workerTypes)"
+    outputs:
+      - "worker-configuration.d.ts"

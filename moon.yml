@@ -1,0 +1,65 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+id: "root"
+language: "typescript"
+layer: "configuration"
+stack: "unknown"
+tags: ["root"]
+
+fileGroups:
+  scripts:
+    - "moon.yml"
+    - "scripts/**/*.ts"
+    - "scripts/tsconfig.json"
+    - "package.json"
+    - "pnpm-lock.yaml"
+    - "pnpm-workspace.yaml"
+    - "tsconfig.base.json"
+  workflows:
+    - ".prototools"
+    - ".github/actionlint.yaml"
+    - ".github/workflows/**/*.yaml"
+    - ".github/workflows/**/*.yml"
+  prd:
+    - "docs/PRD.md"
+    - glob: "docs/PRD.html"
+    - "docs/AGENTS.md"
+    - "scripts/docs/sync-prd.ts"
+    - "package.json"
+    - "pnpm-lock.yaml"
+    - "pnpm-workspace.yaml"
+
+workspace:
+  inheritedTasks:
+    include: []
+
+tasks:
+  sync-prd:
+    command: "node"
+    args: ["scripts/docs/sync-prd.ts"]
+    inputs:
+      - "@group(prd)"
+    outputs:
+      - "docs/PRD.md"
+    options:
+      runInCI: false
+
+  check-prd:
+    command: "node"
+    args: ["scripts/docs/sync-prd.ts", "--check"]
+    deps:
+      - "root:typecheck"
+    inputs:
+      - "@group(prd)"
+
+  actionlint:
+    command: "actionlint"
+    toolchains: ["system"]
+    inputs:
+      - "@group(workflows)"
+
+  typecheck:
+    command: "tsgo"
+    toolchains: ["javascript"]
+    args: ["--project", "scripts/tsconfig.json", "--noEmit"]
+    inputs:
+      - "@group(scripts)"

@@ -1,0 +1,7 @@
+default:
+  paths:
+    - "tests/acceptance/**/*.feature"
+  import:
+    - "tests/acceptance/steps/**/*.ts"
+  format:
+    - "progress"

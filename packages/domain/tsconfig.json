@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "../../.moon/cache/types/packages/domain",
+    "tsBuildInfoFile": "../../.moon/cache/types/packages/domain/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"]
+}

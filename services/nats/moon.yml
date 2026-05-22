@@ -1,0 +1,16 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "typescript"
+layer: "library"
+stack: "backend"
+tags: ["nats", "protocol", "messaging"]
+
+dependsOn:
+  - "domain"
+
+tasks:
+  setup-local:
+    command: "nu"
+    args: ["scripts/setup-local.nu"]
+    options:
+      cache: false
+      runInCI: false

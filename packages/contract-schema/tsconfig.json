@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "../../.moon/cache/types/packages/contract-schema",
+    "tsBuildInfoFile": "../../.moon/cache/types/packages/contract-schema/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"]
+}

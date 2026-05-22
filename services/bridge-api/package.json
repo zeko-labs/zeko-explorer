@@ -1,0 +1,9 @@
+{
+  "name": "@zeko/bridge-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zeko/domain": "workspace:*"
+  }
+}

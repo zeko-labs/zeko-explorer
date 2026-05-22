@@ -1,0 +1,76 @@
+$schema: "https://moonrepo.dev/schemas/tasks.json"
+
+inheritedBy:
+  language: "typescript"
+
+fileGroups:
+  sources:
+    - "src/**/*"
+    - "moon.yml"
+    - "package.json"
+    - "tsdown.config.*"
+    - "tsconfig.json"
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
+    - "/tsconfig.base.json"
+  tests:
+    - "tests/**/*"
+    - "src/**/*.test.ts"
+    - "src/**/*.spec.ts"
+
+tasks:
+  build:
+    command: "tsgo"
+    args: ["--build", "--verbose", "tsconfig.json"]
+    deps:
+      - "^:build"
+    inputs:
+      - "@group(sources)"
+    options:
+      cache: false
+
+  lint:
+    command: "biome"
+    args: ["lint", "."]
+    inputs:
+      - "@group(sources)"
+
+  format:
+    command: "biome"
+    args: ["format", "."]
+    inputs:
+      - "@group(sources)"
+
+  lint-fix:
+    command: "biome"
+    args: ["lint", "--write", "."]
+    inputs:
+      - "@group(sources)"
+    options:
+      runInCI: false
+
+  format-fix:
+    command: "biome"
+    args: ["format", "--write", "."]
+    inputs:
+      - "@group(sources)"
+    options:
+      runInCI: false
+
+  test:
+    command: "vitest"
+    args: ["run", "--passWithNoTests"]
+    inputs:
+      - "@group(sources)"
+      - "@group(tests)"
+
+  typecheck:
+    command: "tsgo"
+    args: ["--build", "--verbose", "tsconfig.json"]
+    deps:
+      - "^:typecheck"
+    inputs:
+      - "@group(sources)"
+    options:
+      cache: false

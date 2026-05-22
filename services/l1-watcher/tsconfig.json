@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "paths": {
+      "@zeko/domain": ["../../packages/domain/src/index.ts"],
+      "@zeko/domain/*": ["../../packages/domain/src/*"],
+      "@zeko/nats": ["../nats/src/index.ts"],
+      "@zeko/nats/*": ["../nats/src/*"]
+    },
+    "outDir": "../../.moon/cache/types/services/l1-watcher",
+    "tsBuildInfoFile": "../../.moon/cache/types/services/l1-watcher/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../../packages/domain"
+    },
+    {
+      "path": "../nats"
+    }
+  ]
+}

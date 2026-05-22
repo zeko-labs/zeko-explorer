@@ -1,0 +1,11 @@
+{
+  "name": "@zeko/zeko-indexer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zeko/database": "workspace:*",
+    "@zeko/domain": "workspace:*",
+    "@zeko/nats": "workspace:*"
+  }
+}

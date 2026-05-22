@@ -1,0 +1,9 @@
+{
+  "name": "@zeko/hive-gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zeko/domain": "workspace:*"
+  }
+}

@@ -1,0 +1,103 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "go"
+layer: "automation"
+stack: "infrastructure"
+tags: ["infra", "kubernetes", "docker"]
+
+fileGroups:
+  workspaceDeps:
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
+  k8s:
+    - "moon.yml"
+    - "go.mod"
+    - "k8s/**/*"
+    - "scripts/k8s-tools/validate.nu"
+    - "/.moon/toolchains.yml"
+    - "/.prototools"
+  acceptance:
+    - "moon.yml"
+    - "cucumber.yaml"
+    - "tests/**/*"
+    - "tsconfig.json"
+    - "k8s/**/*"
+    - "local/docker-desktop/**/*"
+  testTypes:
+    - "moon.yml"
+    - "tests/**/*.ts"
+    - "tsconfig.json"
+    - "/tsconfig.base.json"
+
+tasks:
+  build-local-images:
+    command: "nu"
+    toolchains: ["system"]
+    args: ["local/docker-desktop/build-local-images.nu"]
+    options:
+      cache: false
+      runInCI: false
+
+  dev:
+    command: "nu"
+    toolchains: ["system"]
+    args: ["local/docker-desktop/dev.nu"]
+    options:
+      cache: false
+      persistent: true
+      runInCI: false
+
+  k8s-local-down:
+    command: "nu"
+    toolchains: ["go"]
+    args: ["local/docker-desktop/down.nu"]
+    options:
+      cache: false
+      runInCI: false
+
+  k8s-local-forward:
+    command: "nu"
+    toolchains: ["system"]
+    args: ["local/docker-desktop/forward.nu"]
+    options:
+      cache: false
+      persistent: true
+      runInCI: false
+
+  k8s-local-up:
+    command: "nu"
+    toolchains: ["go"]
+    args: ["local/docker-desktop/up.nu"]
+    deps:
+      - "infra:build-local-images"
+    options:
+      cache: false
+      runInCI: false
+
+  acceptance:
+    command: "cucumber-js"
+    toolchains: ["javascript"]
+    args:
+      - "--config"
+      - "cucumber.yaml"
+    inputs:
+      - "@group(acceptance)"
+      - "@group(workspaceDeps)"
+
+  lint:
+    command: "nu"
+    toolchains: ["go"]
+    args: ["scripts/k8s-tools/validate.nu"]
+    inputs:
+      - "@group(k8s)"
+
+  typecheck:
+    command: "tsgo"
+    toolchains: ["javascript"]
+    args:
+      - "--project"
+      - "tsconfig.json"
+      - "--noEmit"
+    inputs:
+      - "@group(testTypes)"
+      - "@group(workspaceDeps)"

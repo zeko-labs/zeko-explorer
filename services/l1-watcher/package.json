@@ -1,0 +1,14 @@
+{
+  "name": "@zeko/l1-watcher",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#config": "./src/config.ts",
+    "#service": "./src/service.ts"
+  },
+  "dependencies": {
+    "@zeko/domain": "workspace:*",
+    "@zeko/nats": "workspace:*"
+  }
+}
