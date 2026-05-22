@@ -24,7 +24,8 @@ COPY ./.moon/docker/sources .
 RUN moon run l1-watcher:build
 RUN moon docker prune
 
-FROM base AS runtime
+FROM node:26.1.0-trixie-slim AS runtime
+WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app /app
 CMD ["node", "services/l1-watcher/dist/index.mjs"]

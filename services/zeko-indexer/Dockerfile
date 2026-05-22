@@ -24,7 +24,8 @@ COPY ./.moon/docker/sources .
 RUN moon run zeko-indexer:build
 RUN moon docker prune
 
-FROM base AS runtime
+FROM node:26.1.0-trixie-slim AS runtime
+WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app /app
 CMD ["node", "services/zeko-indexer/dist/index.mjs"]

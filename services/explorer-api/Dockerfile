@@ -24,7 +24,8 @@ COPY ./.moon/docker/sources .
 RUN moon run explorer-api:build
 RUN moon docker prune
 
-FROM base AS runtime
+FROM node:26.1.0-trixie-slim AS runtime
+WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4101
 EXPOSE 4101
