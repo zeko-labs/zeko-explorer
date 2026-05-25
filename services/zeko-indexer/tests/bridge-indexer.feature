@@ -38,6 +38,13 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-cancel" sequence 0 has status "cancelled"
     And bridge operation for aux "aux-cancel" sequence 0 has cancel tx hash "l1-cancel-aux-cancel"
 
+  Scenario: Deposit cancellation uses the cancelled deposit index
+    Given the indexer consumed a deposit submission for aux "aux-cancel-index"
+    And the indexer consumed another deposit submission for aux "aux-cancel-index"
+    When the indexer consumes a deposit cancellation for aux "aux-cancel-index" sequence 1
+    Then bridge operation for aux "aux-cancel-index" sequence 0 has status "submitted"
+    And bridge operation for aux "aux-cancel-index" sequence 1 has status "cancelled"
+
   Scenario: Withdrawal lifecycle uses L2 inner actions, commits, delay, and L1 witnesses
     Given the indexer consumed an L2 inner action for aux "aux-withdrawal" with action state "inner-withdrawal"
     When the indexer consumes an L1 commit covering inner action state "inner-withdrawal"
@@ -45,6 +52,14 @@ Feature: Bridge operation projection
     And the indexer consumes an L1 witness for aux "aux-withdrawal"
     Then bridge operation for aux "aux-withdrawal" sequence 0 has type "withdrawal"
     And bridge operation for aux "aux-withdrawal" sequence 0 has status "completed"
+
+  Scenario: Out-of-order withdrawal finalization is enriched by the L2 burn
+    Given the indexer consumed an L1 withdrawal finalization for aux "aux-withdrawal-out-of-order"
+    When the indexer consumes an L2 inner action for aux "aux-withdrawal-out-of-order" with action state "inner-withdrawal-out-of-order"
+    Then bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has status "completed"
+    And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has submit tx hash "tx-inner-withdrawal-out-of-order"
+    And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has sender "B62qUser"
+    And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has amount "1000000000"
 
   Scenario: L1 rollback invalidating a witness recalculates bridge status
     Given the indexer consumed a deposit submission for aux "aux-rollback"

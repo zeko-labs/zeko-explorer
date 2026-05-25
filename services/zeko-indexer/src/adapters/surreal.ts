@@ -1,4 +1,4 @@
-import type { IndexerStore } from "../store";
+import type { IndexerStore } from "../store.ts";
 import type {
   BridgeOperationRow,
   BridgeTransactionLinkRow,
@@ -6,7 +6,7 @@ import type {
   L1ActionLinkRow,
   L2ActionLinkRow,
   OuterActionRow,
-} from "../types";
+} from "../types.ts";
 
 export type SurrealHttpConfig = {
   endpoint: string;

@@ -177,6 +177,48 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeCancellation = async (aux: string, cancelledDepositIndex = 0) => {
+    await indexer.consume({
+      subject: "zeko.l1.bridge-events",
+      payload: {
+        ...l1Envelope(5030),
+        subject: "zeko.l1.bridge-events",
+        bridgeEventId: `l1-cancel-${aux}-${cancelledDepositIndex}`,
+        type: "deposit_cancelled",
+        userPk: "B62qUser",
+        userPkSource: "account_update",
+        txHash: `l1-cancel-${aux}`,
+        aux,
+        cancel: {
+          cancelledDepositIndex,
+          helperAccountL1: "B62qHelper",
+        },
+      },
+    });
+  };
+
+  const consumeWithdrawalFinalization = async (aux: string) => {
+    await indexer.consume({
+      subject: "zeko.l1.bridge-events",
+      payload: {
+        ...l1Envelope(5050),
+        subject: "zeko.l1.bridge-events",
+        bridgeEventId: `l1-withdrawal-finalized-${aux}`,
+        type: "withdrawal_finalized",
+        userPk: "B62qL1User",
+        userPkSource: "event_log",
+        txHash: `l1-withdrawal-finalized-${aux}`,
+        aux,
+        amount: "0",
+        recipient: "unknown",
+        withdrawal: {
+          withdrawalIndex: 0,
+          rawEventFields: [aux],
+        },
+      },
+    });
+  };
+
   Scenario("Deposit submission is recorded from L1 bridge events", ({ When, Then, And }) => {
     reset();
     When("the indexer consumes a deposit submission for aux {string}", (_context, aux: string) =>
@@ -314,27 +356,8 @@ describeFeature(feature, ({ Scenario }) => {
     Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
       consumeDeposit(aux),
     );
-    When(
-      "the indexer consumes a deposit cancellation for aux {string}",
-      async (_context, aux: string) => {
-        await indexer.consume({
-          subject: "zeko.l1.bridge-events",
-          payload: {
-            ...l1Envelope(5030),
-            subject: "zeko.l1.bridge-events",
-            bridgeEventId: `l1-cancel-${aux}`,
-            type: "deposit_cancelled",
-            userPk: "B62qUser",
-            userPkSource: "account_update",
-            txHash: `l1-cancel-${aux}`,
-            aux,
-            cancel: {
-              cancelledDepositIndex: 0,
-              helperAccountL1: "B62qHelper",
-            },
-          },
-        });
-      },
+    When("the indexer consumes a deposit cancellation for aux {string}", (_context, aux: string) =>
+      consumeCancellation(aux),
     );
     Then(
       "bridge operation for aux {string} sequence {int} has status {string}",
@@ -349,6 +372,38 @@ describeFeature(feature, ({ Scenario }) => {
       },
     );
   });
+
+  Scenario(
+    "Deposit cancellation uses the cancelled deposit index",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And(
+        "the indexer consumed another deposit submission for aux {string}",
+        async (_context, aux: string) => {
+          await consumeDeposit(aux, 1);
+        },
+      );
+      When(
+        "the indexer consumes a deposit cancellation for aux {string} sequence {int}",
+        (_context, aux: string, sequence: number) => consumeCancellation(aux, sequence),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
 
   Scenario(
     "Withdrawal lifecycle uses L2 inner actions, commits, delay, and L1 witnesses",
@@ -379,6 +434,45 @@ describeFeature(feature, ({ Scenario }) => {
         "bridge operation for aux {string} sequence {int} has status {string}",
         (_, aux: string, sequence: number, status: string) => {
           expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "Out-of-order withdrawal finalization is enriched by the L2 burn",
+    ({ Given, When, Then, And }) => {
+      reset();
+      Given(
+        "the indexer consumed an L1 withdrawal finalization for aux {string}",
+        (_context, aux: string) => consumeWithdrawalFinalization(aux),
+      );
+      When(
+        "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has submit tx hash {string}",
+        (_, aux: string, sequence: number, txHash: string) => {
+          expect(operation(aux, sequence).submit_tx_hash).toBe(txHash);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has sender {string}",
+        (_, aux: string, sequence: number, sender: string) => {
+          expect(operation(aux, sequence).sender).toBe(sender);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has amount {string}",
+        (_, aux: string, sequence: number, amount: string) => {
+          expect(operation(aux, sequence).amount).toBe(amount);
         },
       );
     },

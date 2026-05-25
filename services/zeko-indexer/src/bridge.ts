@@ -1,5 +1,5 @@
-import type { IndexerStore } from "./store";
-import { normalizeTimestamp } from "./store";
+import type { IndexerStore } from "./store.ts";
+import { normalizeTimestamp } from "./store.ts";
 import type {
   BridgeOperationRow,
   InnerActionRow,
@@ -7,7 +7,7 @@ import type {
   L1OuterActionInput,
   TransactionRow,
   ZkappActionRow,
-} from "./types";
+} from "./types.ts";
 
 export type BridgeProjectorOptions = {
   withdrawalDelaySlots?: number;
@@ -154,6 +154,7 @@ export function consumeBridgeInnerAction(
         action.fields.length >= 4 ? undefined : ["inner_action_missing_user_fields"],
     });
 
+  enrichWithdrawalFromL2Submit(operation, transaction, action);
   operation.l2_action_state = row.after_state;
   operation.l2_tx_hash = transaction.hash;
   operation.l2_block_height = transaction.block_height;
@@ -161,6 +162,32 @@ export function consumeBridgeInnerAction(
   operation.status = withdrawalStatus(operation);
   linkL2Action(store, operation, row, "burn");
   linkBridgeTransaction(store, operation, transaction, "submit");
+}
+
+function enrichWithdrawalFromL2Submit(
+  operation: BridgeOperationRow,
+  transaction: TransactionRow,
+  action: ZkappActionRow,
+): void {
+  operation.sender = transaction.sender_public_key ?? transaction.fee_payer_public_key ?? UNKNOWN;
+  operation.recipient = action.fields[2] ?? transaction.receiver_public_key ?? UNKNOWN;
+  operation.amount = action.fields[3] ?? transaction.amount ?? UNKNOWN;
+  operation.submit_tx_hash = transaction.hash;
+  operation.submit_block_height = transaction.block_height;
+  operation.sort_submit_block_height = -transaction.block_height;
+  operation.submit_timestamp = transaction.timestamp;
+  operation.data_quality = action.fields.length >= 4 ? "complete" : "partial";
+  operation.data_quality_reasons =
+    action.fields.length >= 4 ? undefined : ["inner_action_missing_user_fields"];
+  operation.search_text = [
+    operation.aux,
+    operation.status,
+    operation.type,
+    operation.sender,
+    operation.recipient,
+  ]
+    .filter((value) => value && value !== UNKNOWN)
+    .join(" ");
 }
 
 export function consumeBridgeRollback(
@@ -240,11 +267,22 @@ function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
   if (!event.aux) {
     return;
   }
-  const operation = firstOperationNeeding(
-    store,
-    event.aux,
-    (candidate) => candidate.type === "deposit" && candidate.status !== "cancelled",
-  );
+  const cancelledSequence = event.cancel?.cancelledDepositIndex;
+  const operation =
+    cancelledSequence === undefined
+      ? firstOperationNeeding(
+          store,
+          event.aux,
+          (candidate) => candidate.type === "deposit" && candidate.status !== "cancelled",
+        )
+      : store
+          .bridgeOperationsByAux(event.aux)
+          .find(
+            (candidate) =>
+              candidate.type === "deposit" &&
+              candidate.aux_sequence === cancelledSequence &&
+              candidate.status !== "cancelled",
+          );
   if (!operation) {
     return;
   }

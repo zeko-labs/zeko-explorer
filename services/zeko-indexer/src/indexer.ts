@@ -5,8 +5,8 @@ import {
   consumeBridgeRollback,
   consumeL1BridgeEvent,
   consumeL1OuterAction,
-} from "./bridge";
-import { accountKey, type IndexerStore, normalizeTimestamp } from "./store";
+} from "./bridge.ts";
+import { accountKey, type IndexerStore, normalizeTimestamp } from "./store.ts";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -25,7 +25,7 @@ import type {
   ObservedZkappActionInput,
   PendingDaAttestationRow,
   TransactionRow,
-} from "./types";
+} from "./types.ts";
 
 export type ZekoIndexerOptions = {
   da?: {

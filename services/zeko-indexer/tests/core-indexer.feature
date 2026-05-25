@@ -359,3 +359,6 @@ Feature: Unified Zeko indexer
 
   Scenario: Indexer remains schema-blind at the package boundary
     Then the zeko-indexer source does not import "@zeko/contract-schema"
+
+  Scenario: Dev entrypoint resolves under raw Node
+    Then node can execute the zeko-indexer dev entrypoint

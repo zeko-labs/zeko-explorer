@@ -1,7 +1,7 @@
 import { connect } from "@nats-io/transport-node";
 import { EventSchemas, NATS_SUBJECTS } from "@zeko/nats";
 import { parse } from "valibot";
-import type { ConsumeEnvelope } from "../types";
+import type { ConsumeEnvelope } from "../types.ts";
 
 const textDecoder = new TextDecoder();
 

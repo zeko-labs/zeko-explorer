@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
@@ -11,6 +13,8 @@ import {
 } from "../src/index";
 
 const feature = await loadFeature("tests/core-indexer.feature");
+const execFileAsync = promisify(execFile);
+const serviceRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const timestamp = "2026-05-13T00:00:00.000Z";
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
@@ -2573,6 +2577,12 @@ describeFeature(feature, ({ Scenario }) => {
       const files = await tsFilesUnder(srcDir);
       const contents = await Promise.all(files.map((file) => readFile(file, "utf8")));
       expect(contents.join("\n")).not.toContain("@zeko/contract-schema");
+    });
+  });
+
+  Scenario("Dev entrypoint resolves under raw Node", ({ Then }) => {
+    Then("node can execute the zeko-indexer dev entrypoint", async () => {
+      await execFileAsync(process.execPath, ["src/index.ts"], { cwd: serviceRoot });
     });
   });
 });
