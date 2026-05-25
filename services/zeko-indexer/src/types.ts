@@ -29,6 +29,7 @@ export type L2AccountUpdateInput = {
   public_key?: string;
   account?: { public_key?: string };
   body?: {
+    public_key?: string;
     events?: unknown[];
     actions?: unknown[];
   };

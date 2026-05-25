@@ -51,6 +51,14 @@ const zkappUpdate = (
   actions,
 });
 
+const bodyShapedZkappUpdate = (publicKey: string): L2AccountUpdateInput => ({
+  body: {
+    public_key: publicKey,
+    events: [["300", "400"]],
+    actions: [["77"]],
+  },
+});
+
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let indexer: ZekoIndexer;
@@ -131,6 +139,40 @@ describeFeature(feature, ({ Scenario }) => {
         changed_accounts: [
           changedAccount("B62qsender", "999", 2),
           changedAccount("B62qContract", "500", 0, state, [actionState, "0", "0", "0", "0"]),
+        ],
+      },
+    });
+  };
+
+  const consumeBodyShapedZkapp = async (
+    targetLedgerHash: string,
+    publicKey: string,
+    sourceLedgerHash = store.syncStatus.get("l2-transactions")?.last_hash ?? "ledger-0",
+  ) => {
+    await indexer.consume({
+      subject: "zeko.l2.transactions",
+      payload: {
+        source_ledger_hash: sourceLedgerHash,
+        target_ledger_hash: targetLedgerHash,
+        timestamp,
+        acc_set: "acc-set",
+        command: {
+          type: "zkapp_command",
+          hash: `tx-${targetLedgerHash}`,
+          sender: "B62qsender",
+          fee: "1",
+          nonce: 1,
+          account_updates: [bodyShapedZkappUpdate(publicKey)],
+        },
+        changed_accounts: [
+          changedAccount("B62qsender", "999", 2),
+          changedAccount(publicKey, "500", 0, oneState, [
+            "action-after-body",
+            "action-before-body",
+            "0",
+            "0",
+            "0",
+          ]),
         ],
       },
     });
@@ -292,6 +334,54 @@ describeFeature(feature, ({ Scenario }) => {
         (_context, ledger: string) => {
           expect(store.zkappEventsByLedger(ledger)).toHaveLength(1);
           expect(store.zkappActionsByLedger(ledger)).toHaveLength(1);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "zkApp ingestion accepts Spike 003 body-shaped account updates",
+    ({ Given, When, Then, And }) => {
+      Given(
+        "account {string} has prior action_state head {string}",
+        async (_context, publicKey: string, priorActionState: string) => {
+          reset();
+          await consumePayment("ledger-zk-body-prior", undefined, [
+            changedAccount(publicKey, "500", 0, oneState, [priorActionState, "0", "0", "0", "0"]),
+          ]);
+        },
+      );
+
+      When(
+        "the indexer consumes a body-shaped zkApp transaction for {string} on ledger {string}",
+        async (_context, publicKey: string, ledger: string) => {
+          await consumeBodyShapedZkapp(ledger, publicKey);
+        },
+      );
+
+      Then("one zkapp_event row exists for account {string}", (_context, publicKey: string) => {
+        expect(store.zkappEventsByAccount(publicKey)).toHaveLength(1);
+      });
+
+      And('the zkapp_event row stores raw fields ["300", "400"]', () => {
+        expect(store.zkappEventsByAccount("B62qBodyContract")[0]?.fields).toEqual(["300", "400"]);
+      });
+
+      And("one zkapp_action row exists for account {string}", (_context, publicKey: string) => {
+        expect(store.zkappActionsByAccount(publicKey)).toHaveLength(1);
+      });
+
+      And('the zkapp_action row stores raw fields ["77"]', () => {
+        expect(store.zkappActionsByAccount("B62qBodyContract")[0]?.fields).toEqual(["77"]);
+      });
+
+      And(
+        "the zkapp_action row has before_action_state {string} and action_state {string}",
+        (_context, before: string, after: string) => {
+          expect(store.zkappActionsByAccount("B62qBodyContract")[0]).toMatchObject({
+            before_action_state: before,
+            action_state: after,
+          });
         },
       );
     },

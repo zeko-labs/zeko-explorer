@@ -21,8 +21,9 @@ Implementation choices not explicitly described in the PRD:
 - L2 `block_height` and `sequence_number` currently come from local consumption
   order because the current `zeko.l2.transactions` contract does not carry an
   explicit L2 height.
-- zkApp actions persist observed `before_action_state` and `action_state` from
-  the event payload. This slice does not port Poseidon action-state derivation.
+- zkApp actions with raw action arrays bind `before_action_state` / `action_state`
+  from the pre/post account `action_state` snapshot vector. This slice does not
+  port Poseidon action-state derivation.
 - Commandless diffs are classified as `genesis` when `genesis = true`, otherwise
   `fee_transfer`.
 - Direct `zeko.da.signatures` ingestion is included because the WEB-426 schema

@@ -29,6 +29,15 @@ Feature: Unified Zeko indexer
     And the zkapp_action row has before_action_state "action-before" and action_state "action-after"
     And the zkApp child rows are tagged with target_ledger_hash "ledger-zk-1"
 
+  Scenario: zkApp ingestion accepts Spike 003 body-shaped account updates
+    Given account "B62qBodyContract" has prior action_state head "action-before-body"
+    When the indexer consumes a body-shaped zkApp transaction for "B62qBodyContract" on ledger "ledger-zk-body"
+    Then one zkapp_event row exists for account "B62qBodyContract"
+    And the zkapp_event row stores raw fields ["300", "400"]
+    And one zkapp_action row exists for account "B62qBodyContract"
+    And the zkapp_action row stores raw fields ["77"]
+    And the zkapp_action row has before_action_state "action-before-body" and action_state "action-after-body"
+
   Scenario: Fee transfer and genesis diffs are classified without commands
     When the indexer consumes a fee transfer diff for ledger "ledger-fee-1"
     Then the latest commandless transaction row has type "fee_transfer"

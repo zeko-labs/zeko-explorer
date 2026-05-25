@@ -453,6 +453,10 @@ export class ZekoIndexer {
       if (!account) {
         continue;
       }
+      const activity = [...this.#store.accountActivities.values()].find(
+        (candidate) =>
+          candidate.transaction === transaction.id && candidate.account_public_key === publicKey,
+      );
       const events = normalizeFieldArrays(update.events ?? update.body?.events ?? []);
       events.forEach((fields, eventIndex) => {
         const key = `${transaction.hash}:${publicKey}:event:${eventIndex}`;
@@ -478,7 +482,10 @@ export class ZekoIndexer {
         });
       });
 
-      const actions = normalizeObservedActions(update.actions ?? update.body?.actions ?? []);
+      const actions = normalizeObservedActions(update.actions ?? update.body?.actions ?? [], {
+        beforeHead: activity?.action_state_before?.[0],
+        afterHeads: activity?.action_state_after,
+      });
       actions.forEach((action, actionIndex) => {
         const key = `${transaction.hash}:${publicKey}:action:${actionIndex}`;
         if (this.#store.zkappActions.has(key)) {
@@ -577,7 +584,7 @@ const accountRole = (
 };
 
 const accountUpdatePublicKey = (update: L2AccountUpdateInput): string | undefined =>
-  update.public_key ?? update.account?.public_key;
+  update.public_key ?? update.account?.public_key ?? update.body?.public_key;
 
 const normalizeFieldArrays = (items: unknown[]): string[][] =>
   items.flatMap((item) => {
@@ -590,8 +597,31 @@ const normalizeFieldArrays = (items: unknown[]): string[][] =>
     return [];
   });
 
-const normalizeObservedActions = (items: unknown[]): ObservedZkappActionInput[] =>
-  items.flatMap((item) => {
+type ActionStateContext = {
+  beforeHead?: string;
+  afterHeads?: string[];
+};
+
+const normalizeObservedActions = (
+  items: unknown[],
+  state: ActionStateContext = {},
+): ObservedZkappActionInput[] =>
+  items.flatMap((item, index) => {
+    const rawFields = rawActionFields(item);
+    if (rawFields) {
+      const before = actionStateBefore(index, items.length, state);
+      const after = actionStateAfter(index, items.length, state);
+      if (!before || !after) {
+        throw new Error("Cannot index raw zkApp action without action_state snapshots");
+      }
+      return [
+        {
+          fields: rawFields,
+          before_action_state: before,
+          action_state: after,
+        },
+      ];
+    }
     if (!isRecord(item) || !Array.isArray(item.fields)) {
       return [];
     }
@@ -606,6 +636,37 @@ const normalizeObservedActions = (items: unknown[]): ObservedZkappActionInput[] 
       },
     ];
   });
+
+const rawActionFields = (item: unknown): string[] | undefined => {
+  if (Array.isArray(item)) {
+    return item.map(String);
+  }
+  if (
+    isRecord(item) &&
+    Array.isArray(item.fields) &&
+    (typeof item.before_action_state !== "string" || typeof item.action_state !== "string")
+  ) {
+    return item.fields.map(String);
+  }
+  return undefined;
+};
+
+const actionStateBefore = (
+  actionIndex: number,
+  actionCount: number,
+  state: ActionStateContext,
+): string | undefined => {
+  if (actionIndex === 0) {
+    return state.beforeHead;
+  }
+  return state.afterHeads?.[actionCount - actionIndex];
+};
+
+const actionStateAfter = (
+  actionIndex: number,
+  actionCount: number,
+  state: ActionStateContext,
+): string | undefined => state.afterHeads?.[actionCount - actionIndex - 1];
 
 const isRecord = (item: unknown): item is Record<string, unknown> =>
   typeof item === "object" && item !== null;
