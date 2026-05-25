@@ -1,6 +1,6 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
-import { type IndexerStore, normalizeTimestamp } from "./store.ts";
+import { type IndexerStore, normalizeTimestamp } from "./store";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -17,7 +17,7 @@ import type {
   ObservedZkappActionInput,
   PendingDaAttestationRow,
   TransactionRow,
-} from "./types.ts";
+} from "./types";
 
 export type ZekoIndexerOptions = {
   da?: {
@@ -38,6 +38,15 @@ const PRECEDENCE: Record<DaSource, number> = {
 export class ZekoIndexer {
   readonly #store: IndexerStore;
   readonly #options: ZekoIndexerOptions;
+  readonly #pendingDaSigners = new Map<
+    string,
+    {
+      receivedAt: string;
+      implementation: string;
+      quorum: number;
+      signers: DaSignerRow[];
+    }
+  >();
 
   constructor(store: IndexerStore, options: ZekoIndexerOptions = {}) {
     this.#store = store;
@@ -268,6 +277,12 @@ export class ZekoIndexer {
           l1_block_height: undefined,
           l1_confirmations: undefined,
           l1_finality_level: undefined,
+          da_status: undefined,
+          da_source: undefined,
+          da_attested_at: undefined,
+          da_implementation: undefined,
+          da_quorum_threshold: undefined,
+          da_signers: undefined,
           settled_at: undefined,
         },
         event.detectedAt,
@@ -295,7 +310,11 @@ export class ZekoIndexer {
     };
     const batch = this.#store.batchByLedger(event.ledgerHash);
     const pending = this.#store.pendingDa.get(event.ledgerHash);
-    const signers = appendSigner(batch?.da_signers ?? pending?.signers ?? [], signer);
+    const pendingSigners = this.#pendingDaSigners.get(event.ledgerHash);
+    const signers = appendSigner(
+      batch?.da_signers ?? pending?.signers ?? pendingSigners?.signers ?? [],
+      signer,
+    );
     if (batch) {
       const patch =
         signers.length >= quorum
@@ -313,19 +332,28 @@ export class ZekoIndexer {
       return;
     }
 
+    if (signers.length < quorum) {
+      this.#pendingDaSigners.set(event.ledgerHash, {
+        receivedAt: pendingSigners?.receivedAt ?? event.signedAt,
+        implementation: event.implementation,
+        quorum,
+        signers,
+      });
+      return;
+    }
+
     this.#store.pendingDa.set(event.ledgerHash, {
       ledger_hash: event.ledgerHash,
-      source:
-        signers.length >= quorum ? chooseDaSource(pending?.source, "da-direct") : pending?.source,
+      source: chooseDaSource(pending?.source, "da-direct"),
       received_at: pending?.received_at ?? event.signedAt,
-      attested_at:
-        signers.length >= quorum && shouldReplaceAttestedAt(pending?.source, "da-direct")
-          ? event.signedAt
-          : pending?.attested_at,
+      attested_at: shouldReplaceAttestedAt(pending?.source, "da-direct")
+        ? event.signedAt
+        : pending?.attested_at,
       implementation: event.implementation,
       quorum_threshold: quorum,
       signers,
     });
+    this.#pendingDaSigners.delete(event.ledgerHash);
   }
 
   prunePendingDa(now: string | number, maxAgeDays = 30): void {
@@ -567,6 +595,7 @@ export class ZekoIndexer {
     }
 
     const pending = this.#store.pendingDa.get(ledgerHash);
+    const pendingSigners = this.#pendingDaSigners.get(ledgerHash);
     const incomingSource = pending?.source ? chooseDaSource(pending.source, source) : source;
     const nextSource = chooseDaSource(batch.da_source, incomingSource);
     const incomingAttestedAt =
@@ -581,13 +610,19 @@ export class ZekoIndexer {
         da_attested_at: shouldReplaceAttestedAt(batch.da_source, incomingSource)
           ? incomingAttestedAt
           : batch.da_attested_at,
-        da_implementation: pending?.implementation ?? batch.da_implementation,
-        da_quorum_threshold: pending?.quorum_threshold ?? batch.da_quorum_threshold,
-        da_signers: mergeSigners(batch.da_signers, pending?.signers),
+        da_implementation:
+          pending?.implementation ?? pendingSigners?.implementation ?? batch.da_implementation,
+        da_quorum_threshold:
+          pending?.quorum_threshold ?? pendingSigners?.quorum ?? batch.da_quorum_threshold,
+        da_signers: mergeSigners(
+          mergeSigners(batch.da_signers, pending?.signers),
+          pendingSigners?.signers,
+        ),
       },
       attestedAt ?? normalizeTimestamp(Date.now()),
     );
     this.#store.pendingDa.delete(ledgerHash);
+    this.#pendingDaSigners.delete(ledgerHash);
   }
 
   private upsertPendingDa(ledgerHash: string, source: DaSource, attestedAt?: string): void {

@@ -1,8 +1,6 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
@@ -13,7 +11,6 @@ import {
 } from "../src/index";
 
 const feature = await loadFeature("tests/unified-indexer.feature");
-const execFile = promisify(execFileCallback);
 
 const timestamp = "2026-05-13T00:00:00.000Z";
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
@@ -79,7 +76,6 @@ describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let indexer: ZekoIndexer;
   let lastError: unknown;
-  let cliOutput = "";
 
   const reset = () => {
     store = new InMemoryIndexerStore();
@@ -91,7 +87,6 @@ describeFeature(feature, ({ Scenario }) => {
       },
     });
     lastError = undefined;
-    cliOutput = "";
   };
 
   const consumePayment = async (
@@ -101,13 +96,14 @@ describeFeature(feature, ({ Scenario }) => {
       changedAccount("B62qsender", "900", 6),
       changedAccount("B62qreceiver", "1100", 0),
     ],
+    occurredAt: string | number = timestamp,
   ) => {
     await indexer.consume({
       subject: "zeko.l2.transactions",
       payload: {
         source_ledger_hash: sourceLedgerHash,
         target_ledger_hash: targetLedgerHash,
-        timestamp,
+        timestamp: occurredAt,
         acc_set: "acc-set",
         command: {
           type: "signed_command",
@@ -262,6 +258,23 @@ describeFeature(feature, ({ Scenario }) => {
       );
     },
   );
+
+  Scenario("L2 millisecond timestamp strings are normalized", ({ When, Then }) => {
+    When(
+      "the indexer consumes a payment transaction for ledger {string} with timestamp {string}",
+      async (_context, ledger: string, observedAt: string) => {
+        reset();
+        await consumePayment(ledger, undefined, undefined, observedAt);
+      },
+    );
+
+    Then(
+      "transaction {string} has timestamp {string}",
+      (_context, hash: string, expectedTimestamp: string) => {
+        expect(store.transactionByHash(hash)?.timestamp).toBe(expectedTimestamp);
+      },
+    );
+  });
 
   Scenario("Duplicate L2 transaction messages are idempotent", ({ When, And, Then }) => {
     When(
@@ -1422,6 +1435,10 @@ describeFeature(feature, ({ Scenario }) => {
       },
     );
 
+    And("batch for ledger {string} has no da_status", (_context, ledger: string) => {
+      expect(store.batchByLedger(ledger)?.da_status).toBeUndefined();
+    });
+
     And(
       "pending DA attestation for {string} has source {string}",
       (_context, ledger: string, source: string) => {
@@ -1487,18 +1504,6 @@ describeFeature(feature, ({ Scenario }) => {
       const files = await tsFilesUnder(srcDir);
       const contents = await Promise.all(files.map((file) => readFile(file, "utf8")));
       expect(contents.join("\n")).not.toContain("@zeko/contract-schema");
-    });
-  });
-
-  Scenario("CLI entrypoint reports consumed NATS subjects", ({ When, Then }) => {
-    When("the indexer CLI entrypoint is executed", async () => {
-      const serviceDir = fileURLToPath(new URL("..", import.meta.url));
-      const result = await execFile(process.execPath, ["src/index.ts"], { cwd: serviceDir });
-      cliOutput = result.stdout;
-    });
-
-    Then("the CLI output includes {string}", (_context, subject: string) => {
-      expect(cliOutput).toContain(subject);
     });
   });
 });

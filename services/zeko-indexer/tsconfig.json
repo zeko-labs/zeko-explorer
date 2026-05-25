@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
     "rootDir": "src",
     "outDir": "../../.moon/cache/types/services/zeko-indexer",
     "tsBuildInfoFile": "../../.moon/cache/types/services/zeko-indexer/tsconfig.tsbuildinfo",

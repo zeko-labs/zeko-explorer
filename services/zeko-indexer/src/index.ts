@@ -2,9 +2,9 @@ import { pathToFileURL } from "node:url";
 import { SURREALKIT_PROJECT_DIR } from "@zeko/database";
 import { NATS_SUBJECTS } from "@zeko/nats";
 
-export * from "./indexer.ts";
-export * from "./store.ts";
-export * from "./types.ts";
+export * from "./indexer";
+export * from "./store";
+export * from "./types";
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   console.log(

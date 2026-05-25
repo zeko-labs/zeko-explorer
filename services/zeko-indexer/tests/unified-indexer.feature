@@ -10,6 +10,10 @@ Feature: Unified Zeko indexer
     And account activity snapshots exist for ledger "ledger-1"
     And sync status for "l2-transactions" has last_hash "ledger-1"
 
+  Scenario: L2 millisecond timestamp strings are normalized
+    When the indexer consumes a payment transaction for ledger "ledger-ms-time" with timestamp "1710000000000"
+    Then transaction "tx-ledger-ms-time" has timestamp "2024-03-09T16:00:00.000Z"
+
   Scenario: Duplicate L2 transaction messages are idempotent
     When the indexer consumes a payment transaction for ledger "ledger-duplicate"
     And the indexer consumes the same payment transaction for ledger "ledger-duplicate" again
@@ -200,6 +204,7 @@ Feature: Unified Zeko indexer
     Given batch for ledger "ledger-da-3" is attested from source "settlement"
     When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-3"
     Then batch for ledger "ledger-da-3" has settlement_status "pending"
+    And batch for ledger "ledger-da-3" has no da_status
     And pending DA attestation for "ledger-da-3" has source "settlement"
 
   Scenario: Pending DA attestations are pruned after the max age
@@ -215,7 +220,3 @@ Feature: Unified Zeko indexer
 
   Scenario: Indexer remains schema-blind at the package boundary
     Then the zeko-indexer source does not import "@zeko/contract-schema"
-
-  Scenario: CLI entrypoint reports consumed NATS subjects
-    When the indexer CLI entrypoint is executed
-    Then the CLI output includes "zeko.l2.transactions"

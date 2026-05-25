@@ -25,8 +25,9 @@ tasks:
 
   dev:
     command: "node"
-    args: ["src/index.ts"]
+    args: ["dist/index.mjs"]
     deps:
+      - "zeko-indexer:build"
       - "^:build"
     options:
       persistent: true

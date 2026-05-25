@@ -8,7 +8,7 @@ import type {
   TransactionRow,
   ZkappActionRow,
   ZkappEventRow,
-} from "./types.ts";
+} from "./types";
 
 export type IdFactory = {
   newId(timestamp: string | number): string;
@@ -53,6 +53,10 @@ export class UlidFactory implements IdFactory {
 export const timestampToMillis = (timestamp: string | number): number => {
   if (typeof timestamp === "number") {
     return timestamp;
+  }
+
+  if (/^\d+$/.test(timestamp)) {
+    return Number(timestamp);
   }
 
   const millis = Date.parse(timestamp);
