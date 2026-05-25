@@ -2,6 +2,7 @@ import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
 import {
   consumeBridgeInnerAction,
+  consumeBridgeL2Rollback,
   consumeBridgeRollback,
   consumeL1BridgeEvent,
   consumeL1OuterAction,
@@ -34,6 +35,7 @@ export type ZekoIndexerOptions = {
     verifySignature?: (event: DaSignatureInput) => boolean;
   };
   bridge?: {
+    innerActionPublicKeys?: ReadonlySet<string>;
     withdrawalDelaySlots?: number;
   };
 };
@@ -580,6 +582,7 @@ export class ZekoIndexer {
         this.#store.zkappActions.delete(id);
       }
     }
+    consumeBridgeL2Rollback(this.#store, { rollbackId: `l2-rollback-${ledgerHash}`, ledgerHash });
 
     const affectedAccounts = new Set(
       [...this.#store.accountActivities.values()]
@@ -838,12 +841,21 @@ export class ZekoIndexer {
           target_ledger_hash: event.target_ledger_hash,
         });
         const actionRow = this.#store.zkappActions.get(key);
-        if (actionRow) {
+        if (actionRow && this.isBridgeInnerAction(publicKey)) {
           consumeBridgeInnerAction(this.#store, transaction, actionRow);
         }
       });
     }
   }
+
+  private isBridgeInnerAction(publicKey: string): boolean {
+    const configured = this.#options.bridge?.innerActionPublicKeys;
+    if (!configured) {
+      return false;
+    }
+    return configured.has(publicKey);
+  }
+
   private applyDaAttestation(ledgerHash: string, source: DaSource, attestedAt?: string): void {
     const batch = this.#store.batchByLedger(ledgerHash);
     if (!batch) {

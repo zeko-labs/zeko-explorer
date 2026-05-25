@@ -5,6 +5,7 @@ import type {
   InnerActionRow,
   L1BridgeEventInput,
   L1OuterActionInput,
+  OuterActionRow,
   TransactionRow,
   ZkappActionRow,
 } from "./types.ts";
@@ -129,6 +130,7 @@ export function consumeBridgeInnerAction(
     existingDeposit.status = depositStatus(existingDeposit);
     linkL2Action(store, existingDeposit, row, "mint");
     linkBridgeTransaction(store, existingDeposit, transaction, "l2_finalize");
+    replayKnownCommits(store);
     return;
   }
 
@@ -162,6 +164,7 @@ export function consumeBridgeInnerAction(
   operation.status = withdrawalStatus(operation);
   linkL2Action(store, operation, row, "burn");
   linkBridgeTransaction(store, operation, transaction, "submit");
+  replayKnownCommits(store);
 }
 
 function enrichWithdrawalFromL2Submit(
@@ -214,11 +217,13 @@ export function consumeBridgeRollback(
   for (const outerActionId of event.affected.outerActionIds) {
     const outerAction = store.outerActions.get(outerActionId);
     store.outerActions.delete(outerActionId);
+    deleteL1LinksForOuterAction(store, outerActionId);
     if (!outerAction) {
       continue;
     }
 
     for (const operation of store.bridgeOperations.values()) {
+      let affected = false;
       if (operation.l1_witness_action_state === outerAction.after_state) {
         operation.l1_witness_action_state = undefined;
         operation.l1_witness_tx_hash = undefined;
@@ -226,12 +231,72 @@ export function consumeBridgeRollback(
         operation.l1_witness_timestamp = undefined;
         operation.l1_slot_range_lower = undefined;
         operation.l1_slot_range_upper = undefined;
+        affected = true;
       }
       if (operation.commit_action_state === outerAction.after_state) {
         operation.commit_action_state = undefined;
+        affected = true;
       }
-      operation.status =
-        operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation);
+      if (affected) {
+        operation.status =
+          operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation);
+      }
+    }
+  }
+}
+
+export function consumeBridgeL2Rollback(
+  store: IndexerStore,
+  event: { rollbackId: string; ledgerHash: string },
+): void {
+  const removedInnerActions = new Map<string, InnerActionRow>();
+  for (const [state, innerAction] of store.innerActions) {
+    if (innerAction.target_ledger_hash === event.ledgerHash) {
+      removedInnerActions.set(innerAction.id, innerAction);
+      store.innerActions.delete(state);
+    }
+  }
+
+  if (removedInnerActions.size === 0) {
+    return;
+  }
+
+  const affectedOperationIds = new Set<string>();
+  for (const [key, link] of store.l2ActionLinks) {
+    if (removedInnerActions.has(link.out)) {
+      affectedOperationIds.add(link.in);
+      store.l2ActionLinks.delete(key);
+    }
+  }
+
+  const removedTransactionIds = new Set(
+    [...removedInnerActions.values()].map((innerAction) => innerAction.transaction),
+  );
+  for (const [key, link] of store.bridgeTransactionLinks) {
+    if (removedTransactionIds.has(link.out)) {
+      affectedOperationIds.add(link.in);
+      store.bridgeTransactionLinks.delete(key);
+    }
+  }
+
+  for (const operationId of affectedOperationIds) {
+    const operation = store.bridgeOperationById(operationId);
+    if (!operation) {
+      continue;
+    }
+    operation.l2_action_state = undefined;
+    operation.l2_tx_hash = undefined;
+    operation.l2_block_height = undefined;
+    operation.l2_timestamp = undefined;
+    if (operation.type === "withdrawal") {
+      operation.submit_tx_hash = undefined;
+    }
+    operation.commit_action_state = undefined;
+    deleteCommitLinksForOperation(store, operation.id);
+    operation.status =
+      operation.type === "deposit" ? depositStatus(operation) : withdrawalRollbackStatus(operation);
+    if (operation.status === "rolled_back") {
+      operation.rollback_reason = event.rollbackId;
     }
   }
 }
@@ -412,6 +477,19 @@ function applyOuterCommit(
   }
 }
 
+function replayKnownCommits(store: IndexerStore): void {
+  for (const outerAction of store.outerActions.values()) {
+    if (isCommitOuterAction(outerAction)) {
+      applyOuterCommit(
+        store,
+        outerAction,
+        outerAction.inner_action_state,
+        outerAction.inner_action_state_length,
+      );
+    }
+  }
+}
+
 function coveredInnerActions(
   store: IndexerStore,
   headState: string,
@@ -558,7 +636,23 @@ function withdrawalStatus(operation: BridgeOperationRow): BridgeOperationRow["st
   if (operation.commit_action_state) {
     return "committed";
   }
+  if (operation.l2_action_state) {
+    return "l2_witnessed";
+  }
   return "submitted";
+}
+
+function withdrawalRollbackStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {
+  if (operation.l1_witness_action_state || operation.l1_witness_tx_hash) {
+    return "completed";
+  }
+  if (operation.commit_action_state) {
+    return "committed";
+  }
+  if (operation.l2_action_state) {
+    return "l2_witnessed";
+  }
+  return "rolled_back";
 }
 
 function linkL1Action(
@@ -593,4 +687,31 @@ function linkBridgeTransaction(
 
 function bridgeKey(aux: string, sequence: number): string {
   return `${aux}:${sequence}`;
+}
+
+function deleteL1LinksForOuterAction(store: IndexerStore, outerActionId: string): void {
+  for (const [key, link] of store.l1ActionLinks) {
+    if (link.in === outerActionId) {
+      store.l1ActionLinks.delete(key);
+    }
+  }
+}
+
+function deleteCommitLinksForOperation(store: IndexerStore, operationId: string): void {
+  for (const [key, link] of store.l1ActionLinks) {
+    if (link.out === operationId && link.role === "commit") {
+      store.l1ActionLinks.delete(key);
+    }
+  }
+}
+
+function isCommitOuterAction(outerAction: OuterActionRow): outerAction is OuterActionRow & {
+  inner_action_state: string;
+  inner_action_state_length: number;
+} {
+  return (
+    outerAction.kind === "commit" &&
+    outerAction.inner_action_state !== undefined &&
+    outerAction.inner_action_state_length !== undefined
+  );
 }

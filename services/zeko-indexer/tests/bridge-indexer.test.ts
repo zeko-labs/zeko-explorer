@@ -28,7 +28,12 @@ describeFeature(feature, ({ Scenario }) => {
 
   const reset = () => {
     store = new InMemoryIndexerStore();
-    indexer = new ZekoIndexer(store, { bridge: { withdrawalDelaySlots: 100 } });
+    indexer = new ZekoIndexer(store, {
+      bridge: {
+        innerActionPublicKeys: new Set(["B62qInnerBridge"]),
+        withdrawalDelaySlots: 100,
+      },
+    });
   };
 
   const operation = (aux: string, sequence: number) => {
@@ -177,6 +182,85 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeNonBridgeAction = async (aux: string) => {
+    await indexer.consume({
+      subject: "zeko.l2.transactions",
+      payload: {
+        source_ledger_hash: store.syncStatus.get("l2-transactions")?.last_hash ?? "ledger-0",
+        target_ledger_hash: `ledger-non-bridge-${aux}`,
+        timestamp,
+        acc_set: "acc-set",
+        command: {
+          type: "zkapp_command",
+          hash: `tx-non-bridge-${aux}`,
+          sender: "B62qUser",
+          fee: "1",
+          nonce: 1,
+          account_updates: [
+            {
+              public_key: "B62qUnrelatedContract",
+              actions: [
+                {
+                  fields: ["1", aux, "B62qRecipient", "1000000000"],
+                  before_action_state: "0",
+                  action_state: `non-bridge-${aux}`,
+                },
+              ],
+            },
+          ],
+        },
+        changed_accounts: [
+          {
+            index: 0,
+            account: {
+              public_key: "B62qUnrelatedContract",
+              balance: "0",
+              nonce: 1,
+              token_id: "1",
+              action_state: [`non-bridge-${aux}`],
+              permissions: {},
+              timing: {},
+            },
+          },
+        ],
+      },
+    });
+  };
+
+  const consumeReplacement = async (sourceLedgerHash: string, targetLedgerHash: string) => {
+    await indexer.consume({
+      subject: "zeko.l2.transactions",
+      payload: {
+        source_ledger_hash: sourceLedgerHash,
+        target_ledger_hash: targetLedgerHash,
+        timestamp,
+        acc_set: "acc-set",
+        command: {
+          type: "signed_command",
+          hash: `tx-${targetLedgerHash}`,
+          sender: "B62qUser",
+          receiver: "B62qRecipient",
+          amount: "1",
+          fee: "1",
+          nonce: 2,
+        },
+        changed_accounts: [
+          {
+            index: 0,
+            account: {
+              public_key: "B62qUser",
+              balance: "99",
+              nonce: 2,
+              token_id: "1",
+              permissions: {},
+              timing: {},
+            },
+          },
+        ],
+      },
+    });
+  };
+
   const consumeCancellation = async (aux: string, cancelledDepositIndex = 0) => {
     await indexer.consume({
       subject: "zeko.l1.bridge-events",
@@ -295,6 +379,94 @@ describeFeature(feature, ({ Scenario }) => {
           (link) => link.in === row.id && link.role === role,
         ),
       ).toHaveLength(1);
+    });
+  });
+
+  Scenario("Non-bridge zkApp actions are not projected as bridge operations", ({ When, Then }) => {
+    reset();
+    When(
+      "the indexer consumes a non-bridge zkApp action for aux {string}",
+      (_context, aux: string) => consumeNonBridgeAction(aux),
+    );
+    Then("no bridge operation exists for aux {string}", (_context, aux: string) => {
+      expect(store.bridgeOperationsByAux(aux)).toHaveLength(0);
+    });
+  });
+
+  Scenario(
+    "Late L2 inner actions replay previously indexed commits",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      And(
+        "the indexer consumed an L1 commit covering inner action state {string}",
+        (_context, innerActionState: string) => consumeCommit(innerActionState),
+      );
+      When(
+        "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And("one L1 commit link exists for aux {string}", (_, aux: string) => {
+        const row = operation(aux, 0);
+        expect(
+          [...store.l1ActionLinks.values()].filter(
+            (link) => link.out === row.id && link.role === "commit",
+          ),
+        ).toHaveLength(1);
+      });
+    },
+  );
+
+  Scenario("L2 rollback removes derived bridge inner evidence", ({ Given, And, When, Then }) => {
+    reset();
+    Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+      consumeDeposit(aux),
+    );
+    And("the indexer consumed an L1 witness for aux {string}", (_context, aux: string) =>
+      consumeWitness(aux),
+    );
+    And(
+      "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    And(
+      "the indexer consumed an L1 commit covering inner action state {string}",
+      (_context, innerActionState: string) => consumeCommit(innerActionState),
+    );
+    When(
+      "the indexer consumes an L2 replacement from source ledger {string} to target ledger {string}",
+      (_context, source: string, target: string) => consumeReplacement(source, target),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+    And("no L2 links exist for aux {string}", (_, aux: string) => {
+      const row = operation(aux, 0);
+      expect([...store.l2ActionLinks.values()].filter((link) => link.in === row.id)).toHaveLength(
+        0,
+      );
+    });
+    And("no L1 commit link exists for aux {string}", (_, aux: string) => {
+      const row = operation(aux, 0);
+      expect(
+        [...store.l1ActionLinks.values()].filter(
+          (link) => link.out === row.id && link.role === "commit",
+        ),
+      ).toHaveLength(0);
     });
   });
 
@@ -439,6 +611,20 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("Withdrawal inner action is exposed as L2 witnessed before commit", ({ When, Then }) => {
+    reset();
+    When(
+      "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+  });
+
   Scenario(
     "Out-of-order withdrawal finalization is enriched by the L2 burn",
     ({ Given, When, Then, And }) => {
@@ -518,6 +704,74 @@ describeFeature(feature, ({ Scenario }) => {
         },
       );
       Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And("no L1 witness link exists for aux {string}", (_, aux: string) => {
+        const row = operation(aux, 0);
+        expect(
+          [...store.l1ActionLinks.values()].filter(
+            (link) => link.out === row.id && link.role === "witness",
+          ),
+        ).toHaveLength(0);
+      });
+    },
+  );
+
+  Scenario(
+    "L1 rollback does not downgrade unrelated clock-derived bridge status",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      And("the indexer observes L1 slot {int}", async (_context, slot: number) => {
+        await consumeCommit(`unrelated-${slot}`, 5100 + slot, slot);
+      });
+      When(
+        "the indexer consumes an L1 rollback affecting outer action {string}",
+        async (_context, outerActionId: string) => {
+          await indexer.consume({
+            subject: "zeko.l1.rollbacks",
+            payload: {
+              schemaVersion: 1,
+              provider: "mina",
+              network: "zeko-m-devnet",
+              source: "l1-watcher",
+              subject: "zeko.l1.rollbacks",
+              rollbackId: `rollback-${outerActionId}`,
+              detectedAt: timestamp,
+              commonAncestor: { height: 4999, hash: "l1-block-4999" },
+              orphanedBlocks: [
+                { height: 5010, hash: "l1-block-5010", parentHash: "l1-block-5009" },
+              ],
+              replacementBlocks: [
+                { height: 5010, hash: "l1-block-5010b", parentHash: "l1-block-5009" },
+              ],
+              affected: {
+                settlementIds: [],
+                outerActionIds: [outerActionId],
+                bridgeEventIds: [],
+              },
+            },
+          });
+        },
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
         "bridge operation for aux {string} sequence {int} has status {string}",
         (_, aux: string, sequence: number, status: string) => {
           expect(operation(aux, sequence).status).toBe(status);
