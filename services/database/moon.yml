@@ -7,7 +7,38 @@ tags: ["surrealdb", "database"]
 dependsOn:
   - "domain"
 
+fileGroups:
+  acceptance:
+    - "acceptance/**/*.feature"
+    - "acceptance/**/*.ts"
+    - "queries/**/*.surql"
+    - "surrealkit/**/*.surql"
+    - "surrealkit/**/*.toml"
+    - "moon.yml"
+    - "package.json"
+    - "tsconfig.json"
+    - "/docs/spikes/008-surrealdb-schema/surrealkit/**/*.surql"
+    - "/docs/spikes/008-surrealdb-schema/surrealkit/**/*.toml"
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
+
 tasks:
+  test:
+    command: "cucumber-js"
+    args:
+      - "--import=acceptance/support/*.ts"
+      - "--import=acceptance/step_definitions/*.ts"
+      - "--format"
+      - "progress"
+      - "acceptance/**/*.feature"
+    inputs:
+      - "@group(acceptance)"
+    options:
+      cache: false
+      mergeArgs: "replace"
+      mergeInputs: "replace"
+
   migrate-local:
     command: "nu"
     args: ["scripts/migrate-local.nu"]

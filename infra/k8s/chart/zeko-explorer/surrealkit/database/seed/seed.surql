@@ -1,1 +1,0 @@
--- SurrealKit seed entrypoint. Benchmark seeds are generated into temporary SurrealKit projects.

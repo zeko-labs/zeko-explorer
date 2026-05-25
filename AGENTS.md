@@ -8,6 +8,7 @@
 - Use PNPM catalog entries for external JavaScript dependencies.
 - Use Proto-managed Nushell through `proto-nu` for local automation scripts. Do not add Bash entrypoint scripts or npm Nushell packages.
 - Use Biome for linting and formatting. Do not add ESLint, Prettier, oxlint, or oxfmt.
+- For product/domain behavior and acceptance coverage, use BDD/TDD with Gherkin/Cucumber. Do not add Vitest/Jest-style behavior tests for WEB work unless the user explicitly asks for that test shape.
 - Use `wrangler.jsonc` and generated Wrangler Env types for Cloudflare Workers.
 - Use `.kyaml` for Kubernetes values. Use `.tpl` for Helm template sources so YAML tooling only parses rendered manifests.
 - Keep `apps/` for consumer surfaces and `services/` for backend services.

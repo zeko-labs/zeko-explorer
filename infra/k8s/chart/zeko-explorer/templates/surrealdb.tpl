@@ -79,6 +79,8 @@ data:
 {{ .Files.Get "surrealkit/migrations/0001_initial_core.surql" | indent 4 }}
   0002_l1_watcher_and_bridge_quality.surql: |-
 {{ .Files.Get "surrealkit/migrations/0002_l1_watcher_and_bridge_quality.surql" | indent 4 }}
+  0003_da_attestation_status.surql: |-
+{{ .Files.Get "surrealkit/migrations/0003_da_attestation_status.surql" | indent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -104,6 +106,7 @@ spec:
           command: ["/bin/sh", "-ceu"]
           args:
             - |
+              surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} apply migrations/0003_da_attestation_status.surql
               surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} sync --fail-fast
           volumeMounts:
             - name: migrations
@@ -125,3 +128,5 @@ spec:
                 path: migrations/0001_initial_core.surql
               - key: 0002_l1_watcher_and_bridge_quality.surql
                 path: migrations/0002_l1_watcher_and_bridge_quality.surql
+              - key: 0003_da_attestation_status.surql
+                path: migrations/0003_da_attestation_status.surql
