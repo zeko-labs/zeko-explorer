@@ -1,6 +1,6 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
-import { type IndexerStore, normalizeTimestamp } from "./store";
+import { type IndexerStore, normalizeTimestamp } from "./store.ts";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -17,7 +17,7 @@ import type {
   ObservedZkappActionInput,
   PendingDaAttestationRow,
   TransactionRow,
-} from "./types";
+} from "./types.ts";
 
 export type ZekoIndexerOptions = {
   da?: {
@@ -215,18 +215,26 @@ export class ZekoIndexer {
     const incomingStatus = event.finalityLevel === "finalized" ? "finalized" : "settling";
     const existing = this.#store.batchByLedger(ledgerHash);
     const settlementStatus = chooseSettlementStatus(existing?.settlement_status, incomingStatus);
+    const downgradeFromFinalized =
+      existing?.settlement_status === "finalized" && incomingStatus !== "finalized";
     this.#store.upsertBatch(
       ledgerHash,
       {
         settlement_id: event.settlementId,
         proof_status: "proved",
         settlement_status: settlementStatus,
-        l1_chain: event.provider,
-        l1_block_height: event.block.height,
-        l1_block_hash: event.block.hash,
-        l1_tx_hash: event.txHash,
-        l1_confirmations: event.block.confirmationDepth,
-        l1_finality_level: settlementStatus === "finalized" ? "finalized" : event.finalityLevel,
+        l1_chain: downgradeFromFinalized ? existing.l1_chain : event.provider,
+        l1_block_height: downgradeFromFinalized ? existing.l1_block_height : event.block.height,
+        l1_block_hash: downgradeFromFinalized ? existing.l1_block_hash : event.block.hash,
+        l1_tx_hash: downgradeFromFinalized ? existing.l1_tx_hash : event.txHash,
+        l1_confirmations: downgradeFromFinalized
+          ? existing.l1_confirmations
+          : event.block.confirmationDepth,
+        l1_finality_level: downgradeFromFinalized
+          ? existing.l1_finality_level
+          : settlementStatus === "finalized"
+            ? "finalized"
+            : event.finalityLevel,
         submitted_at: existing?.submitted_at ?? observedAt,
         settled_at: event.finalityLevel === "finalized" ? observedAt : existing?.settled_at,
       },
@@ -558,14 +566,17 @@ export class ZekoIndexer {
     }
 
     const pending = this.#store.pendingDa.get(ledgerHash);
-    const nextSource = chooseDaSource(batch.da_source, source);
+    const incomingSource = chooseDaSource(pending?.source, source);
+    const nextSource = chooseDaSource(batch.da_source, incomingSource);
+    const incomingAttestedAt =
+      incomingSource === pending?.source ? (pending.attested_at ?? attestedAt) : attestedAt;
     this.#store.upsertBatch(
       ledgerHash,
       {
         da_status: "attested",
         da_source: nextSource,
-        da_attested_at: shouldReplaceAttestedAt(batch.da_source, source)
-          ? attestedAt
+        da_attested_at: shouldReplaceAttestedAt(batch.da_source, incomingSource)
+          ? incomingAttestedAt
           : batch.da_attested_at,
         da_implementation: pending?.implementation ?? batch.da_implementation,
         da_quorum_threshold: pending?.quorum_threshold ?? batch.da_quorum_threshold,
@@ -573,6 +584,7 @@ export class ZekoIndexer {
       },
       attestedAt ?? normalizeTimestamp(Date.now()),
     );
+    this.#store.pendingDa.delete(ledgerHash);
   }
 
   private upsertPendingDa(ledgerHash: string, source: DaSource, attestedAt?: string): void {

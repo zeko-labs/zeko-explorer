@@ -101,6 +101,7 @@ Feature: Unified Zeko indexer
     When the indexer consumes a settlement message for ledger "ledger-finalized-replay"
     Then batch for ledger "ledger-finalized-replay" has settlement_status "finalized"
     And batch for ledger "ledger-finalized-replay" keeps settled_at "2026-05-13T00:00:00.000Z"
+    And batch for ledger "ledger-finalized-replay" keeps l1_confirmations 290
 
   Scenario: Settlement stores the source L1 provider
     When the indexer consumes an "ethereum" settlement message for ledger "ledger-ethereum-settlement"
@@ -172,6 +173,13 @@ Feature: Unified Zeko indexer
     Then after settlement batch for ledger "ledger-da-2" has da_status "attested" and da_source "settlement"
     And batch for ledger "ledger-da-2" records DA signers "PK_A" and "PK_B"
 
+  Scenario: Pending direct DA signatures keep precedence when proved finality creates the batch
+    Given the indexer consumed valid DA signatures for ledger "ledger-da-direct-first" from "PK_A" and "PK_B"
+    And the indexer consumed a payment transaction for ledger "ledger-da-direct-first"
+    When the indexer consumes a proved finality message for ledger "ledger-da-direct-first"
+    Then batch for ledger "ledger-da-direct-first" has da_status "attested" and da_source "da-direct"
+    And no pending DA attestation remains for "ledger-da-direct-first"
+
   Scenario: L1 rollback preserves DA facts for later rebinding
     Given batch for ledger "ledger-da-3" is attested from source "settlement"
     When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-3"
@@ -191,3 +199,7 @@ Feature: Unified Zeko indexer
 
   Scenario: Indexer remains schema-blind at the package boundary
     Then the zeko-indexer source does not import "@zeko/contract-schema"
+
+  Scenario: CLI entrypoint reports consumed NATS subjects
+    When the indexer CLI entrypoint is executed
+    Then the CLI output includes "zeko.l2.transactions"

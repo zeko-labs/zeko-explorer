@@ -1,6 +1,8 @@
+import { execFile as execFileCallback } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
@@ -11,6 +13,7 @@ import {
 } from "../src/index";
 
 const feature = await loadFeature("tests/unified-indexer.feature");
+const execFile = promisify(execFileCallback);
 
 const timestamp = "2026-05-13T00:00:00.000Z";
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
@@ -76,6 +79,7 @@ describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let indexer: ZekoIndexer;
   let lastError: unknown;
+  let cliOutput = "";
 
   const reset = () => {
     store = new InMemoryIndexerStore();
@@ -87,6 +91,7 @@ describeFeature(feature, ({ Scenario }) => {
       },
     });
     lastError = undefined;
+    cliOutput = "";
   };
 
   const consumePayment = async (
@@ -807,6 +812,13 @@ describeFeature(feature, ({ Scenario }) => {
           expect(store.batchByLedger(ledger)?.settled_at).toBe(settledAt);
         },
       );
+
+      And(
+        "batch for ledger {string} keeps l1_confirmations {int}",
+        (_context, ledger: string, confirmations: number) => {
+          expect(store.batchByLedger(ledger)?.l1_confirmations).toBe(confirmations);
+        },
+      );
     },
   );
 
@@ -1197,6 +1209,62 @@ describeFeature(feature, ({ Scenario }) => {
     );
   });
 
+  Scenario(
+    "Pending direct DA signatures keep precedence when proved finality creates the batch",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed valid DA signatures for ledger {string} from {string} and {string}",
+        async (_context, ledger: string, first: string, second: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, first),
+          });
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, second),
+          });
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has da_status {string} and da_source {string}",
+        (_context, ledger: string, status: string, source: string) => {
+          expect(store.batchByLedger(ledger)).toMatchObject({
+            da_status: status,
+            da_source: source,
+          });
+        },
+      );
+
+      And("no pending DA attestation remains for {string}", (_context, ledger: string) => {
+        expect(store.pendingDa.has(ledger)).toBe(false);
+      });
+    },
+  );
+
   Scenario("L1 rollback preserves DA facts for later rebinding", ({ Given, When, Then, And }) => {
     Given(
       "batch for ledger {string} is attested from source {string}",
@@ -1312,6 +1380,18 @@ describeFeature(feature, ({ Scenario }) => {
       expect(contents.join("\n")).not.toContain("@zeko/contract-schema");
     });
   });
+
+  Scenario("CLI entrypoint reports consumed NATS subjects", ({ When, Then }) => {
+    When("the indexer CLI entrypoint is executed", async () => {
+      const serviceDir = fileURLToPath(new URL("..", import.meta.url));
+      const result = await execFile(process.execPath, ["src/index.ts"], { cwd: serviceDir });
+      cliOutput = result.stdout;
+    });
+
+    Then("the CLI output includes {string}", (_context, subject: string) => {
+      expect(cliOutput).toContain(subject);
+    });
+  });
 });
 
 const tsFilesUnder = async (dir: string): Promise<string[]> => {
@@ -1345,7 +1425,7 @@ const settlement = (
     parentHash: "state-hash-99",
     slot: 200,
     timestamp,
-    confirmationDepth: 12,
+    confirmationDepth: finalityLevel === "finalized" ? 290 : 12,
   },
   eventType: finalityLevel === "finalized" ? "finalized" : "detected",
   settlementId: `settlement-${ledger}`,
