@@ -137,7 +137,10 @@ export function consumeBridgeInnerAction(
   const existingWithdrawal = firstOperationNeeding(
     store,
     aux,
-    (operation) => operation.type === "withdrawal" && operation.l2_action_state === undefined,
+    (operation) =>
+      operation.type === "withdrawal" &&
+      operation.status !== "rolled_back" &&
+      operation.l2_action_state === undefined,
   );
   const operation =
     existingWithdrawal ??

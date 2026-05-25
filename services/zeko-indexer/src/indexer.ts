@@ -108,12 +108,8 @@ export class ZekoIndexer {
 
   consumeL2Transaction(event: L2TransactionInput): void {
     const txHash = event.command?.hash ?? `${event.target_ledger_hash}:diff`;
-    const existing = this.#store.transactionByHash(txHash);
-    if (
-      existing &&
-      existing.source_ledger_hash === event.source_ledger_hash &&
-      existing.target_ledger_hash === event.target_ledger_hash
-    ) {
+    const existing = this.transactionByHashAndLedger(txHash, event.target_ledger_hash);
+    if (existing) {
       return;
     }
 
@@ -144,7 +140,7 @@ export class ZekoIndexer {
       target_ledger_hash: event.target_ledger_hash,
       raw_command: event.command ?? undefined,
     };
-    this.#store.transactions.set(txHash, row);
+    this.#store.transactions.set(transactionKey(txHash, event.target_ledger_hash), row);
     if (this.#store.ledgerOrder.length === 0) {
       this.#store.ledgerOrder.push(event.source_ledger_hash);
     }
@@ -174,7 +170,7 @@ export class ZekoIndexer {
       };
       this.#store.accounts.set(accountKey(publicKey, account.token_id), account);
       this.#store.accountActivities.set(
-        `${txHash}:${publicKey}:${account.token_id}:${activityIndex}`,
+        `${row.id}:${publicKey}:${account.token_id}:${activityIndex}`,
         {
           id: this.#store.idFactory.newId(timestamp),
           account: account.id,
@@ -787,7 +783,7 @@ export class ZekoIndexer {
       events.forEach((fields) => {
         const eventIndex = eventIndexesByPublicKey.get(publicKey) ?? 0;
         eventIndexesByPublicKey.set(publicKey, eventIndex + 1);
-        const key = `${transaction.hash}:${publicKey}:event:${eventIndex}`;
+        const key = `${transaction.id}:${publicKey}:event:${eventIndex}`;
         if (this.#store.zkappEvents.has(key)) {
           return;
         }
@@ -817,7 +813,7 @@ export class ZekoIndexer {
       actions.forEach((action) => {
         const actionIndex = actionIndexesByPublicKey.get(publicKey) ?? 0;
         actionIndexesByPublicKey.set(publicKey, actionIndex + 1);
-        const key = `${transaction.hash}:${publicKey}:action:${actionIndex}`;
+        const key = `${transaction.id}:${publicKey}:action:${actionIndex}`;
         if (this.#store.zkappActions.has(key)) {
           return;
         }
@@ -927,6 +923,20 @@ export class ZekoIndexer {
     };
     this.#store.pendingDa.set(ledgerHash, row);
   }
+
+  private transactionByHashAndLedger(
+    hash: string,
+    targetLedgerHash: string,
+  ): TransactionRow | undefined {
+    return [...this.#store.transactions.values()].find(
+      (transaction) =>
+        transaction.hash === hash && transaction.target_ledger_hash === targetLedgerHash,
+    );
+  }
+}
+
+function transactionKey(hash: string, targetLedgerHash: string): string {
+  return `${hash}:${targetLedgerHash}`;
 }
 
 const transactionType = (event: L2TransactionInput): TransactionRow["type"] => {

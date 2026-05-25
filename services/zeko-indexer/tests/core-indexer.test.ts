@@ -101,6 +101,7 @@ describeFeature(feature, ({ Scenario }) => {
       changedAccount("B62qreceiver", "1100", 0),
     ],
     occurredAt: string | number = timestamp,
+    commandHash?: string,
   ) => {
     await indexer.consume({
       subject: "zeko.l2.transactions",
@@ -111,7 +112,9 @@ describeFeature(feature, ({ Scenario }) => {
         acc_set: "acc-set",
         command: {
           type: "signed_command",
-          hash: targetLedgerHash === "ledger-1" ? "tx-payment-1" : `tx-${targetLedgerHash}`,
+          hash:
+            commandHash ??
+            (targetLedgerHash === "ledger-1" ? "tx-payment-1" : `tx-${targetLedgerHash}`),
           sender: "B62qsender",
           receiver: "B62qreceiver",
           amount: "100",
@@ -1736,6 +1739,77 @@ describeFeature(feature, ({ Scenario }) => {
           expect(store.syncStatus.get(source)?.last_hash).toBe(lastHash);
         },
       );
+    },
+  );
+
+  Scenario(
+    "Re-included command hashes preserve reverted transaction history",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string} with command hash {string}",
+        async (_context, ledger: string, commandHash: string) => {
+          reset();
+          await consumePayment(ledger, undefined, undefined, timestamp, commandHash);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string} with command hash {string}",
+        async (_context, source: string, target: string, commandHash: string) => {
+          await consumePayment(target, source, undefined, timestamp, commandHash);
+        },
+      );
+
+      And(
+        "the indexer consumes a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      Then("transaction hash {string} has {int} rows", (_context, hash: string, count: number) => {
+        expect(
+          [...store.transactions.values()].filter((transaction) => transaction.hash === hash),
+        ).toHaveLength(count);
+      });
+
+      And(
+        "replacement transaction hash {string} on ledger {string} has status {string}",
+        (_context, hash: string, ledger: string, status: string) => {
+          expect(
+            [...store.transactions.values()].find(
+              (transaction) =>
+                transaction.hash === hash && transaction.target_ledger_hash === ledger,
+            )?.status,
+          ).toBe(status);
+        },
+      );
+
+      And(
+        "transaction hash {string} on ledger {string} has status {string}",
+        (_context, hash: string, ledger: string, status: string) => {
+          expect(
+            [...store.transactions.values()].find(
+              (transaction) =>
+                transaction.hash === hash && transaction.target_ledger_hash === ledger,
+            )?.status,
+          ).toBe(status);
+        },
+      );
+
+      And("transaction rows have unique block heights", () => {
+        const heights = [...store.transactions.values()].map(
+          (transaction) => transaction.block_height,
+        );
+        expect(new Set(heights).size).toBe(heights.length);
+      });
     },
   );
 

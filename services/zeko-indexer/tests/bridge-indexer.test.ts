@@ -470,6 +470,37 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario(
+    "L2 withdrawal after rollback creates a fresh bridge operation",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given(
+        "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      And(
+        "the indexer consumes an L2 replacement from source ledger {string} to target ledger {string}",
+        (_context, source: string, target: string) => consumeReplacement(source, target),
+      );
+      When(
+        "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
+
   Scenario("Repeated deposits with the same aux keep FIFO identity", ({ When, And, Then }) => {
     reset();
     When("the indexer consumes a deposit submission for aux {string}", (_context, aux: string) =>

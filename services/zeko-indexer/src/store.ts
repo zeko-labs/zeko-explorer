@@ -126,7 +126,10 @@ export class InMemoryIndexerStore implements IndexerStore {
   }
 
   transactionByHash(hash: string): TransactionRow | undefined {
-    return this.transactions.get(hash);
+    const matches = [...this.transactions.values()]
+      .filter((transaction) => transaction.hash === hash)
+      .sort((left, right) => right.block_height - left.block_height);
+    return matches.find((transaction) => transaction.status === "applied") ?? matches[0];
   }
 
   batchByLedger(ledgerHash: string): BatchRow | undefined {

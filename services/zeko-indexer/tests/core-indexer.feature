@@ -242,6 +242,16 @@ Feature: Unified Zeko indexer
     And transaction "tx-ledger-first-replacement" is still applied
     And sync status for "l2-transactions" has last_hash "ledger-first-replacement"
 
+  Scenario: Re-included command hashes preserve reverted transaction history
+    Given the indexer consumed a payment transaction for ledger "ledger-reinclude-a" with command hash "tx-reincluded"
+    And the indexer consumed a payment transaction for ledger "ledger-reinclude-b"
+    When the indexer consumes a replacement transaction from source ledger "ledger-0" to target ledger "ledger-reinclude-c" with command hash "tx-reincluded"
+    And the indexer consumes a payment transaction for ledger "ledger-reinclude-d"
+    Then transaction hash "tx-reincluded" has 2 rows
+    And transaction hash "tx-reincluded" on ledger "ledger-reinclude-a" has status "reverted"
+    And replacement transaction hash "tx-reincluded" on ledger "ledger-reinclude-c" has status "applied"
+    And transaction rows have unique block heights
+
   Scenario: Unknown L2 source hash pauses indexing for backfill
     Given the indexer consumed a payment transaction for ledger "ledger-gap-before"
     When the indexer consumes a payment transaction from source ledger "ledger-missing" to target ledger "ledger-gap-after"

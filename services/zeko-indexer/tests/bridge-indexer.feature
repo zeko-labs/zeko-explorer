@@ -41,6 +41,13 @@ Feature: Bridge operation projection
     And no L2 links exist for aux "aux-l2-rollback"
     And no L1 commit link exists for aux "aux-l2-rollback"
 
+  Scenario: L2 withdrawal after rollback creates a fresh bridge operation
+    Given the indexer consumed an L2 inner action for aux "aux-withdrawal-reinclude" with action state "inner-withdrawal-rolled-back"
+    And the indexer consumes an L2 replacement from source ledger "ledger-0" to target ledger "ledger-withdrawal-replacement"
+    When the indexer consumes an L2 inner action for aux "aux-withdrawal-reinclude" with action state "inner-withdrawal-reincluded"
+    Then bridge operation for aux "aux-withdrawal-reinclude" sequence 0 has status "rolled_back"
+    And bridge operation for aux "aux-withdrawal-reinclude" sequence 1 has status "l2_witnessed"
+
   Scenario: Repeated deposits with the same aux keep FIFO identity
     When the indexer consumes a deposit submission for aux "aux-shared"
     And the indexer consumes another deposit submission for aux "aux-shared"
