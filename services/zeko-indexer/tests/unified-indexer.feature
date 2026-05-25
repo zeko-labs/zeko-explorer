@@ -155,6 +155,13 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-finalized-replay" keeps settled_at "2026-05-13T00:00:00.000Z"
     And batch for ledger "ledger-finalized-replay" keeps l1_confirmations 290
 
+  Scenario: Replayed settling settlement keeps finalized rollback identity
+    Given the indexer consumed a finalized settlement message for ledger "ledger-finalized-rollback-id"
+    When the indexer consumes a settlement message for ledger "ledger-finalized-rollback-id" with settlement id "settlement-late-ledger-finalized-rollback-id"
+    And the indexer consumes an L1 rollback affecting settlement "settlement-ledger-finalized-rollback-id"
+    Then batch for ledger "ledger-finalized-rollback-id" has settlement_status "pending"
+    And batch for ledger "ledger-finalized-rollback-id" has no l1_tx_hash
+
   Scenario: Settlement stores the source L1 provider
     When the indexer consumes an "ethereum" settlement message for ledger "ledger-ethereum-settlement"
     Then batch for ledger "ledger-ethereum-settlement" has l1_chain "ethereum"

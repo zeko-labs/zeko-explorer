@@ -1123,6 +1123,69 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Replayed settling settlement keeps finalized rollback identity",
+    ({ Given, When, And, Then }) => {
+      Given(
+        "the indexer consumed a finalized settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.l1.settlements",
+            payload: settlement(ledger, "finalized"),
+          });
+        },
+      );
+
+      When(
+        "the indexer consumes a settlement message for ledger {string} with settlement id {string}",
+        async (_context, ledger: string, settlementId: string) => {
+          await indexer.consume({
+            subject: "zeko.l1.settlements",
+            payload: settlement(ledger, "settling", "mina", settlementId),
+          });
+        },
+      );
+
+      And(
+        "the indexer consumes an L1 rollback affecting settlement {string}",
+        async (_context, settlementId: string) => {
+          await indexer.consume({
+            subject: "zeko.l1.rollbacks",
+            payload: {
+              schemaVersion: 1,
+              provider: "mina",
+              network: "zeko-m-devnet",
+              source: "l1-watcher",
+              subject: "zeko.l1.rollbacks",
+              rollbackId: `rollback-${settlementId}`,
+              detectedAt: timestamp,
+              commonAncestor: { height: 1, hash: "ancestor" },
+              orphanedBlocks: [{ height: 2, hash: "old", parentHash: "ancestor" }],
+              replacementBlocks: [{ height: 2, hash: "new", parentHash: "ancestor" }],
+              affected: {
+                settlementIds: [settlementId],
+                outerActionIds: [],
+                bridgeEventIds: [],
+              },
+            },
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has settlement_status {string}",
+        (_context, ledger: string, settlementStatus: string) => {
+          expect(store.batchByLedger(ledger)?.settlement_status).toBe(settlementStatus);
+        },
+      );
+
+      And("batch for ledger {string} has no l1_tx_hash", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.l1_tx_hash).toBeUndefined();
+      });
+    },
+  );
+
   Scenario("Settlement stores the source L1 provider", ({ When, Then }) => {
     When(
       "the indexer consumes an {string} settlement message for ledger {string}",
@@ -2178,6 +2241,7 @@ const settlement = (
   ledger: string,
   finalityLevel: "settling" | "finalized" = "settling",
   provider: "mina" | "ethereum" = "mina",
+  settlementId = `settlement-${ledger}`,
 ) => ({
   schemaVersion: 1,
   provider,
@@ -2194,7 +2258,7 @@ const settlement = (
     confirmationDepth: finalityLevel === "finalized" ? 290 : 12,
   },
   eventType: finalityLevel === "finalized" ? "finalized" : "detected",
-  settlementId: `settlement-${ledger}`,
+  settlementId,
   finalityLevel,
   txHash: `l1-tx-${ledger}`,
   commit: {

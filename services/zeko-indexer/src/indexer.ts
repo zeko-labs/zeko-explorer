@@ -278,7 +278,7 @@ export class ZekoIndexer {
     this.#store.upsertBatch(
       ledgerHash,
       {
-        settlement_id: event.settlementId,
+        settlement_id: downgradeFromFinalized ? existing.settlement_id : event.settlementId,
         proof_status: "proved",
         settlement_status: settlementStatus,
         l1_chain: downgradeFromFinalized ? existing.l1_chain : event.provider,
