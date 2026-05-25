@@ -126,6 +126,7 @@ function serializeInnerAction(row: InnerActionRow): Record<string, unknown> {
     block_height: row.block_height,
     timestamp: date(row.timestamp),
     txn_hash: row.txn_hash,
+    transaction: row.transaction ? record("transaction", row.transaction) : undefined,
     fields: row.fields,
     aux: row.aux,
     marked_as_canonical_at: row.marked_as_canonical_at
@@ -190,6 +191,10 @@ function recordId(table: string, id: string): string {
   return `${table}:${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
 }
 
+function record(table: string, id: string): { readonly kind: "record"; readonly value: string } {
+  return { kind: "record", value: recordId(table, id) };
+}
+
 function stripUndefined(row: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
 }
@@ -201,6 +206,9 @@ function date(value: string): { readonly kind: "datetime"; readonly value: strin
 function literal(value: unknown): string {
   if (isDate(value)) {
     return `d"${value.value.replace(".000Z", "Z")}"`;
+  }
+  if (isRecordId(value)) {
+    return value.value;
   }
   if (Array.isArray(value)) {
     return `[${value.map(literal).join(", ")}]`;
@@ -217,4 +225,8 @@ function isDate(value: unknown): value is { readonly kind: "datetime"; readonly 
   return (
     typeof value === "object" && value !== null && "kind" in value && value.kind === "datetime"
   );
+}
+
+function isRecordId(value: unknown): value is { readonly kind: "record"; readonly value: string } {
+  return typeof value === "object" && value !== null && "kind" in value && value.kind === "record";
 }

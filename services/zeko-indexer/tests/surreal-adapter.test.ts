@@ -80,4 +80,35 @@ describeFeature(feature, ({ Scenario }) => {
       expect(statements.join("\n")).toContain('role: "l2_finalize"');
     });
   });
+
+  Scenario("Inner actions retain their source transaction record", ({ Given, When, Then }) => {
+    Given(
+      "the in-memory projection has an inner action from transaction {string}",
+      (_, tx: string) => {
+        reset();
+        store.innerActions.set("inner-after", {
+          id: "inner-1",
+          after_state: "inner-after",
+          before_state: "inner-before",
+          action_index: 1,
+          block_height: 42,
+          timestamp: "2026-05-13T00:00:00.000Z",
+          txn_hash: tx,
+          transaction: tx,
+          fields: ["1", "aux-inner", "B62qRecipient", "42"],
+          aux: "aux-inner",
+          marked_as_canonical_at: "2026-05-13T00:00:00.000Z",
+          target_ledger_hash: "ledger-inner",
+        });
+      },
+    );
+
+    When("the bridge projection is flushed once", async () => {
+      await writeBridgeProjectionToSurreal(client, store);
+    });
+
+    Then("the SurrealDB SQL stores the inner action transaction link", () => {
+      expect(statements.join("\n")).toContain("transaction: transaction:tx_1");
+    });
+  });
 });

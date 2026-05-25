@@ -14,6 +14,7 @@ catalog:
   "@amiceli/vitest-cucumber": "6.5.0"
   "@biomejs/biome": "2.4.15"
   "@cucumber/cucumber": "12.8.3"
+  "@nats-io/jetstream": "3.4.0"
   "@nats-io/transport-node": "3.4.0"
   "@kreuzberg/html-to-markdown": "3.4.0"
   "@typescript/native-preview": "7.0.0-dev.20260513.1"

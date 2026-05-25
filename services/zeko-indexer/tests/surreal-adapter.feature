@@ -11,3 +11,8 @@ Feature: Surreal bridge adapter
     Given the in-memory projection has a bridge transaction link
     When the bridge projection is flushed once
     Then the SurrealDB SQL contains a bridge transaction relation
+
+  Scenario: Inner actions retain their source transaction record
+    Given the in-memory projection has an inner action from transaction "tx-1"
+    When the bridge projection is flushed once
+    Then the SurrealDB SQL stores the inner action transaction link

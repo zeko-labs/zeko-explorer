@@ -1,6 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
+import { jetstreamManager } from "@nats-io/jetstream";
 import { connect } from "@nats-io/transport-node";
 import { expect } from "vitest";
 import {
@@ -71,6 +72,16 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
       }
     }
     throw new Error("NATS did not become ready");
+  };
+
+  const syncNatsStreams = async () => {
+    const connection = await connect({ servers: natsUrl });
+    try {
+      const manager = await jetstreamManager(connection);
+      await manager.streams.add({ name: "zeko-l1", subjects: ["zeko.l1.*"] });
+    } finally {
+      await connection.close();
+    }
   };
 
   const publishDeposit = async (aux: string) => {
@@ -171,6 +182,12 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
   };
 
   const consumeNextNatsMessage = async () => {
+    envelopeSource ??= consumeNatsEnvelopes({
+      servers: natsUrl,
+      stream: "zeko-l1",
+      subject: "zeko.l1.*",
+      durableName: `zeko-indexer-runtime-${process.pid}`,
+    });
     if (!envelopeSource) {
       throw new Error("NATS envelope source is not started");
     }
@@ -191,60 +208,61 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
   const RuntimeScenario =
     process.env.ZEKO_INDEXER_RUN_RUNTIME_INTEGRATION === "1" ? Scenario : Scenario.skip;
 
-  RuntimeScenario("Bridge event flows from NATS into SurrealDB", ({ Given, When, And, Then }) => {
-    Given("local NATS and SurrealDB are running", async () => {
-      await startNats();
-      surrealEndpoint = await startSurreal();
-      db = `zeko_indexer_runtime_${process.pid}`;
-      await syncSchema(db);
-      store = new InMemoryIndexerStore();
-      indexer = new ZekoIndexer(store);
-      envelopeSource = consumeNatsEnvelopes({ servers: natsUrl, subject: "zeko.l1.*" });
-      pendingEnvelope = envelopeSource.next();
-      await delay(100);
-    });
-    When(
-      "a deposit submission is published on NATS for aux {string}",
-      async (_context, aux: string) => {
-        await publishDeposit(aux);
-      },
-    );
-    And("an L1 witness is published on NATS for aux {string}", async (_context, aux: string) => {
-      await publishWitness(aux);
-    });
-    And("the indexer consumes two NATS messages", async () => {
-      await consumeNextNatsMessage();
-      await consumeNextNatsMessage();
-    });
-    And("the bridge projection is flushed to SurrealDB twice", async () => {
-      const client = createSurrealHttpClient({
-        endpoint: surrealEndpoint,
-        namespace: "database_test",
-        database: db,
-        username: "root",
-        password: "root",
+  RuntimeScenario(
+    "Bridge event replays from JetStream into SurrealDB",
+    ({ Given, When, And, Then }) => {
+      Given("local NATS and SurrealDB are running", async () => {
+        await startNats();
+        await syncNatsStreams();
+        surrealEndpoint = await startSurreal();
+        db = `zeko_indexer_runtime_${process.pid}`;
+        await syncSchema(db);
+        store = new InMemoryIndexerStore();
+        indexer = new ZekoIndexer(store);
       });
-      await writeBridgeProjectionToSurreal(client, store);
-      await writeBridgeProjectionToSurreal(client, store);
-    });
-    Then(
-      "SurrealDB stores a bridge operation for aux {string} with status {string}",
-      async (_context, aux: string, status: string) => {
-        const result = await runSql<Array<{ aux: string; status: string }>>(
+      When(
+        "a deposit submission is published on NATS for aux {string}",
+        async (_context, aux: string) => {
+          await publishDeposit(aux);
+        },
+      );
+      And("an L1 witness is published on NATS for aux {string}", async (_context, aux: string) => {
+        await publishWitness(aux);
+      });
+      And("the indexer consumes two NATS messages from durable replay", async () => {
+        await consumeNextNatsMessage();
+        await consumeNextNatsMessage();
+      });
+      And("the bridge projection is flushed to SurrealDB twice", async () => {
+        const client = createSurrealHttpClient({
+          endpoint: surrealEndpoint,
+          namespace: "database_test",
+          database: db,
+          username: "root",
+          password: "root",
+        });
+        await writeBridgeProjectionToSurreal(client, store);
+        await writeBridgeProjectionToSurreal(client, store);
+      });
+      Then(
+        "SurrealDB stores a bridge operation for aux {string} with status {string}",
+        async (_context, aux: string, status: string) => {
+          const result = await runSql<Array<{ aux: string; status: string }>>(
+            db,
+            `SELECT aux, status FROM bridge_operation WHERE aux = "${aux}";`,
+          );
+          const rows = result.at(-1)?.result ?? [];
+          expect(rows).toEqual([{ aux, status }]);
+        },
+      );
+      And("SurrealDB stores one L1 witness link", async () => {
+        const result = await runSql<Array<{ count: number }>>(
           db,
-          `SELECT aux, status FROM bridge_operation WHERE aux = "${aux}";`,
+          'SELECT count() AS count FROM l1_action_link WHERE role = "witness" GROUP ALL;',
         );
         const rows = result.at(-1)?.result ?? [];
-        expect(rows).toEqual([{ aux, status }]);
-      },
-    );
-    And("SurrealDB stores one L1 witness link", async () => {
-      const result = await runSql<Array<{ count: number }>>(
-        db,
-        'SELECT count() AS count FROM l1_action_link WHERE role = "witness" GROUP ALL;',
-      );
-      const rows = result.at(-1)?.result ?? [];
-      expect(rows).toEqual([{ count: 1 }]);
-    });
-  });
+        expect(rows).toEqual([{ count: 1 }]);
+      });
+    },
+  );
 });
