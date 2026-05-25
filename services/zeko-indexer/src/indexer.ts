@@ -171,6 +171,7 @@ export class ZekoIndexer {
       last_height: sequence,
       last_processed_at: timestamp,
     });
+    this.linkTransactionsToBatch(event.target_ledger_hash, timestamp);
   }
 
   consumeL2Finality(event: L2FinalityInput): void {
@@ -195,22 +196,23 @@ export class ZekoIndexer {
   consumeL1Settlement(event: L1SettlementInput): void {
     const ledgerHash = event.commit.ledgerHash;
     const observedAt = event.observedAt;
-    const status = event.finalityLevel === "finalized" ? "finalized" : "settling";
+    const incomingStatus = event.finalityLevel === "finalized" ? "finalized" : "settling";
     const existing = this.#store.batchByLedger(ledgerHash);
+    const settlementStatus = chooseSettlementStatus(existing?.settlement_status, incomingStatus);
     this.#store.upsertBatch(
       ledgerHash,
       {
         settlement_id: event.settlementId,
         proof_status: "proved",
-        settlement_status: status,
+        settlement_status: settlementStatus,
         l1_chain: "mina",
         l1_block_height: event.block.height,
         l1_block_hash: event.block.hash,
         l1_tx_hash: event.txHash,
         l1_confirmations: event.block.confirmationDepth,
-        l1_finality_level: event.finalityLevel,
+        l1_finality_level: settlementStatus === "finalized" ? "finalized" : event.finalityLevel,
         submitted_at: existing?.submitted_at ?? observedAt,
-        settled_at: event.finalityLevel === "finalized" ? observedAt : undefined,
+        settled_at: event.finalityLevel === "finalized" ? observedAt : existing?.settled_at,
       },
       observedAt,
     );
@@ -359,11 +361,16 @@ export class ZekoIndexer {
     );
     for (const publicKey of affectedAccounts) {
       const latest = [...this.#store.accountActivities.values()]
-        .filter(
-          (activity) =>
+        .filter((activity) => {
+          const transaction = [...this.#store.transactions.values()].find(
+            (candidate) => candidate.id === activity.transaction,
+          );
+          return (
             activity.account_public_key === publicKey &&
-            !rollbackScope.has(activity.target_ledger_hash),
-        )
+            !rollbackScope.has(activity.target_ledger_hash) &&
+            transaction?.status !== "reverted"
+          );
+        })
         .sort((left, right) => right.block_height - left.block_height)[0];
       const account = this.#store.accountByPublicKey(publicKey);
       if (!account) {
@@ -602,6 +609,18 @@ const chooseDaSource = (current: DaSource | undefined, incoming: DaSource): DaSo
 
 const shouldReplaceAttestedAt = (current: DaSource | undefined, incoming: DaSource): boolean =>
   !current || PRECEDENCE[incoming] > PRECEDENCE[current];
+
+type SettlementStatus = "pending" | "settling" | "finalized" | "rolled_back";
+
+const chooseSettlementStatus = (
+  current: SettlementStatus | undefined,
+  incoming: SettlementStatus,
+): SettlementStatus => {
+  if (current === "finalized" && incoming === "settling") {
+    return current;
+  }
+  return incoming;
+};
 
 const appendSigner = (signers: DaSignerRow[], signer: DaSignerRow): DaSignerRow[] => {
   if (signers.some((existing) => existing.publicKey === signer.publicKey)) {

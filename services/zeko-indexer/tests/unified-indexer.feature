@@ -50,6 +50,20 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-batch-2" has transaction_count 2
     And transactions "tx-ledger-batch-1" and "tx-ledger-batch-2" are linked to batch for ledger "ledger-batch-2"
 
+  Scenario: Settlement links covered L2 transactions that arrive later
+    Given the indexer consumed a settlement message before L2 transactions for ledger "ledger-late-batch-2"
+    When the indexer consumes a payment transaction for ledger "ledger-late-batch-1"
+    And the indexer consumes a payment transaction for ledger "ledger-late-batch-2"
+    Then batch for ledger "ledger-late-batch-2" covers transaction heights 1 through 2
+    And batch for ledger "ledger-late-batch-2" has transaction_count 2
+    And transactions "tx-ledger-late-batch-1" and "tx-ledger-late-batch-2" are linked to batch for ledger "ledger-late-batch-2"
+
+  Scenario: Replayed settling settlement does not downgrade finalized batch
+    Given the indexer consumed a finalized settlement message for ledger "ledger-finalized-replay"
+    When the indexer consumes a settlement message for ledger "ledger-finalized-replay"
+    Then batch for ledger "ledger-finalized-replay" has settlement_status "finalized"
+    And batch for ledger "ledger-finalized-replay" keeps settled_at "2026-05-13T00:00:00.000Z"
+
   Scenario: L2 rollback deletes derived zkApp rows and restores account snapshots
     Given the indexer consumed a zkApp transaction for ledger "ledger-keep"
     And the indexer consumed a follow-up zkApp transaction for ledger "ledger-reverted"
@@ -64,6 +78,13 @@ Feature: Unified Zeko indexer
     And the indexer consumed a payment transaction creating account "B62qNewAccount" for ledger "ledger-account-reverted"
     When the indexer consumes a replacement transaction from source ledger "ledger-account-keep" to target ledger "ledger-account-replacement"
     Then account "B62qNewAccount" no longer exists
+
+  Scenario: Later rollbacks do not restore account state from reverted ledgers
+    Given the indexer consumed an account update for "B62qsender" with balance "100" on ledger "ledger-canonical-a"
+    And the indexer consumed an account update for "B62qsender" with balance "200" on ledger "ledger-reverted-b"
+    And the indexer consumes a replacement transaction from source ledger "ledger-canonical-a" to target ledger "ledger-canonical-c"
+    When the indexer consumes a replacement transaction from source ledger "ledger-canonical-a" to target ledger "ledger-canonical-d"
+    Then account "B62qsender" has balance "100"
 
   Scenario: Unknown L2 source hash pauses indexing for backfill
     Given the indexer consumed a payment transaction for ledger "ledger-gap-before"

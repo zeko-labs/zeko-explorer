@@ -439,6 +439,96 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "Settlement links covered L2 transactions that arrive later",
+    ({ Given, When, And, Then }) => {
+      Given(
+        "the indexer consumed a settlement message before L2 transactions for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      When(
+        "the indexer consumes a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumes a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      Then(
+        "batch for ledger {string} covers transaction heights {int} through {int}",
+        (_context, ledger: string, first: number, last: number) => {
+          expect(store.batchByLedger(ledger)).toMatchObject({
+            first_tx_height: first,
+            last_tx_height: last,
+          });
+        },
+      );
+
+      And(
+        "batch for ledger {string} has transaction_count {int}",
+        (_context, ledger: string, count: number) => {
+          expect(store.batchByLedger(ledger)?.transaction_count).toBe(count);
+        },
+      );
+
+      And(
+        "transactions {string} and {string} are linked to batch for ledger {string}",
+        (_context, firstHash: string, secondHash: string, ledger: string) => {
+          const batchId = store.batchByLedger(ledger)?.id;
+          expect(store.transactionByHash(firstHash)?.batch).toBe(batchId);
+          expect(store.transactionByHash(secondHash)?.batch).toBe(batchId);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "Replayed settling settlement does not downgrade finalized batch",
+    ({ Given, When, Then, And }) => {
+      Given(
+        "the indexer consumed a finalized settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.l1.settlements",
+            payload: settlement(ledger, "finalized"),
+          });
+        },
+      );
+
+      When(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has settlement_status {string}",
+        (_context, ledger: string, settlementStatus: string) => {
+          expect(store.batchByLedger(ledger)?.settlement_status).toBe(settlementStatus);
+        },
+      );
+
+      And(
+        "batch for ledger {string} keeps settled_at {string}",
+        (_context, ledger: string, settledAt: string) => {
+          expect(store.batchByLedger(ledger)?.settled_at).toBe(settledAt);
+        },
+      );
+    },
+  );
+
+  Scenario(
     "L2 rollback deletes derived zkApp rows and restores account snapshots",
     ({ Given, When, Then, And }) => {
       Given(
@@ -509,6 +599,47 @@ describeFeature(feature, ({ Scenario }) => {
       Then("account {string} no longer exists", (_context, publicKey: string) => {
         expect(store.accountByPublicKey(publicKey)).toBeUndefined();
       });
+    },
+  );
+
+  Scenario(
+    "Later rollbacks do not restore account state from reverted ledgers",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed an account update for {string} with balance {string} on ledger {string}",
+        async (_context, publicKey: string, balance: string, ledger: string) => {
+          reset();
+          await consumePayment(ledger, undefined, [changedAccount(publicKey, balance, 0)]);
+        },
+      );
+
+      And(
+        "the indexer consumed an account update for {string} with balance {string} on ledger {string}",
+        async (_context, publicKey: string, balance: string, ledger: string) => {
+          await consumePayment(ledger, undefined, [changedAccount(publicKey, balance, 0)]);
+        },
+      );
+
+      And(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source, [changedAccount("B62qsender", "150", 0)]);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source, [changedAccount("B62qother", "175", 0)]);
+        },
+      );
+
+      Then(
+        "account {string} has balance {string}",
+        (_context, publicKey: string, balance: string) => {
+          expect(store.accountByPublicKey(publicKey)?.balance).toBe(balance);
+        },
+      );
     },
   );
 
@@ -773,7 +904,7 @@ const tsFilesUnder = async (dir: string): Promise<string[]> => {
   return files.flat();
 };
 
-const settlement = (ledger: string) => ({
+const settlement = (ledger: string, finalityLevel: "settling" | "finalized" = "settling") => ({
   schemaVersion: 1,
   provider: "mina",
   network: "zeko-m-devnet",
@@ -788,9 +919,9 @@ const settlement = (ledger: string) => ({
     timestamp,
     confirmationDepth: 12,
   },
-  eventType: "detected",
+  eventType: finalityLevel === "finalized" ? "finalized" : "detected",
   settlementId: `settlement-${ledger}`,
-  finalityLevel: "settling",
+  finalityLevel,
   txHash: `l1-tx-${ledger}`,
   commit: {
     ledgerHash: ledger,
