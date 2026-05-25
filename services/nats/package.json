@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./dist/index.mjs"
   },
   "dependencies": {
-    "@zeko/domain": "workspace:*",
     "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@amiceli/vitest-cucumber": "catalog:"
   }
 }

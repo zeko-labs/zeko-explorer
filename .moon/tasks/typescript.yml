@@ -32,21 +32,24 @@ tasks:
 
   lint:
     command: "biome"
-    args: ["lint", "."]
+    args: ["check", "."]
     inputs:
       - "@group(sources)"
+      - "@group(tests)"
 
   format:
     command: "biome"
     args: ["format", "."]
     inputs:
       - "@group(sources)"
+      - "@group(tests)"
 
   lint-fix:
     command: "biome"
-    args: ["lint", "--write", "."]
+    args: ["check", "--write", "."]
     inputs:
       - "@group(sources)"
+      - "@group(tests)"
     options:
       runInCI: false
 
@@ -55,6 +58,7 @@ tasks:
     args: ["format", "--write", "."]
     inputs:
       - "@group(sources)"
+      - "@group(tests)"
     options:
       runInCI: false
 

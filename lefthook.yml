@@ -1,11 +1,8 @@
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
     lint-fix:
       run: moon run :lint-fix
-      stage_fixed: true
-    format-fix:
-      run: moon run :format-fix
       stage_fixed: true
     actionlint:
       run: moon run root:actionlint
