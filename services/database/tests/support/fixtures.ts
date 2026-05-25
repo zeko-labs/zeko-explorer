@@ -1,4 +1,4 @@
-import { seedSqlWithSurrealKit } from "../lib/surreal-client.ts";
+import { seedSqlWithSurrealKit } from "../lib/surreal-client";
 
 const ids = {
   alice: "account:01J0000000000000000000ALIC",
@@ -23,8 +23,8 @@ const ids = {
   outerCommit: "outer_action:01J0000000000000000000OA02",
   innerMint: "inner_action:01J0000000000000000000IA01",
   bridge1: "bridge_operation:01J0000000000000000000BO01",
-  bridge2: "bridge_operation:01J0000000000000000000BO02",
   attestation1: "da_attestation:01J0000000000000000000DA01",
+  bridge2: "bridge_operation:01J0000000000000000000BO02",
 };
 
 export function fixtureIds() {
@@ -91,14 +91,4 @@ CREATE l1_watcher_published:settlement1 SET msg_id = "settlement-outer-commit-1-
 CREATE sync_status:l1 SET source = "l1-watcher", status = "healthy", last_height = 5001, last_processed_at = d"2026-05-01T00:09:00Z", lag_seconds = 2;
 `;
   await seedSqlWithSurrealKit(db, sql);
-}
-
-export async function seedCoreMigrationData(db: string): Promise<void> {
-  await seedSqlWithSurrealKit(
-    db,
-    `
-CREATE account:01J0000000000000000000ALIC SET public_key = "B62qAlice", balance = "100", nonce = 0;
-CREATE bridge_operation:01J0000000000000000000BO01 SET type = "deposit", status = "submitted", aux = "aux-migration", aux_sequence = 0, sender = "B62qAlice", recipient = "B62qBob", amount = "10", submit_tx_hash = "l1-migration", submit_block_height = 10, submit_timestamp = d"2026-05-01T00:00:00Z";
-`,
-  );
 }

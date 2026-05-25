@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 export const serviceDir = path.resolve(import.meta.dirname, "../..");
-export const workspaceRoot = path.resolve(serviceDir, "../..");
 export const surrealKitDir = path.join(serviceDir, "surrealkit");
+const surrealNamespace = "database_test";
 
 type QueryStatus = "OK" | "ERR";
 
@@ -49,6 +49,22 @@ export function record(value: string): RecordId {
 export function datetime(value: string): DateTimeLiteral {
   assert.match(value, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   return { kind: "datetime", value };
+}
+
+export function parseParam(value: string): SurrealParam {
+  if (/^[a-zA-Z_][a-zA-Z0-9_]*:[A-Za-z0-9_-]+$/.test(value)) {
+    return { kind: "record", value };
+  }
+  const parsedDatetime = value.match(/^d"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)"$/);
+  if (parsedDatetime?.[1] !== undefined) {
+    return { kind: "datetime", value: parsedDatetime[1] };
+  }
+  if (/^-?\d+$/.test(value)) return Number(value);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value === "null") return null;
+  if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
+  return value;
 }
 
 function authHeader(): string {
@@ -148,15 +164,15 @@ async function waitForServer(url: string): Promise<void> {
 
 export async function startSurreal(): Promise<string> {
   if (endpoint !== undefined) return endpoint;
-  if (process.env.DATABASE_ACCEPTANCE_SURREAL_ENDPOINT !== undefined) {
-    endpoint = process.env.DATABASE_ACCEPTANCE_SURREAL_ENDPOINT;
+  if (process.env.DATABASE_TEST_SURREAL_ENDPOINT !== undefined) {
+    endpoint = process.env.DATABASE_TEST_SURREAL_ENDPOINT;
     await waitForServer(endpoint);
     return endpoint;
   }
-  const port = Number(process.env.DATABASE_ACCEPTANCE_SURREAL_PORT ?? 8128);
+  const port = Number(process.env.DATABASE_TEST_SURREAL_PORT ?? 8128);
   endpoint = `http://127.0.0.1:${port}`;
-  const dockerImage = process.env.DATABASE_ACCEPTANCE_SURREAL_IMAGE ?? "surrealdb/surrealdb:v3";
-  dockerContainer = `zeko-database-acceptance-${process.pid}-${port}`;
+  const dockerImage = process.env.DATABASE_TEST_SURREAL_IMAGE ?? "surrealdb/surrealdb:v3";
+  dockerContainer = `zeko-database-test-${process.pid}-${port}`;
   server = spawn("docker", [
     "run",
     "--rm",
@@ -176,7 +192,7 @@ export async function startSurreal(): Promise<string> {
     "memory",
   ]);
   server.stderr.on("data", (chunk: Buffer) => {
-    if (process.env.DATABASE_ACCEPTANCE_DEBUG !== undefined) process.stderr.write(chunk);
+    if (process.env.DATABASE_TEST_DEBUG !== undefined) process.stderr.write(chunk);
   });
   await waitForServer(endpoint);
   return endpoint;
@@ -214,11 +230,11 @@ async function runProcess(
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
-      if (process.env.DATABASE_ACCEPTANCE_DEBUG !== undefined) process.stdout.write(chunk);
+      if (process.env.DATABASE_TEST_DEBUG !== undefined) process.stdout.write(chunk);
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
-      if (process.env.DATABASE_ACCEPTANCE_DEBUG !== undefined) process.stderr.write(chunk);
+      if (process.env.DATABASE_TEST_DEBUG !== undefined) process.stderr.write(chunk);
     });
     child.on("error", reject);
     child.on("close", (code) => {
@@ -255,7 +271,7 @@ async function runSurrealKit(
     "--host",
     surrealKitHost(),
     "--ns",
-    "database_acceptance",
+    surrealNamespace,
     "--db",
     db,
     "--user",
@@ -268,18 +284,6 @@ async function runSurrealKit(
 
 export async function syncSchema(db: string): Promise<void> {
   await runSurrealKit(db, ["sync", "--fail-fast"]);
-}
-
-export async function applyWithSurrealKit(db: string, relativePath: string): Promise<void> {
-  await runSurrealKit(db, ["apply", relativePath]);
-}
-
-export async function syncSpike008Schema(db: string): Promise<void> {
-  await runSurrealKit(
-    db,
-    ["sync", "--fail-fast"],
-    path.join(workspaceRoot, "docs/spikes/008-surrealdb-schema/surrealkit"),
-  );
 }
 
 export async function seedSqlWithSurrealKit(db: string, sql: string): Promise<void> {
@@ -308,7 +312,7 @@ export async function runSql<T = unknown>(
     method: "POST",
     headers: {
       Authorization: authHeader(),
-      "Surreal-NS": "database_acceptance",
+      "Surreal-NS": surrealNamespace,
       "Surreal-DB": db,
       Accept: "application/json",
     },

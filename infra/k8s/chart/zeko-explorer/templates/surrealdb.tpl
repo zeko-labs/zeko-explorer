@@ -62,9 +62,9 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: surrealdb-migrations
+  name: surrealdb-bootstrap
   labels:
-    app.kubernetes.io/name: surrealdb-migrations
+    app.kubernetes.io/name: surrealdb-bootstrap
     {{- include "zeko-explorer.labels" . | nindent 4 }}
 data:
   surrealkit.toml: |-
@@ -75,19 +75,13 @@ data:
 {{ .Files.Get "surrealkit/database/schema/000_schema.surql" | indent 4 }}
   seed.surql: |-
 {{ .Files.Get "surrealkit/database/seed/seed.surql" | indent 4 }}
-  0001_initial_core.surql: |-
-{{ .Files.Get "surrealkit/migrations/0001_initial_core.surql" | indent 4 }}
-  0002_l1_watcher_and_bridge_quality.surql: |-
-{{ .Files.Get "surrealkit/migrations/0002_l1_watcher_and_bridge_quality.surql" | indent 4 }}
-  0003_da_attestation_status.surql: |-
-{{ .Files.Get "surrealkit/migrations/0003_da_attestation_status.surql" | indent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: surrealdb-migrate
+  name: surrealdb-bootstrap
   labels:
-    app.kubernetes.io/name: surrealdb-migrate
+    app.kubernetes.io/name: surrealdb-bootstrap
     {{- include "zeko-explorer.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
@@ -96,25 +90,24 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: surrealdb-migrate
+        app.kubernetes.io/name: surrealdb-bootstrap
     spec:
       restartPolicy: OnFailure
       containers:
-        - name: surrealdb-migrate
+        - name: surrealdb-bootstrap
           image: {{ .Values.images.surrealkit | quote }}
           workingDir: /work
           command: ["/bin/sh", "-ceu"]
           args:
             - |
-              surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} apply migrations/0003_da_attestation_status.surql
               surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} sync --fail-fast
           volumeMounts:
-            - name: migrations
+            - name: bootstrap
               mountPath: /work
       volumes:
-        - name: migrations
+        - name: bootstrap
           configMap:
-            name: surrealdb-migrations
+            name: surrealdb-bootstrap
             items:
               - key: surrealkit.toml
                 path: surrealkit.toml
@@ -124,9 +117,3 @@ spec:
                 path: database/schema/000_schema.surql
               - key: seed.surql
                 path: database/seed/seed.surql
-              - key: 0001_initial_core.surql
-                path: migrations/0001_initial_core.surql
-              - key: 0002_l1_watcher_and_bridge_quality.surql
-                path: migrations/0002_l1_watcher_and_bridge_quality.surql
-              - key: 0003_da_attestation_status.surql
-                path: migrations/0003_da_attestation_status.surql

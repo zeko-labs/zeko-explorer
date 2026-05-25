@@ -8,9 +8,9 @@ dependsOn:
   - "domain"
 
 fileGroups:
-  acceptance:
-    - "acceptance/**/*.feature"
-    - "acceptance/**/*.ts"
+  tests:
+    - "tests/**/*.feature"
+    - "tests/**/*.ts"
     - "queries/**/*.surql"
     - "surrealkit/**/*.surql"
     - "surrealkit/**/*.toml"
@@ -25,15 +25,10 @@ fileGroups:
 
 tasks:
   test:
-    command: "cucumber-js"
-    args:
-      - "--import=acceptance/support/*.ts"
-      - "--import=acceptance/step_definitions/*.ts"
-      - "--format"
-      - "progress"
-      - "acceptance/**/*.feature"
+    command: "vitest"
+    args: ["run", "--passWithNoTests", "--testTimeout=60000", "--hookTimeout=60000"]
     inputs:
-      - "@group(acceptance)"
+      - "@group(tests)"
     options:
       cache: false
       mergeArgs: "replace"

@@ -8,7 +8,8 @@
 - Use PNPM catalog entries for external JavaScript dependencies.
 - Use Proto-managed Nushell through `proto-nu` for local automation scripts. Do not add Bash entrypoint scripts or npm Nushell packages.
 - Use Biome for linting and formatting. Do not add ESLint, Prettier, oxlint, or oxfmt.
-- For product/domain behavior and acceptance coverage, use BDD/TDD with Gherkin/Cucumber. Do not add Vitest/Jest-style behavior tests for WEB work unless the user explicitly asks for that test shape.
+- For product/domain behavior and acceptance coverage, write Gherkin feature files and run them through the repo's Vitest/Cucumber pattern, such as `@amiceli/vitest-cucumber`.
+- Use extensionless relative TypeScript imports in repo code and tests. The repo uses TypeScript Bundler module resolution, so write `./foo` rather than `./foo.ts`.
 - Use `wrangler.jsonc` and generated Wrangler Env types for Cloudflare Workers.
 - Use `.kyaml` for Kubernetes values. Use `.tpl` for Helm template sources so YAML tooling only parses rendered manifests.
 - Keep `apps/` for consumer surfaces and `services/` for backend services.

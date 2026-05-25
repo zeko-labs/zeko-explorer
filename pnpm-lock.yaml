@@ -136,6 +136,10 @@ importers:
       '@zeko/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+    devDependencies:
+      '@amiceli/vitest-cucumber':
+        specifier: 'catalog:'
+        version: 6.5.0(vitest@4.1.6(@types/node@25.7.0)(vite@7.3.3(@types/node@25.7.0)(jiti@2.7.0)(terser@5.47.1)(yaml@2.9.0)))
 
   services/explorer-api:
     dependencies:

@@ -5,6 +5,7 @@ Feature: Schema inventory and indexes
 
   Scenario: The consolidated schema defines every storage table
     Then the database should contain tables:
+      | name |
       | account                 |
       | account_activity        |
       | account_transaction     |
@@ -28,6 +29,7 @@ Feature: Schema inventory and indexes
 
   Scenario: Transaction query paths have matching indexes
     Then table "transaction" should define indexes:
+      | name |
       | idx_tx_hash            |
       | idx_tx_connection_order            |
       | idx_tx_timestamp       |
@@ -36,18 +38,22 @@ Feature: Schema inventory and indexes
 
   Scenario: Native aggregate count paths have matching indexes
     Then table "account" should define indexes:
+      | name |
       | idx_account_count |
     And table "bridge_operation" should define indexes:
+      | name |
       | idx_bo_count      |
 
   Scenario: Account transaction graph query paths have matching indexes
     Then table "account_transaction" should define indexes:
+      | name |
       | idx_account_tx_public_key_all_order |
       | idx_account_tx_public_key_role_order     |
       | idx_account_tx_unique              |
 
   Scenario: Bridge query paths have matching indexes
     Then table "bridge_operation" should define indexes:
+      | name |
       | idx_bo_aux_unique          |
       | idx_bo_recipient_order      |
       | idx_bo_sender_type_order    |
@@ -61,28 +67,37 @@ Feature: Schema inventory and indexes
 
   Scenario: Native full-text search paths have matching indexes
     Then table "transaction" should define indexes:
+      | name |
       | idx_tx_search_text |
     And table "account" should define indexes:
+      | name |
       | idx_account_search_text |
     And table "bridge_operation" should define indexes:
+      | name |
       | idx_bo_search_text |
 
   Scenario: Transaction detail fanout query paths have matching indexes
     Then table "zkapp_event" should define indexes:
+      | name |
       | idx_event_hash_order |
     And table "zkapp_action" should define indexes:
+      | name |
       | idx_action_hash_order |
     And table "inner_action" should define indexes:
+      | name |
       | idx_ia_txn_hash_order |
 
   Scenario: Spike 006 watcher durability tables have idempotency indexes
     Then table "l1_watcher_cursor" should define indexes:
+      | name |
       | idx_l1_cursor_unique |
     And table "l1_watcher_published" should define indexes:
+      | name |
       | idx_l1_published_msg |
 
   Scenario: PRD DA attestation storage has matching fields and indexes
     Then table "batch" should define fields:
+      | name |
       | target_ledger_hash    |
       | da_status             |
       | da_source             |
@@ -91,9 +106,11 @@ Feature: Schema inventory and indexes
       | da_quorum_threshold   |
       | da_signers            |
     And table "batch" should define indexes:
+      | name |
       | idx_batch_target_ledger_hash |
       | idx_batch_da                 |
     And table "pending_da_attestation" should define fields:
+      | name |
       | ledger_hash      |
       | source           |
       | attested_at      |
@@ -102,5 +119,6 @@ Feature: Schema inventory and indexes
       | quorum_threshold |
       | signers          |
     And table "pending_da_attestation" should define indexes:
+      | name |
       | idx_pending_da_hash        |
       | idx_pending_da_received_at |

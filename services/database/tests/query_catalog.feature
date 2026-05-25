@@ -6,6 +6,7 @@ Feature: Query catalog
 
   Scenario: Global transaction feed is keyset ordered
     When I run query "transaction-feed-first-page" with:
+      | key | value |
       | from_sort_block_height | -106 |
       | limit                  | 4    |
     Then the result should contain 4 rows
@@ -14,12 +15,14 @@ Feature: Query catalog
 
   Scenario: Natural transaction lookup is idempotent and direct
     When I run query "transaction-by-hash" with:
+      | key | value |
       | hash | "tx-005" |
     Then the result should contain one row
     And field "hash" of the first row should equal "tx-005"
 
   Scenario: Transaction investigation by hash includes bounded related data
     When I run query "transaction-detail-by-hash" with:
+      | key | value |
       | hash               | "tx-006" |
       | event_limit        | 10       |
       | action_limit       | 10       |
@@ -31,6 +34,7 @@ Feature: Query catalog
 
   Scenario: Account profile query loads current state and first-page feeds
     When I run query "account-profile-overview" with:
+      | key | value |
       | public_key     | "B62qAlice" |
       | activity_limit | 3           |
       | sent_limit     | 3           |
@@ -43,6 +47,7 @@ Feature: Query catalog
 
   Scenario: Smart contract transaction feed is receiver-indexed
     When I run query "transactions-by-receiver-first-page" with:
+      | key | value |
       | public_key | "B62qContract" |
       | limit      | 3              |
     Then the result should contain 3 rows
@@ -50,6 +55,7 @@ Feature: Query catalog
 
   Scenario: Account activity feed uses account-specific ordering
     When I run query "account-activity-first-page" with:
+      | key | value |
       | account | account:01J0000000000000000000ALIC |
       | limit   | 3                                      |
     Then the result should contain 3 rows
@@ -57,6 +63,7 @@ Feature: Query catalog
 
   Scenario: zkApp events are paginated by emitting account
     When I run query "zkapp-events-first-page" with:
+      | key | value |
       | account | account:01J0000000000000000000ZKAP |
       | limit   | 2                                      |
     Then the result should contain 2 rows
@@ -64,6 +71,7 @@ Feature: Query catalog
 
   Scenario: Bridge sender history keeps aux collisions stable
     When I run query "bridge-operations-by-sender-first-page" with:
+      | key | value |
       | public_key | "B62qAlice" |
       | limit      | 10          |
     Then the result should contain 2 rows
@@ -71,6 +79,7 @@ Feature: Query catalog
 
   Scenario: Bridge evidence issues are derived from canonical bridge operations
     When I run query "bridge-quality-issues-first-page" with:
+      | key | value |
       | data_quality | "partial" |
       | limit        | 5         |
     Then the result should contain one row
@@ -79,6 +88,7 @@ Feature: Query catalog
 
   Scenario: Bridge evidence issues can be filtered by canonical missing source reason
     When I run query "bridge-quality-issues-by-reason" with:
+      | key | value |
       | reason | "historical_bridge_events_unavailable" |
       | limit  | 5                                      |
     Then the result should contain one row
@@ -86,6 +96,7 @@ Feature: Query catalog
 
   Scenario: Native transaction full-text search uses SurrealDB search functions
     When I run query "transactions-search-text" with:
+      | key | value |
       | term  | "again" |
       | limit | 5           |
     Then the result should contain one row
@@ -93,6 +104,7 @@ Feature: Query catalog
 
   Scenario: Native account full-text search uses the canonical account table
     When I run query "accounts-search-text" with:
+      | key | value |
       | term  | "B62qAlice" |
       | limit | 5           |
     Then the result should contain one row
@@ -100,6 +112,7 @@ Feature: Query catalog
 
   Scenario: L1 watcher cursor lookup exposes source limitations
     When I run query "l1-watcher-cursor" with:
+      | key | value |
       | source      | "l1-watcher"    |
       | network     | "zeko-m-devnet" |
       | provider    | "mina-daemon"   |
@@ -109,6 +122,7 @@ Feature: Query catalog
 
   Scenario: Network stats are derived from canonical tables
     When I run query "network-stats-current" with:
+      | key | value |
       | scope | "current" |
     Then the result should contain one row
     And field "latest_block_height" of the first row should equal "106"
@@ -118,6 +132,7 @@ Feature: Query catalog
 
   Scenario: Native throughput aggregation uses time buckets on canonical transactions
     When I run query "network-throughput-by-minute" with:
+      | key | value |
       | from | d"2026-05-01T00:00:00Z" |
       | to   | d"2026-05-01T01:00:00Z" |
     Then the result should contain 6 rows
