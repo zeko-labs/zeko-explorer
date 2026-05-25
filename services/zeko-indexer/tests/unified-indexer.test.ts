@@ -1931,6 +1931,49 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "L1 rollback before settlement tombstones the delayed settlement",
+    ({ Given, When, Then }) => {
+      Given(
+        "the indexer consumed an L1 rollback affecting settlement {string}",
+        async (_context, settlementId: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.l1.rollbacks",
+            payload: {
+              schemaVersion: 1,
+              provider: "mina",
+              network: "zeko-m-devnet",
+              source: "l1-watcher",
+              subject: "zeko.l1.rollbacks",
+              rollbackId: `rollback-${settlementId}`,
+              detectedAt: timestamp,
+              commonAncestor: { height: 1, hash: "ancestor" },
+              orphanedBlocks: [{ height: 2, hash: "old", parentHash: "ancestor" }],
+              replacementBlocks: [{ height: 2, hash: "new", parentHash: "ancestor" }],
+              affected: {
+                settlementIds: [settlementId],
+                outerActionIds: [],
+                bridgeEventIds: [],
+              },
+            },
+          });
+        },
+      );
+
+      When(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then("no batch row exists for ledger {string}", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)).toBeUndefined();
+      });
+    },
+  );
+
+  Scenario(
     "L1 rollback preserves direct DA signer details for later rebinding",
     ({ Given, When, Then, And }) => {
       Given(

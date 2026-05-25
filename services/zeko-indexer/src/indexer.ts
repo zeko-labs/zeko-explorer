@@ -305,13 +305,13 @@ export class ZekoIndexer {
 
   consumeL1Rollback(event: L1RollbackInput): void {
     for (const settlementId of event.affected.settlementIds) {
+      this.#store.rolledBackSettlementIds.add(settlementId);
       const batch = [...this.#store.batches.values()].find(
         (candidate) => candidate.settlement_id === settlementId,
       );
       if (!batch) {
         continue;
       }
-      this.#store.rolledBackSettlementIds.add(settlementId);
       if (batch.da_status === "attested" && batch.da_source) {
         this.upsertPendingDa(batch.target_ledger_hash, batch.da_source, batch.da_attested_at, {
           implementation: batch.da_implementation,

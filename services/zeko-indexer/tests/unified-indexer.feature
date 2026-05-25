@@ -277,6 +277,11 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-l1-rollback-replay" has no da_status
     And batch for ledger "ledger-l1-rollback-replay" has no l1_tx_hash
 
+  Scenario: L1 rollback before settlement tombstones the delayed settlement
+    Given the indexer consumed an L1 rollback affecting settlement "settlement-ledger-l1-rollback-before-batch"
+    When the indexer consumes a settlement message for ledger "ledger-l1-rollback-before-batch"
+    Then no batch row exists for ledger "ledger-l1-rollback-before-batch"
+
   Scenario: L1 rollback preserves direct DA signer details for later rebinding
     Given batch for ledger "ledger-da-rollback-signers" is directly attested with signers "PK_A" and "PK_B"
     When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-rollback-signers"

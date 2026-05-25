@@ -31,7 +31,8 @@ Implementation choices not explicitly described in the PRD:
   correctness only depends on proved and settlement-derived DA status.
 - L1 rollback settlement tombstones are tracked in the store boundary so
   at-least-once replay of an orphaned settlement ID cannot rebind cleared L1
-  fields before raw rollback-fact projection exists.
+  fields, including when the rollback fact arrives before the matching batch
+  exists.
 - Late proved-finality or settlement facts for L2-reverted ledger hashes are
   ignored once the store contains reverted transactions for that target ledger,
   so stale messages cannot create pending DA rows or zero-transaction batches.
