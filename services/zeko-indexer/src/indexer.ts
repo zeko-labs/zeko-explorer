@@ -368,6 +368,9 @@ export class ZekoIndexer {
     if (event.implementation !== "zeko-multisig-v1") {
       return;
     }
+    if (this.ledgerHasRevertedTransactions(event.ledgerHash)) {
+      return;
+    }
 
     const { authorizedSigners, quorum = 1, verifySignature = () => false } = this.#options.da ?? {};
     if (authorizedSigners && !authorizedSigners.has(event.publicKey)) {
@@ -485,6 +488,9 @@ export class ZekoIndexer {
     detectedAt = normalizeTimestamp(Date.now()),
     preRollbackAccounts = this.snapshotAccountsForRollback(rollbackScope),
   ): void {
+    this.#store.pendingDa.delete(ledgerHash);
+    this.#store.pendingFinality.delete(ledgerHash);
+    this.#pendingDaSigners.delete(ledgerHash);
     const invalidatedBatchIds = new Set(
       [...this.#store.batches.values()]
         .filter((batch) => rollbackScope.has(batch.target_ledger_hash))

@@ -289,6 +289,15 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-da-subquorum" has da_status "attested" and da_source "proved"
     And batch for ledger "ledger-da-subquorum" records DA signer "PK_A"
 
+  Scenario: Direct DA signatures are cleared and ignored for L2 rolled-back ledgers
+    Given the indexer consumed a payment transaction for ledger "ledger-da-l2-rollback-1"
+    And the indexer consumed a payment transaction for ledger "ledger-da-l2-rollback-2"
+    And the indexer consumed a valid DA signature for ledger "ledger-da-l2-rollback-2" from "PK_A"
+    When the indexer consumes a replacement transaction from source ledger "ledger-da-l2-rollback-1" to target ledger "ledger-da-l2-rollback-3"
+    Then no pending DA attestation remains for "ledger-da-l2-rollback-2"
+    When the indexer consumes a valid DA signature for ledger "ledger-da-l2-rollback-2" from "PK_B"
+    Then no pending DA attestation remains after replay for "ledger-da-l2-rollback-2"
+
   Scenario: L1 rollback preserves DA facts for later rebinding
     Given batch for ledger "ledger-da-3" is attested from source "settlement"
     When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-3"

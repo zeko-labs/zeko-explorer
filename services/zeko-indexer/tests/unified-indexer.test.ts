@@ -2027,6 +2027,64 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Direct DA signatures are cleared and ignored for L2 rolled-back ledgers",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a valid DA signature for ledger {string} from {string}",
+        async (_context, ledger: string, publicKey: string) => {
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey),
+          });
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      Then("no pending DA attestation remains for {string}", (_context, ledger: string) => {
+        expect(store.pendingDa.has(ledger)).toBe(false);
+      });
+
+      When(
+        "the indexer consumes a valid DA signature for ledger {string} from {string}",
+        async (_context, ledger: string, publicKey: string) => {
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey),
+          });
+        },
+      );
+
+      Then(
+        "no pending DA attestation remains after replay for {string}",
+        (_context, ledger: string) => {
+          expect(store.pendingDa.has(ledger)).toBe(false);
+        },
+      );
+    },
+  );
+
   Scenario("L1 rollback preserves DA facts for later rebinding", ({ Given, When, Then, And }) => {
     Given(
       "batch for ledger {string} is attested from source {string}",
