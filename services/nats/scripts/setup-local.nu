@@ -29,4 +29,5 @@ def ensure_stream [
 
 ensure_stream zeko-l2 "zeko.l2.>" ["--max-age", "2160h", "--dupe-window", "2m"]
 ensure_stream zeko-l1 "zeko.l1.>" ["--max-age", "2160h", "--dupe-window", "2m"]
+ensure_stream zeko-da "zeko.da.>" ["--max-age", "2160h", "--dupe-window", "5m"]
 ensure_stream zeko-health "zeko.health" ["--max-msgs", "1000"]

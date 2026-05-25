@@ -3,40 +3,40 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/mcp"
+      "path": "apps/mcp"
     },
     {
-      "path": "./infra"
+      "path": "infra"
     },
     {
-      "path": "./packages/contract-schema"
+      "path": "packages/contract-schema"
     },
     {
-      "path": "./packages/domain"
+      "path": "packages/domain"
     },
     {
-      "path": "./services/bridge-api"
+      "path": "services/bridge-api"
     },
     {
-      "path": "./services/contract-registry-api"
+      "path": "services/contract-registry-api"
     },
     {
-      "path": "./services/database"
+      "path": "services/database"
     },
     {
-      "path": "./services/explorer-api"
+      "path": "services/explorer-api"
     },
     {
-      "path": "./services/hive-gateway"
+      "path": "services/hive-gateway"
     },
     {
-      "path": "./services/l1-watcher"
+      "path": "services/l1-watcher"
     },
     {
-      "path": "./services/nats"
+      "path": "services/nats"
     },
     {
-      "path": "./services/zeko-indexer"
+      "path": "services/zeko-indexer"
     }
   ],
   "compilerOptions": {

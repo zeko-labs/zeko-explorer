@@ -6,7 +6,6 @@ tags: ["kubernetes", "indexer", "nats", "surrealdb"]
 
 dependsOn:
   - "database"
-  - "domain"
   - "nats"
 
 tasks:
@@ -27,6 +26,8 @@ tasks:
   dev:
     command: "node"
     args: ["src/index.ts"]
+    deps:
+      - "^:build"
     options:
       persistent: true
 
