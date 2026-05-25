@@ -1016,6 +1016,21 @@ describeFeature(feature, ({ Scenario }) => {
         },
       );
 
+      And(
+        "batch for ledger {string} has proof_status {string}",
+        (_context, ledger: string, proofStatus: string) => {
+          expect(store.batchByLedger(ledger)?.proof_status).toBe(proofStatus);
+        },
+      );
+
+      And("batch for ledger {string} has no da_status", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.da_status).toBeUndefined();
+      });
+
+      And("batch for ledger {string} has no l1_tx_hash", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.l1_tx_hash).toBeUndefined();
+      });
+
       And("transaction {string} is not linked to a batch", (_context, hash: string) => {
         expect(store.transactionByHash(hash)?.batch).toBeUndefined();
       });

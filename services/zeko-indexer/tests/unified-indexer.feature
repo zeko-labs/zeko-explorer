@@ -135,6 +135,9 @@ Feature: Unified Zeko indexer
     When the indexer consumes a replacement transaction from source ledger "ledger-stale-settlement-1" to target ledger "ledger-stale-settlement-3"
     And the indexer consumes a settlement message for ledger "ledger-stale-settlement-2"
     Then batch for ledger "ledger-stale-settlement-2" has settlement_status "rolled_back"
+    And batch for ledger "ledger-stale-settlement-2" has proof_status "pending"
+    And batch for ledger "ledger-stale-settlement-2" has no da_status
+    And batch for ledger "ledger-stale-settlement-2" has no l1_tx_hash
     And transaction "tx-ledger-stale-settlement-2" is not linked to a batch
 
   Scenario: Stale settlement does not create a batch for an already rolled-back L2 ledger
