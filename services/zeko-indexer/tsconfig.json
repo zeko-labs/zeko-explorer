@@ -5,8 +5,6 @@
     "paths": {
       "@zeko/database": ["../database/src/index.ts"],
       "@zeko/database/*": ["../database/src/*"],
-      "@zeko/domain": ["../../packages/domain/src/index.ts"],
-      "@zeko/domain/*": ["../../packages/domain/src/*"],
       "@zeko/nats": ["../nats/src/index.ts"],
       "@zeko/nats/*": ["../nats/src/*"]
     },
@@ -15,9 +13,6 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
-    {
-      "path": "../../packages/domain"
-    },
     {
       "path": "../database"
     },

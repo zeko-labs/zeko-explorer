@@ -11,6 +11,7 @@ allowBuilds:
   workerd: true
 
 catalog:
+  "@amiceli/vitest-cucumber": "6.5.0"
   "@biomejs/biome": "2.4.15"
   "@cucumber/cucumber": "12.8.3"
   "@kreuzberg/html-to-markdown": "3.4.0"

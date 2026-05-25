@@ -26,6 +26,8 @@ tasks:
   dev:
     command: "node"
     args: ["src/index.ts"]
+    deps:
+      - "^:build"
     options:
       persistent: true
 

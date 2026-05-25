@@ -2,12 +2,23 @@ $schema: "https://moonrepo.dev/schemas/project.json"
 language: "typescript"
 layer: "library"
 stack: "backend"
-tags: ["nats", "protocol", "messaging"]
-
-dependsOn:
-  - "domain"
+tags: ["nats", "protocol", "messaging", "jetstream", "local"]
 
 tasks:
+  build:
+    command: "tsdown"
+    args: ["--config", "tsdown.config.ts"]
+    deps:
+      - "^:build"
+    inputs:
+      - "@group(sources)"
+    outputs:
+      - "dist"
+    options:
+      cache: true
+      mergeArgs: "replace"
+      mergeDeps: "replace"
+
   setup-local:
     command: "nu"
     args: ["scripts/setup-local.nu"]
