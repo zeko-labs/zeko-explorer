@@ -3,8 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@zeko/database": "workspace:*",
-    "@zeko/nats": "workspace:*"
+    "@zeko/nats": "workspace:*",
+    "ulid": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@amiceli/vitest-cucumber": "catalog:"
   }
 }

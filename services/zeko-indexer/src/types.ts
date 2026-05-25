@@ -1,0 +1,293 @@
+export type DaSource = "proved" | "da-direct" | "settlement";
+export type DaStatus = "attested";
+export type TransactionStatus = "applied" | "reverted";
+
+export type L2AccountChangeInput = {
+  index: number;
+  account: {
+    public_key: string;
+    balance: string;
+    nonce: number;
+    delegate?: string;
+    token_id?: string;
+    zkapp_state?: string[];
+    action_state?: string[];
+    verification_key_hash?: string;
+    zkapp_uri?: string;
+    permissions?: Record<string, string>;
+    timing?: Record<string, string>;
+  };
+};
+
+export type ObservedZkappActionInput = {
+  fields: string[];
+  before_action_state: string;
+  action_state: string;
+};
+
+export type L2AccountUpdateInput = {
+  public_key?: string;
+  account?: { public_key?: string };
+  body?: {
+    events?: unknown[];
+    actions?: unknown[];
+  };
+  events?: unknown[];
+  actions?: unknown[];
+};
+
+export type L2CommandInput = {
+  type: "signed_command" | "zkapp_command";
+  hash: string;
+  sender?: string;
+  receiver?: string;
+  amount?: string;
+  fee?: string;
+  nonce?: number;
+  memo?: string;
+  account_updates?: L2AccountUpdateInput[];
+};
+
+export type L2TransactionInput = {
+  source_ledger_hash: string;
+  target_ledger_hash: string;
+  timestamp: string | number;
+  acc_set: string;
+  command: L2CommandInput | null;
+  changed_accounts: L2AccountChangeInput[];
+  genesis?: boolean;
+};
+
+export type L2FinalityInput = {
+  ledger_hash: string;
+  level: "proved" | "committed";
+  source_ledger_hash: string;
+  timestamp: string;
+};
+
+export type L1SettlementInput = {
+  settlementId: string;
+  eventType: "detected" | "finalized";
+  finalityLevel: "settling" | "finalized";
+  txHash: string;
+  observedAt: string;
+  block: {
+    height: number;
+    hash: string;
+    timestamp: string;
+    confirmationDepth: number;
+  };
+  commit: {
+    ledgerHash: string;
+    innerActionState: string;
+    innerActionStateLength: number;
+    synchronizedOuterActionState: string;
+    synchronizedOuterActionStateLength: number;
+    slotRange: { lower: number; upper: number };
+    rawFields: string[];
+  };
+};
+
+export type L1RollbackInput = {
+  rollbackId: string;
+  detectedAt: string;
+  affected: {
+    settlementIds: string[];
+    outerActionIds: string[];
+    bridgeEventIds: string[];
+  };
+};
+
+export type ZekoMultisigSignatureInput = {
+  implementation: "zeko-multisig-v1";
+  ledgerHash: string;
+  accSet: string;
+  publicKey: string;
+  signature: string;
+  instanceId: string;
+  signedAt: string;
+};
+
+export type CelestiaSignatureInput = {
+  implementation: "celestia-v1";
+  ledgerHash: string;
+  publishedAt: string;
+  celestia: {
+    height: number;
+    namespace: string;
+    commitment: string;
+    inclusionProof: string;
+  };
+};
+
+export type DaSignatureInput = ZekoMultisigSignatureInput | CelestiaSignatureInput;
+
+export type AccountRow = {
+  id: string;
+  public_key: string;
+  token_id: string;
+  balance: string;
+  nonce: number;
+  delegate?: string;
+  zkapp_state?: string[];
+  action_state?: string[];
+  verification_key_hash?: string;
+  zkapp_uri?: string;
+  first_seen_height?: number;
+  last_activity_height?: number;
+  last_activity_at?: string;
+  search_text?: string;
+};
+
+export type TransactionRow = {
+  id: string;
+  hash: string;
+  sequence_number: number;
+  type: "payment" | "zkapp_command" | "fee_transfer" | "genesis" | "sync";
+  status: TransactionStatus;
+  sender_public_key?: string;
+  receiver_public_key?: string;
+  fee_payer_public_key?: string;
+  amount?: string;
+  fee?: string;
+  nonce?: number;
+  memo?: string;
+  block_height: number;
+  tx_index: number;
+  sort_block_height: number;
+  sort_tx_index: number;
+  timestamp: string;
+  source_ledger_hash: string;
+  target_ledger_hash: string;
+  batch?: string;
+  rollback_reason?: string;
+  raw_command?: L2CommandInput;
+};
+
+export type AccountActivityRow = {
+  id: string;
+  account: string;
+  account_public_key: string;
+  transaction: string;
+  role: "sender" | "receiver" | "fee_payer" | "touched" | "delegate" | "rollback";
+  block_height: number;
+  tx_index: number;
+  activity_index: number;
+  sort_block_height: number;
+  sort_tx_index: number;
+  sort_activity_index: number;
+  timestamp: string;
+  balance_before?: string;
+  balance_after?: string;
+  nonce_before?: number;
+  nonce_after?: number;
+  zkapp_state_before?: string[];
+  zkapp_state_after?: string[];
+  action_state_before?: string[];
+  action_state_after?: string[];
+  verification_key_hash_before?: string;
+  verification_key_hash_after?: string;
+  zkapp_uri_before?: string;
+  zkapp_uri_after?: string;
+  target_ledger_hash: string;
+};
+
+export type ZkappEventRow = {
+  id: string;
+  transaction: string;
+  transaction_hash: string;
+  emitting_account: string;
+  emitting_account_public_key: string;
+  event_index: number;
+  block_height: number;
+  tx_index: number;
+  sort_block_height: number;
+  sort_tx_index: number;
+  sort_event_index: number;
+  timestamp: string;
+  fields: string[];
+  sequence_number: number;
+  target_ledger_hash: string;
+};
+
+export type ZkappActionRow = {
+  id: string;
+  transaction: string;
+  transaction_hash: string;
+  emitting_account: string;
+  emitting_account_public_key: string;
+  action_index: number;
+  block_height: number;
+  tx_index: number;
+  sort_block_height: number;
+  sort_tx_index: number;
+  sort_action_index: number;
+  timestamp: string;
+  fields: string[];
+  before_action_state: string;
+  action_state: string;
+  sequence_number: number;
+  target_ledger_hash: string;
+};
+
+export type DaSignerRow = {
+  publicKey: string;
+  signedAt: string;
+  instanceId: string;
+};
+
+export type BatchRow = {
+  id: string;
+  target_ledger_hash: string;
+  settlement_id?: string;
+  batch_height: number;
+  sort_batch_height: number;
+  first_tx_height: number;
+  last_tx_height: number;
+  transaction_count: number;
+  proof_status: "pending" | "proved" | "failed";
+  settlement_status: "pending" | "settling" | "finalized" | "rolled_back";
+  proved_at?: string;
+  l1_chain?: string;
+  l1_block_height?: number;
+  l1_block_hash?: string;
+  l1_tx_hash?: string;
+  l1_confirmations?: number;
+  l1_finality_level?: "detected" | "confirming" | "settling" | "finalized" | "canonical";
+  da_status?: DaStatus;
+  da_source?: DaSource;
+  da_attested_at?: string;
+  da_implementation?: string;
+  da_quorum_threshold?: number;
+  da_signers?: DaSignerRow[];
+  submitted_at?: string;
+  settled_at?: string;
+};
+
+export type PendingDaAttestationRow = {
+  ledger_hash: string;
+  source: DaSource;
+  attested_at?: string;
+  received_at: string;
+  implementation?: string;
+  quorum_threshold?: number;
+  signers?: DaSignerRow[];
+};
+
+export type SyncStatusRow = {
+  source: string;
+  status: "healthy" | "degraded" | "paused" | "failed";
+  last_sequence?: number;
+  last_hash?: string;
+  last_height?: number;
+  last_processed_at?: string;
+  lag_seconds?: number;
+  error?: string;
+};
+
+export type ConsumeEnvelope =
+  | { subject: "zeko.l2.transactions"; payload: L2TransactionInput }
+  | { subject: "zeko.l2.finality"; payload: L2FinalityInput }
+  | { subject: "zeko.l1.settlements"; payload: L1SettlementInput }
+  | { subject: "zeko.l1.rollbacks"; payload: L1RollbackInput }
+  | { subject: "zeko.da.signatures"; payload: DaSignatureInput };
