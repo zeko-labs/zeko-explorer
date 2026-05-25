@@ -68,6 +68,16 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-proved-batch-2" covers transaction heights 1 through 2
     And transactions "tx-ledger-proved-batch-1" and "tx-ledger-proved-batch-2" are linked to batch for ledger "ledger-proved-batch-2"
 
+  Scenario: Delayed proved finality does not re-attest an L2 rolled-back batch
+    Given the indexer consumed a payment transaction for ledger "ledger-finality-rollback-1"
+    And a pending batch row exists for ledger "ledger-finality-rollback-2"
+    And the indexer consumed a payment transaction for ledger "ledger-finality-rollback-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-finality-rollback-1" to target ledger "ledger-finality-rollback-3"
+    And the indexer consumes a proved finality message for ledger "ledger-finality-rollback-2"
+    Then batch for ledger "ledger-finality-rollback-2" has settlement_status "rolled_back"
+    And batch for ledger "ledger-finality-rollback-2" has proof_status "pending"
+    And batch for ledger "ledger-finality-rollback-2" has no da_status
+
   Scenario: Committed finality does not derive DA attestation
     Given a pending batch row exists for ledger "ledger-committed-1"
     When the indexer consumes a committed finality message for ledger "ledger-committed-1"
@@ -129,6 +139,12 @@ Feature: Unified Zeko indexer
     And no zkapp_action rows remain for target ledger "ledger-reverted"
     And account "B62qContract" has zkapp_state ["1", "1", "1", "1", "1", "1", "1", "1"]
     And account "B62qContract" has last_activity_height 1
+
+  Scenario: Duplicate zkApp action states are rejected
+    Given the indexer consumed a zkApp transaction for ledger "ledger-action-state-original"
+    When the indexer rejects a zkApp transaction for ledger "ledger-action-state-duplicate" with duplicate action_state "action-keep"
+    Then exactly 1 zkapp_action row has action_state "action-keep"
+    And transaction "tx-zk-duplicate-action" does not exist
 
   Scenario: L2 rollback removes accounts first created by the reverted range
     Given the indexer consumed a payment transaction for ledger "ledger-account-keep"

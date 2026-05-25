@@ -591,6 +591,73 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Delayed proved finality does not re-attest an L2 rolled-back batch",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And("a pending batch row exists for ledger {string}", (_context, ledger: string) => {
+        store.upsertBatchForTest(ledger, {
+          proof_status: "pending",
+          settlement_status: "pending",
+        });
+      });
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has settlement_status {string}",
+        (_context, ledger: string, settlementStatus: string) => {
+          expect(store.batchByLedger(ledger)?.settlement_status).toBe(settlementStatus);
+        },
+      );
+
+      And(
+        "batch for ledger {string} has proof_status {string}",
+        (_context, ledger: string, status: string) => {
+          expect(store.batchByLedger(ledger)?.proof_status).toBe(status);
+        },
+      );
+
+      And("batch for ledger {string} has no da_status", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.da_status).toBeUndefined();
+      });
+    },
+  );
+
   Scenario("Committed finality does not derive DA attestation", ({ Given, When, Then }) => {
     Given("a pending batch row exists for ledger {string}", (_context, ledger: string) => {
       reset();
@@ -956,6 +1023,41 @@ describeFeature(feature, ({ Scenario }) => {
       );
     },
   );
+
+  Scenario("Duplicate zkApp action states are rejected", ({ Given, When, Then, And }) => {
+    Given(
+      "the indexer consumed a zkApp transaction for ledger {string}",
+      async (_context, ledger: string) => {
+        reset();
+        await consumeZkapp(ledger, "tx-zk-keep", oneState, "action-keep");
+      },
+    );
+
+    When(
+      "the indexer rejects a zkApp transaction for ledger {string} with duplicate action_state {string}",
+      async (_context, ledger: string, actionState: string) => {
+        try {
+          await consumeZkapp(ledger, "tx-zk-duplicate-action", twoState, actionState);
+        } catch (error) {
+          lastError = error;
+        }
+      },
+    );
+
+    Then(
+      "exactly {int} zkapp_action row has action_state {string}",
+      (_context, count: number, actionState: string) => {
+        expect(
+          [...store.zkappActions.values()].filter((action) => action.action_state === actionState),
+        ).toHaveLength(count);
+      },
+    );
+
+    And("transaction {string} does not exist", (_context, hash: string) => {
+      expect(store.transactionByHash(hash)).toBeUndefined();
+      expect(lastError).toBeInstanceOf(Error);
+    });
+  });
 
   Scenario(
     "L2 rollback removes accounts first created by the reverted range",

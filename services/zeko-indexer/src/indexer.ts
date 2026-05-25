@@ -95,6 +95,7 @@ export class ZekoIndexer {
     }
 
     this.reconcileLedgerChain(event);
+    this.assertNewZkappActionStates(event);
 
     const timestamp = normalizeTimestamp(event.timestamp);
     const sequence = this.#store.nextTransactionSequence();
@@ -194,12 +195,48 @@ export class ZekoIndexer {
     this.linkTransactionsToBatch(event.target_ledger_hash, timestamp);
   }
 
+  private assertNewZkappActionStates(event: L2TransactionInput): void {
+    if (event.command?.type !== "zkapp_command") {
+      return;
+    }
+
+    const existingActionStates = new Set(
+      [...this.#store.zkappActions.values()].map((action) => action.action_state),
+    );
+    const incomingActionStates = new Set<string>();
+    for (const update of event.command.account_updates ?? []) {
+      const publicKey = accountUpdatePublicKey(update);
+      if (!publicKey) {
+        continue;
+      }
+      const changedAccount = event.changed_accounts.find(
+        (change) => change.account.public_key === publicKey,
+      );
+      const actions = normalizeObservedActions(update.actions ?? update.body?.actions ?? [], {
+        beforeHead: this.#store.accountByPublicKey(publicKey)?.action_state?.[0],
+        afterHeads: changedAccount?.account.action_state,
+      });
+      for (const action of actions) {
+        if (
+          existingActionStates.has(action.action_state) ||
+          incomingActionStates.has(action.action_state)
+        ) {
+          throw new Error(`Duplicate zkApp action_state ${action.action_state}`);
+        }
+        incomingActionStates.add(action.action_state);
+      }
+    }
+  }
+
   consumeL2Finality(event: L2FinalityInput): void {
     if (event.level !== "proved") {
       return;
     }
 
     const batch = this.#store.batchByLedger(event.ledger_hash);
+    if (batch?.settlement_status === "rolled_back") {
+      return;
+    }
     const indexedTargetLedger = [...this.#store.transactions.values()].some(
       (transaction) =>
         transaction.status === "applied" && transaction.target_ledger_hash === event.ledger_hash,
