@@ -77,7 +77,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-8x
     permissions:
       contents: read
-      id-token: write
+      packages: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -95,25 +95,17 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - id: auth
-        if: github.event_name != 'pull_request'
-        uses: google-github-actions/auth@v2
-        with:
-          token_format: access_token
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
         with:
-          registry: gcr.io
-          username: oauth2accesstoken
-          password: ${{ steps.auth.outputs.access_token }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ github.event_name == 'pull_request' && format('zeko/{0}', matrix.image) || format('gcr.io/{0}/{1}', vars.GCP_PROJECT_ID, matrix.image) }}
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=${{ github.sha }},enable=${{ github.event_name != 'pull_request' }}
