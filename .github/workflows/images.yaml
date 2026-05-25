@@ -1,4 +1,4 @@
-name: Images
+name: Build Images
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   plan:
-    name: Plan images
+    name: Plan image builds
     runs-on: warp-ubuntu-latest-x64-8x
     permissions:
       contents: read
@@ -63,10 +63,7 @@ jobs:
           }
 
           const matrix = {
-            include:
-              include.length > 0
-                ? include.map(({ id, image, project }) => ({ id, image, project, shouldBuild: true }))
-                : [{ id: "none", image: "no affected images", project: "", shouldBuild: false }],
+            include: include.map(({ id, image, project }) => ({ id, image, project })),
           };
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `has-images=${include.length > 0}\n`);
@@ -76,6 +73,7 @@ jobs:
   images:
     name: Build Image - ${{ matrix.image }}
     needs: plan
+    if: needs.plan.outputs.has-images == 'true'
     runs-on: warp-ubuntu-latest-x64-8x
     permissions:
       contents: read
@@ -84,36 +82,27 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - name: No affected image projects
-        if: ${{ !matrix.shouldBuild }}
-        run: echo "No image projects were affected by this pull request."
-
       - uses: actions/checkout@v4
-        if: ${{ matrix.shouldBuild }}
         with:
           fetch-depth: 0
 
       - uses: moonrepo/setup-toolchain@v0
-        if: ${{ matrix.shouldBuild }}
         with:
           auto-install: true
 
       - name: Scaffold Docker context
-        if: ${{ matrix.shouldBuild }}
         run: moon docker scaffold ${{ matrix.id }}
 
       - uses: docker/setup-buildx-action@v3
-        if: ${{ matrix.shouldBuild }}
 
       - uses: docker/login-action@v3
-        if: ${{ matrix.shouldBuild && github.event_name != 'pull_request' }}
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        if: ${{ matrix.shouldBuild }}
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
@@ -123,7 +112,6 @@ jobs:
             type=ref,event=tag,enable=${{ github.event_name != 'pull_request' }}
 
       - id: build
-        if: ${{ matrix.shouldBuild }}
         uses: docker/build-push-action@v6
         with:
           context: .
