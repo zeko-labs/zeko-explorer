@@ -71,7 +71,7 @@ jobs:
           NODE
 
   images:
-    name: Image ${{ matrix.image }}
+    name: Build affected images
     needs: plan
     if: needs.plan.outputs.has-images == 'true'
     runs-on: warp-ubuntu-latest-x64-8x
