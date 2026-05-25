@@ -1,3 +1,11 @@
+import type {
+  DaSignatureEvent,
+  L1RollbackEvent,
+  L1SettlementEvent,
+  L2FinalityEvent,
+  L2TransactionEvent,
+} from "@zeko/nats";
+
 export type DaSource = "proved" | "da-direct" | "settlement";
 export type DaStatus = "attested";
 export type TransactionStatus = "applied" | "reverted";
@@ -290,8 +298,26 @@ export type SyncStatusRow = {
 };
 
 export type ConsumeEnvelope =
-  | { subject: "zeko.l2.transactions"; payload: L2TransactionInput }
-  | { subject: "zeko.l2.finality"; payload: L2FinalityInput }
-  | { subject: "zeko.l1.settlements"; payload: L1SettlementInput }
-  | { subject: "zeko.l1.rollbacks"; payload: L1RollbackInput }
-  | { subject: "zeko.da.signatures"; payload: DaSignatureInput };
+  | { subject: "zeko.l2.transactions"; payload: L2TransactionEvent }
+  | { subject: "zeko.l2.finality"; payload: L2FinalityEvent }
+  | { subject: "zeko.l1.settlements"; payload: L1SettlementEvent }
+  | { subject: "zeko.l1.rollbacks"; payload: L1RollbackEvent }
+  | { subject: "zeko.da.signatures"; payload: DaSignatureEvent };
+
+type IsEqual<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
+    ? true
+    : false;
+type AssertTrue<Value extends true> = Value;
+type ConsumePayload<Subject extends ConsumeEnvelope["subject"]> = Extract<
+  ConsumeEnvelope,
+  { subject: Subject }
+>["payload"];
+
+type _ConsumePayloadsMatchNatsContracts = [
+  AssertTrue<IsEqual<ConsumePayload<"zeko.l2.transactions">, L2TransactionEvent>>,
+  AssertTrue<IsEqual<ConsumePayload<"zeko.l2.finality">, L2FinalityEvent>>,
+  AssertTrue<IsEqual<ConsumePayload<"zeko.l1.settlements">, L1SettlementEvent>>,
+  AssertTrue<IsEqual<ConsumePayload<"zeko.l1.rollbacks">, L1RollbackEvent>>,
+  AssertTrue<IsEqual<ConsumePayload<"zeko.da.signatures">, DaSignatureEvent>>,
+];
