@@ -99,6 +99,16 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-late-batch-2" has transaction_count 2
     And transactions "tx-ledger-late-batch-1" and "tx-ledger-late-batch-2" are linked to batch for ledger "ledger-late-batch-2"
 
+  Scenario: Out-of-order settlements recompute earlier batch links
+    Given the indexer consumed a payment transaction for ledger "ledger-out-of-order-batch-1"
+    And the indexer consumed a payment transaction for ledger "ledger-out-of-order-batch-2"
+    And the indexer consumed a settlement message for ledger "ledger-out-of-order-batch-2"
+    When the indexer consumes a settlement message for ledger "ledger-out-of-order-batch-1"
+    Then batch for ledger "ledger-out-of-order-batch-1" has transaction_count 1
+    And batch for ledger "ledger-out-of-order-batch-2" has transaction_count 1
+    And transaction "tx-ledger-out-of-order-batch-1" is linked to batch for ledger "ledger-out-of-order-batch-1"
+    And later transaction "tx-ledger-out-of-order-batch-2" is linked to batch for ledger "ledger-out-of-order-batch-2"
+
   Scenario: L2 rollback clears stale batch links before replacement settlement
     Given the indexer consumed a payment transaction for ledger "ledger-rollback-batch-1"
     And the indexer consumed a payment transaction for ledger "ledger-rollback-batch-2"

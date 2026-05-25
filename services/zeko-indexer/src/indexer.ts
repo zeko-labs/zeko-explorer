@@ -596,45 +596,56 @@ export class ZekoIndexer {
   }
 
   private linkTransactionsToBatch(ledgerHash: string, timestamp: string): void {
-    const batch = this.#store.batchByLedger(ledgerHash);
-    const targetTransaction = [...this.#store.transactions.values()].find(
+    const indexedTarget = [...this.#store.transactions.values()].some(
       (transaction) =>
         transaction.status === "applied" && transaction.target_ledger_hash === ledgerHash,
     );
-    if (!batch || !targetTransaction) {
+    if (!indexedTarget) {
       return;
     }
+    this.recomputeBatchLinks(timestamp);
+  }
 
-    const newlyCovered = [...this.#store.transactions.values()]
-      .filter(
+  private recomputeBatchLinks(timestamp: string): void {
+    const appliedTransactions = [...this.#store.transactions.values()]
+      .filter((transaction) => transaction.status === "applied")
+      .sort((left, right) => left.block_height - right.block_height);
+
+    for (const transaction of appliedTransactions) {
+      transaction.batch = undefined;
+    }
+
+    const ranges = [...this.#store.batches.values()]
+      .filter((batch) => batch.settlement_status !== "rolled_back")
+      .flatMap((batch) => {
+        const target = appliedTransactions.find(
+          (transaction) => transaction.target_ledger_hash === batch.target_ledger_hash,
+        );
+        return target ? [{ batch, targetHeight: target.block_height }] : [];
+      })
+      .sort((left, right) => left.targetHeight - right.targetHeight);
+
+    let previousTargetHeight = 0;
+    for (const { batch, targetHeight } of ranges) {
+      const covered = appliedTransactions.filter(
         (transaction) =>
-          transaction.status === "applied" &&
-          transaction.batch === undefined &&
-          transaction.block_height <= targetTransaction.block_height,
-      )
-      .sort((left, right) => left.block_height - right.block_height);
-    for (const transaction of newlyCovered) {
-      transaction.batch = batch.id;
+          transaction.block_height > previousTargetHeight &&
+          transaction.block_height <= targetHeight,
+      );
+      for (const transaction of covered) {
+        transaction.batch = batch.id;
+      }
+      this.#store.upsertBatch(
+        batch.target_ledger_hash,
+        {
+          first_tx_height: covered[0]?.block_height ?? 0,
+          last_tx_height: covered.at(-1)?.block_height ?? 0,
+          transaction_count: covered.length,
+        },
+        timestamp,
+      );
+      previousTargetHeight = targetHeight;
     }
-
-    const covered = [...this.#store.transactions.values()]
-      .filter((transaction) => transaction.batch === batch.id)
-      .sort((left, right) => left.block_height - right.block_height);
-    const first = covered[0];
-    const last = covered.at(-1);
-    if (!first || !last) {
-      return;
-    }
-
-    this.#store.upsertBatch(
-      ledgerHash,
-      {
-        first_tx_height: first.block_height,
-        last_tx_height: last.block_height,
-        transaction_count: covered.length,
-      },
-      timestamp,
-    );
   }
 
   private writeZkappChildren(event: L2TransactionInput, transaction: TransactionRow): void {

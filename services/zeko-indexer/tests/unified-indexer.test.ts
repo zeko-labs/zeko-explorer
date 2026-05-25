@@ -794,6 +794,68 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "Out-of-order settlements recompute earlier batch links",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      When(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has transaction_count {int}",
+        (_context, ledger: string, count: number) => {
+          expect(store.batchByLedger(ledger)?.transaction_count).toBe(count);
+        },
+      );
+
+      And(
+        "batch for ledger {string} has transaction_count {int}",
+        (_context, ledger: string, count: number) => {
+          expect(store.batchByLedger(ledger)?.transaction_count).toBe(count);
+        },
+      );
+
+      And(
+        "later transaction {string} is linked to batch for ledger {string}",
+        (_context, hash: string, ledger: string) => {
+          expect(store.transactionByHash(hash)?.batch).toBe(store.batchByLedger(ledger)?.id);
+        },
+      );
+
+      And(
+        "transaction {string} is linked to batch for ledger {string}",
+        (_context, hash: string, ledger: string) => {
+          expect(store.transactionByHash(hash)?.batch).toBe(store.batchByLedger(ledger)?.id);
+        },
+      );
+    },
+  );
+
+  Scenario(
     "L2 rollback clears stale batch links before replacement settlement",
     ({ Given, And, When, Then }) => {
       Given(
