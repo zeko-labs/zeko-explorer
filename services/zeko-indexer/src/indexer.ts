@@ -339,6 +339,17 @@ export class ZekoIndexer {
         quorum,
         signers,
       });
+      this.#store.pendingDa.set(event.ledgerHash, {
+        ledger_hash: event.ledgerHash,
+        source: chooseDaSource(pending?.source, "da-direct"),
+        received_at: pending?.received_at ?? pendingSigners?.receivedAt ?? event.signedAt,
+        attested_at: shouldReplaceAttestedAt(pending?.source, "da-direct")
+          ? undefined
+          : pending?.attested_at,
+        implementation: event.implementation,
+        quorum_threshold: quorum,
+        signers,
+      });
       return;
     }
 
@@ -596,11 +607,19 @@ export class ZekoIndexer {
 
     const pending = this.#store.pendingDa.get(ledgerHash);
     const pendingSigners = this.#pendingDaSigners.get(ledgerHash);
-    const incomingSource = pending?.source ? chooseDaSource(pending.source, source) : source;
+    const pendingDirectHasQuorum =
+      pending?.source === "da-direct" &&
+      (pending.signers?.length ?? 0) >= (pending.quorum_threshold ?? Number.POSITIVE_INFINITY);
+    const pendingAttestation =
+      pending?.source && (pending.source !== "da-direct" || pendingDirectHasQuorum)
+        ? pending
+        : undefined;
+    const pendingSource = pendingAttestation?.source;
+    const incomingSource = pendingSource ? chooseDaSource(pendingSource, source) : source;
     const nextSource = chooseDaSource(batch.da_source, incomingSource);
     const incomingAttestedAt =
-      pending?.source && incomingSource === pending.source
-        ? (pending.attested_at ?? attestedAt)
+      pendingSource && incomingSource === pendingSource
+        ? (pendingAttestation.attested_at ?? attestedAt)
         : attestedAt;
     this.#store.upsertBatch(
       ledgerHash,

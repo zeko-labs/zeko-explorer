@@ -193,6 +193,11 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-da-direct-first" has da_status "attested" and da_source "da-direct"
     And no pending DA attestation remains for "ledger-da-direct-first"
 
+  Scenario: Below-quorum direct DA signatures are persisted before batch creation
+    Given the indexer consumed a valid DA signature for ledger "ledger-da-subquorum-pending" from "PK_A"
+    Then pending DA attestation for "ledger-da-subquorum-pending" has source "da-direct"
+    And pending DA attestation for "ledger-da-subquorum-pending" records DA signer "PK_A"
+
   Scenario: Sub-quorum direct DA signatures do not override proved finality
     Given the indexer consumed a valid DA signature for ledger "ledger-da-subquorum" from "PK_A"
     And the indexer consumed a payment transaction for ledger "ledger-da-subquorum"

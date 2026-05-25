@@ -1331,6 +1331,38 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "Below-quorum direct DA signatures are persisted before batch creation",
+    ({ Given, Then, And }) => {
+      Given(
+        "the indexer consumed a valid DA signature for ledger {string} from {string}",
+        async (_context, ledger: string, publicKey: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey),
+          });
+        },
+      );
+
+      Then(
+        "pending DA attestation for {string} has source {string}",
+        (_context, ledger: string, source: string) => {
+          expect(store.pendingDa.get(ledger)?.source).toBe(source);
+        },
+      );
+
+      And(
+        "pending DA attestation for {string} records DA signer {string}",
+        (_context, ledger: string, publicKey: string) => {
+          expect(store.pendingDa.get(ledger)?.signers?.map((signer) => signer.publicKey)).toEqual([
+            publicKey,
+          ]);
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Sub-quorum direct DA signatures do not override proved finality",
     ({ Given, And, When, Then }) => {
       Given(
