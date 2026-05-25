@@ -157,6 +157,7 @@ Feature: Unified Zeko indexer
     And the indexer consumed an account update for "B62qDelegator" with delegate "B62qDelegateB" on ledger "ledger-delegate-reverted"
     When the indexer consumes a replacement transaction from source ledger "ledger-delegate-keep" to target ledger "ledger-delegate-replacement"
     Then account "B62qDelegator" has delegate "B62qDelegateA"
+    And rollback account activity for "B62qDelegator" records delegate_before "B62qDelegateB" and delegate_after "B62qDelegateA"
 
   Scenario: Later rollbacks do not restore account state from reverted ledgers
     Given the indexer consumed an account update for "B62qsender" with balance "100" on ledger "ledger-canonical-a"
@@ -215,6 +216,14 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-da-direct-first" has da_status "attested" and da_source "da-direct"
     And no pending DA attestation remains for "ledger-da-direct-first"
 
+  Scenario: Pending direct DA signatures use quorum time when the batch is later created
+    Given the indexer consumed a valid DA signature for ledger "ledger-da-quorum-time" from "PK_A" at "2026-05-13T00:00:00.000Z"
+    And the indexer consumes a valid DA signature for ledger "ledger-da-quorum-time" from "PK_B" at "2026-05-14T00:00:00.000Z"
+    And the indexer consumed a payment transaction for ledger "ledger-da-quorum-time"
+    When the indexer consumes a proved finality message for ledger "ledger-da-quorum-time"
+    Then batch for ledger "ledger-da-quorum-time" has da_status "attested" and da_source "da-direct"
+    And batch for ledger "ledger-da-quorum-time" keeps da_attested_at "2026-05-14T00:00:00.000Z"
+
   Scenario: Below-quorum direct DA signatures are persisted before batch creation
     Given the indexer consumed a valid DA signature for ledger "ledger-da-subquorum-pending" from "PK_A"
     Then pending DA attestation for "ledger-da-subquorum-pending" has source "da-direct"
@@ -233,6 +242,12 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-da-3" has settlement_status "pending"
     And batch for ledger "ledger-da-3" has no da_status
     And pending DA attestation for "ledger-da-3" has source "settlement"
+
+  Scenario: L1 rollback preserves direct DA signer details for later rebinding
+    Given batch for ledger "ledger-da-rollback-signers" is directly attested with signers "PK_A" and "PK_B"
+    When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-rollback-signers"
+    Then batch for ledger "ledger-da-rollback-signers" has no da_status
+    And pending DA attestation for "ledger-da-rollback-signers" records DA signers "PK_A" and "PK_B"
 
   Scenario: Pending DA attestations are pruned after the max age
     Given pending DA attestation for "ledger-da-stale" was received 31 days ago

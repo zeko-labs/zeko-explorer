@@ -303,7 +303,11 @@ export class ZekoIndexer {
         continue;
       }
       if (batch.da_status === "attested" && batch.da_source) {
-        this.upsertPendingDa(batch.target_ledger_hash, batch.da_source, batch.da_attested_at);
+        this.upsertPendingDa(batch.target_ledger_hash, batch.da_source, batch.da_attested_at, {
+          implementation: batch.da_implementation,
+          quorum_threshold: batch.da_quorum_threshold,
+          signers: batch.da_signers,
+        });
       }
       this.#store.upsertBatch(
         batch.target_ledger_hash,
@@ -398,9 +402,7 @@ export class ZekoIndexer {
       ledger_hash: event.ledgerHash,
       source: chooseDaSource(pending?.source, "da-direct"),
       received_at: pending?.received_at ?? event.signedAt,
-      attested_at: shouldReplaceAttestedAt(pending?.source, "da-direct")
-        ? event.signedAt
-        : pending?.attested_at,
+      attested_at: directDaAttestedAt(pending, event.signedAt),
       implementation: event.implementation,
       quorum_threshold: quorum,
       signers,
@@ -509,7 +511,23 @@ export class ZekoIndexer {
       if (!account) {
         continue;
       }
+      const revertedActivity = [...this.#store.accountActivities.values()]
+        .filter(
+          (activity) =>
+            activity.account_public_key === publicKey && activity.target_ledger_hash === ledgerHash,
+        )
+        .sort((left, right) => right.block_height - left.block_height)[0];
+      const beforeRollback = { ...account };
       if (!latest) {
+        if (revertedActivity) {
+          this.writeRollbackActivity(
+            ledgerHash,
+            revertedActivity,
+            beforeRollback,
+            undefined,
+            detectedAt,
+          );
+        }
         this.#store.accounts.delete(publicKey);
         continue;
       }
@@ -523,7 +541,58 @@ export class ZekoIndexer {
       account.last_activity_height = latest.block_height;
       account.last_activity_at = latest.timestamp;
       this.#store.accounts.set(publicKey, account);
+      if (revertedActivity) {
+        this.writeRollbackActivity(
+          ledgerHash,
+          revertedActivity,
+          beforeRollback,
+          account,
+          detectedAt,
+        );
+      }
     }
+  }
+
+  private writeRollbackActivity(
+    ledgerHash: string,
+    revertedActivity: AccountActivityRow,
+    before: AccountRow,
+    after: AccountRow | undefined,
+    detectedAt: string,
+  ): void {
+    const key = `${revertedActivity.transaction}:${revertedActivity.account_public_key}:rollback:${ledgerHash}`;
+    if (this.#store.accountActivities.has(key)) {
+      return;
+    }
+    this.#store.accountActivities.set(key, {
+      id: this.#store.idFactory.newId(detectedAt),
+      account: before.id,
+      account_public_key: before.public_key,
+      transaction: revertedActivity.transaction,
+      role: "rollback",
+      block_height: revertedActivity.block_height,
+      tx_index: revertedActivity.tx_index,
+      activity_index: revertedActivity.activity_index,
+      sort_block_height: revertedActivity.sort_block_height,
+      sort_tx_index: revertedActivity.sort_tx_index,
+      sort_activity_index: revertedActivity.sort_activity_index,
+      timestamp: detectedAt,
+      balance_before: before.balance,
+      balance_after: after?.balance,
+      nonce_before: before.nonce,
+      nonce_after: after?.nonce,
+      delegate_before: before.delegate,
+      delegate_after: after?.delegate,
+      zkapp_state_before: before.zkapp_state,
+      zkapp_state_after: after?.zkapp_state,
+      action_state_before: before.action_state,
+      action_state_after: after?.action_state,
+      verification_key_hash_before: before.verification_key_hash,
+      verification_key_hash_after: after?.verification_key_hash,
+      zkapp_uri_before: before.zkapp_uri,
+      zkapp_uri_after: after?.zkapp_uri,
+      target_ledger_hash: ledgerHash,
+    });
   }
 
   private linkTransactionsToBatch(ledgerHash: string, timestamp: string): void {
@@ -686,7 +755,16 @@ export class ZekoIndexer {
     this.#pendingDaSigners.delete(ledgerHash);
   }
 
-  private upsertPendingDa(ledgerHash: string, source: DaSource, attestedAt?: string): void {
+  private upsertPendingDa(
+    ledgerHash: string,
+    source: DaSource,
+    attestedAt?: string,
+    facts: {
+      implementation?: string;
+      quorum_threshold?: number;
+      signers?: DaSignerRow[];
+    } = {},
+  ): void {
     const existing = this.#store.pendingDa.get(ledgerHash);
     const nextSource = chooseDaSource(existing?.source, source);
     const row: PendingDaAttestationRow = {
@@ -696,9 +774,9 @@ export class ZekoIndexer {
         ? attestedAt
         : existing?.attested_at,
       received_at: existing?.received_at ?? attestedAt ?? normalizeTimestamp(Date.now()),
-      implementation: existing?.implementation,
-      quorum_threshold: existing?.quorum_threshold,
-      signers: existing?.signers,
+      implementation: facts.implementation ?? existing?.implementation,
+      quorum_threshold: facts.quorum_threshold ?? existing?.quorum_threshold,
+      signers: mergeSigners(existing?.signers, facts.signers),
     };
     this.#store.pendingDa.set(ledgerHash, row);
   }
@@ -827,6 +905,20 @@ const chooseDaSource = (current: DaSource | undefined, incoming: DaSource): DaSo
 
 const shouldReplaceAttestedAt = (current: DaSource | undefined, incoming: DaSource): boolean =>
   !current || PRECEDENCE[incoming] > PRECEDENCE[current];
+
+const directDaAttestedAt = (
+  pending: PendingDaAttestationRow | undefined,
+  signedAt: string,
+): string | undefined => {
+  const nextSource = chooseDaSource(pending?.source, "da-direct");
+  if (nextSource !== "da-direct") {
+    return pending?.attested_at;
+  }
+  if (shouldReplaceAttestedAt(pending?.source, "da-direct")) {
+    return signedAt;
+  }
+  return pending?.attested_at ?? signedAt;
+};
 
 type SettlementStatus = "pending" | "settling" | "finalized" | "rolled_back";
 

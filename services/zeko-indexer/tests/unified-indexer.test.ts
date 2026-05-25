@@ -1119,6 +1119,20 @@ describeFeature(feature, ({ Scenario }) => {
         expect(store.accountByPublicKey(publicKey)?.delegate).toBe(delegate);
       },
     );
+
+    And(
+      "rollback account activity for {string} records delegate_before {string} and delegate_after {string}",
+      (_context, publicKey: string, delegateBefore: string, delegateAfter: string) => {
+        expect(
+          [...store.accountActivities.values()].find(
+            (activity) => activity.account_public_key === publicKey && activity.role === "rollback",
+          ),
+        ).toMatchObject({
+          delegate_before: delegateBefore,
+          delegate_after: delegateAfter,
+        });
+      },
+    );
   });
 
   Scenario(
@@ -1488,6 +1502,71 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "Pending direct DA signatures use quorum time when the batch is later created",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a valid DA signature for ledger {string} from {string} at {string}",
+        async (_context, ledger: string, publicKey: string, signedAt: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey, signedAt),
+          });
+        },
+      );
+
+      And(
+        "the indexer consumes a valid DA signature for ledger {string} from {string} at {string}",
+        async (_context, ledger: string, publicKey: string, signedAt: string) => {
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey, signedAt),
+          });
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has da_status {string} and da_source {string}",
+        (_context, ledger: string, status: string, source: string) => {
+          expect(store.batchByLedger(ledger)).toMatchObject({
+            da_status: status,
+            da_source: source,
+          });
+        },
+      );
+
+      And(
+        "batch for ledger {string} keeps da_attested_at {string}",
+        (_context, ledger: string, attestedAt: string) => {
+          expect(store.batchByLedger(ledger)?.da_attested_at).toBe(attestedAt);
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Below-quorum direct DA signatures are persisted before batch creation",
     ({ Given, Then, And }) => {
       Given(
@@ -1635,6 +1714,71 @@ describeFeature(feature, ({ Scenario }) => {
       },
     );
   });
+
+  Scenario(
+    "L1 rollback preserves direct DA signer details for later rebinding",
+    ({ Given, When, Then, And }) => {
+      Given(
+        "batch for ledger {string} is directly attested with signers {string} and {string}",
+        (_context, ledger: string, first: string, second: string) => {
+          reset();
+          store.upsertBatchForTest(ledger, {
+            settlement_id: `settlement-${ledger}`,
+            settlement_status: "settling",
+            da_status: "attested",
+            da_source: "da-direct",
+            da_attested_at: timestamp,
+            da_implementation: "zeko-multisig-v1",
+            da_quorum_threshold: 2,
+            da_signers: [
+              { publicKey: first, signedAt: timestamp, instanceId: `instance-${first}` },
+              { publicKey: second, signedAt: timestamp, instanceId: `instance-${second}` },
+            ],
+          });
+        },
+      );
+
+      When(
+        "the indexer consumes an L1 rollback affecting settlement {string}",
+        async (_context, settlementId: string) => {
+          await indexer.consume({
+            subject: "zeko.l1.rollbacks",
+            payload: {
+              schemaVersion: 1,
+              provider: "mina",
+              network: "zeko-m-devnet",
+              source: "l1-watcher",
+              subject: "zeko.l1.rollbacks",
+              rollbackId: `rollback-${settlementId}`,
+              detectedAt: timestamp,
+              commonAncestor: { height: 1, hash: "ancestor" },
+              orphanedBlocks: [{ height: 2, hash: "old", parentHash: "ancestor" }],
+              replacementBlocks: [{ height: 2, hash: "new", parentHash: "ancestor" }],
+              affected: {
+                settlementIds: [settlementId],
+                outerActionIds: [],
+                bridgeEventIds: [],
+              },
+            },
+          });
+        },
+      );
+
+      Then("batch for ledger {string} has no da_status", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.da_status).toBeUndefined();
+      });
+
+      And(
+        "pending DA attestation for {string} records DA signers {string} and {string}",
+        (_context, ledger: string, first: string, second: string) => {
+          expect(store.pendingDa.get(ledger)?.signers?.map((signer) => signer.publicKey)).toEqual([
+            first,
+            second,
+          ]);
+        },
+      );
+    },
+  );
 
   Scenario("Pending DA attestations are pruned after the max age", ({ Given, When, Then }) => {
     Given(
