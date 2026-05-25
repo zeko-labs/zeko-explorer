@@ -512,6 +512,67 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Proved finality creates a batch for already indexed L2 transactions",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has proof_status {string}",
+        (_context, ledger: string, status: string) => {
+          expect(store.batchByLedger(ledger)?.proof_status).toBe(status);
+        },
+      );
+
+      And(
+        "batch for ledger {string} covers transaction heights {int} through {int}",
+        (_context, ledger: string, first: number, last: number) => {
+          expect(store.batchByLedger(ledger)).toMatchObject({
+            first_tx_height: first,
+            last_tx_height: last,
+          });
+        },
+      );
+
+      And(
+        "transactions {string} and {string} are linked to batch for ledger {string}",
+        (_context, firstHash: string, secondHash: string, ledger: string) => {
+          const batchId = store.batchByLedger(ledger)?.id;
+          expect(store.transactionByHash(firstHash)?.batch).toBe(batchId);
+          expect(store.transactionByHash(secondHash)?.batch).toBe(batchId);
+        },
+      );
+    },
+  );
+
   Scenario("Committed finality does not derive DA attestation", ({ Given, When, Then }) => {
     Given("a pending batch row exists for ledger {string}", (_context, ledger: string) => {
       reset();
@@ -628,6 +689,71 @@ describeFeature(feature, ({ Scenario }) => {
           });
         },
       );
+
+      And(
+        "batch for ledger {string} has transaction_count {int}",
+        (_context, ledger: string, count: number) => {
+          expect(store.batchByLedger(ledger)?.transaction_count).toBe(count);
+        },
+      );
+
+      And(
+        "transactions {string} and {string} are linked to batch for ledger {string}",
+        (_context, firstHash: string, secondHash: string, ledger: string) => {
+          const batchId = store.batchByLedger(ledger)?.id;
+          expect(store.transactionByHash(firstHash)?.batch).toBe(batchId);
+          expect(store.transactionByHash(secondHash)?.batch).toBe(batchId);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "L2 rollback clears stale batch links before replacement settlement",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then("transaction {string} is marked reverted", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.status).toBe("reverted");
+      });
+
+      And("transaction {string} is not linked to a batch", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.batch).toBeUndefined();
+      });
 
       And(
         "batch for ledger {string} has transaction_count {int}",

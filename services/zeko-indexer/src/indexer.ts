@@ -191,17 +191,22 @@ export class ZekoIndexer {
     }
 
     const batch = this.#store.batchByLedger(event.ledger_hash);
-    if (!batch) {
+    const indexedTargetLedger = [...this.#store.transactions.values()].some(
+      (transaction) =>
+        transaction.status === "applied" && transaction.target_ledger_hash === event.ledger_hash,
+    );
+    if (!batch && !indexedTargetLedger) {
       this.upsertPendingDa(event.ledger_hash, "proved", event.timestamp);
       return;
     }
 
-    this.applyDaAttestation(event.ledger_hash, "proved", event.timestamp);
     this.#store.upsertBatch(
       event.ledger_hash,
       { proof_status: "proved", proved_at: event.timestamp },
       event.timestamp,
     );
+    this.linkTransactionsToBatch(event.ledger_hash, event.timestamp);
+    this.applyDaAttestation(event.ledger_hash, "proved", event.timestamp);
   }
 
   consumeL1Settlement(event: L1SettlementInput): void {
@@ -342,16 +347,43 @@ export class ZekoIndexer {
 
     const rolledBack = this.#store.ledgerOrder.splice(ancestorIndex + 1);
     const rollbackScope = new Set(rolledBack);
+    const detectedAt = normalizeTimestamp(event.timestamp);
     for (const ledgerHash of rolledBack) {
-      this.rollbackL2Ledger(ledgerHash, rollbackScope);
+      this.rollbackL2Ledger(ledgerHash, rollbackScope, detectedAt);
     }
   }
 
-  private rollbackL2Ledger(ledgerHash: string, rollbackScope = new Set([ledgerHash])): void {
+  private rollbackL2Ledger(
+    ledgerHash: string,
+    rollbackScope = new Set([ledgerHash]),
+    detectedAt = normalizeTimestamp(Date.now()),
+  ): void {
+    const invalidatedBatchIds = new Set(
+      [...this.#store.batches.values()]
+        .filter((batch) => rollbackScope.has(batch.target_ledger_hash))
+        .map((batch) => batch.id),
+    );
     for (const tx of this.#store.transactions.values()) {
+      if (tx.batch && invalidatedBatchIds.has(tx.batch)) {
+        tx.batch = undefined;
+      }
       if (tx.target_ledger_hash === ledgerHash) {
         tx.status = "reverted";
         tx.rollback_reason = "l2_hash_chain_break";
+      }
+    }
+    for (const batch of this.#store.batches.values()) {
+      if (rollbackScope.has(batch.target_ledger_hash)) {
+        this.#store.upsertBatch(
+          batch.target_ledger_hash,
+          {
+            first_tx_height: 0,
+            last_tx_height: 0,
+            transaction_count: 0,
+            settlement_status: "rolled_back",
+          },
+          detectedAt,
+        );
       }
     }
     for (const [id, event] of this.#store.zkappEvents) {

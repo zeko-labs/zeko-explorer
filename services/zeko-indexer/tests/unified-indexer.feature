@@ -56,6 +56,14 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-finality-1" has proof_status "proved"
     And batch for ledger "ledger-finality-1" has da_status "attested" and da_source "proved"
 
+  Scenario: Proved finality creates a batch for already indexed L2 transactions
+    Given the indexer consumed a payment transaction for ledger "ledger-proved-batch-1"
+    And the indexer consumed a payment transaction for ledger "ledger-proved-batch-2"
+    When the indexer consumes a proved finality message for ledger "ledger-proved-batch-2"
+    Then batch for ledger "ledger-proved-batch-2" has proof_status "proved"
+    And batch for ledger "ledger-proved-batch-2" covers transaction heights 1 through 2
+    And transactions "tx-ledger-proved-batch-1" and "tx-ledger-proved-batch-2" are linked to batch for ledger "ledger-proved-batch-2"
+
   Scenario: Committed finality does not derive DA attestation
     Given a pending batch row exists for ledger "ledger-committed-1"
     When the indexer consumes a committed finality message for ledger "ledger-committed-1"
@@ -76,6 +84,17 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-late-batch-2" covers transaction heights 1 through 2
     And batch for ledger "ledger-late-batch-2" has transaction_count 2
     And transactions "tx-ledger-late-batch-1" and "tx-ledger-late-batch-2" are linked to batch for ledger "ledger-late-batch-2"
+
+  Scenario: L2 rollback clears stale batch links before replacement settlement
+    Given the indexer consumed a payment transaction for ledger "ledger-rollback-batch-1"
+    And the indexer consumed a payment transaction for ledger "ledger-rollback-batch-2"
+    And the indexer consumed a settlement message for ledger "ledger-rollback-batch-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-rollback-batch-1" to target ledger "ledger-rollback-batch-3"
+    And the indexer consumes a settlement message for ledger "ledger-rollback-batch-3"
+    Then transaction "tx-ledger-rollback-batch-2" is marked reverted
+    And transaction "tx-ledger-rollback-batch-2" is not linked to a batch
+    And batch for ledger "ledger-rollback-batch-3" has transaction_count 2
+    And transactions "tx-ledger-rollback-batch-1" and "tx-ledger-rollback-batch-3" are linked to batch for ledger "ledger-rollback-batch-3"
 
   Scenario: Replayed settling settlement does not downgrade finalized batch
     Given the indexer consumed a finalized settlement message for ledger "ledger-finalized-replay"
