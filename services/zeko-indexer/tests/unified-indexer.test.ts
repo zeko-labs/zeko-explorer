@@ -890,6 +890,22 @@ describeFeature(feature, ({ Scenario }) => {
       );
 
       And(
+        "later batch for ledger {string} has batch_height {int}",
+        (_context, ledger: string, height: number) => {
+          expect(store.batchByLedger(ledger)?.batch_height).toBe(height);
+          expect(store.batchByLedger(ledger)?.sort_batch_height).toBe(-height);
+        },
+      );
+
+      And(
+        "batch for ledger {string} has batch_height {int}",
+        (_context, ledger: string, height: number) => {
+          expect(store.batchByLedger(ledger)?.batch_height).toBe(height);
+          expect(store.batchByLedger(ledger)?.sort_batch_height).toBe(-height);
+        },
+      );
+
+      And(
         "later transaction {string} is linked to batch for ledger {string}",
         (_context, hash: string, ledger: string) => {
           expect(store.transactionByHash(hash)?.batch).toBe(store.batchByLedger(ledger)?.id);
@@ -1363,6 +1379,24 @@ describeFeature(feature, ({ Scenario }) => {
           delegate_before: delegateBefore,
           delegate_after: delegateAfter,
         });
+      },
+    );
+
+    And(
+      "rollback account activity for {string} has a unique activity index",
+      (_context, publicKey: string) => {
+        const rollbackActivity = [...store.accountActivities.values()].find(
+          (activity) => activity.account_public_key === publicKey && activity.role === "rollback",
+        );
+        expect(rollbackActivity).toBeDefined();
+        expect(
+          [...store.accountActivities.values()].filter(
+            (activity) =>
+              activity.transaction === rollbackActivity?.transaction &&
+              activity.account === rollbackActivity.account &&
+              activity.activity_index === rollbackActivity.activity_index,
+          ),
+        ).toHaveLength(1);
       },
     );
   });

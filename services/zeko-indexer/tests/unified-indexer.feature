@@ -114,6 +114,8 @@ Feature: Unified Zeko indexer
     When the indexer consumes a settlement message for ledger "ledger-out-of-order-batch-1"
     Then batch for ledger "ledger-out-of-order-batch-1" has transaction_count 1
     And batch for ledger "ledger-out-of-order-batch-2" has transaction_count 1
+    And batch for ledger "ledger-out-of-order-batch-1" has batch_height 1
+    And later batch for ledger "ledger-out-of-order-batch-2" has batch_height 2
     And transaction "tx-ledger-out-of-order-batch-1" is linked to batch for ledger "ledger-out-of-order-batch-1"
     And later transaction "tx-ledger-out-of-order-batch-2" is linked to batch for ledger "ledger-out-of-order-batch-2"
 
@@ -194,6 +196,7 @@ Feature: Unified Zeko indexer
     When the indexer consumes a replacement transaction from source ledger "ledger-delegate-keep" to target ledger "ledger-delegate-replacement"
     Then account "B62qDelegator" has delegate "B62qDelegateA"
     And rollback account activity for "B62qDelegator" records delegate_before "B62qDelegateB" and delegate_after "B62qDelegateA"
+    And rollback account activity for "B62qDelegator" has a unique activity index
 
   Scenario: Later rollbacks do not restore account state from reverted ledgers
     Given the indexer consumed an account update for "B62qsender" with balance "100" on ledger "ledger-canonical-a"

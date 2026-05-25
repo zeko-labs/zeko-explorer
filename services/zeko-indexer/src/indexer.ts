@@ -638,10 +638,10 @@ export class ZekoIndexer {
       role: "rollback",
       block_height: revertedActivity.block_height,
       tx_index: revertedActivity.tx_index,
-      activity_index: revertedActivity.activity_index,
+      activity_index: revertedActivity.activity_index + 1_000_000,
       sort_block_height: revertedActivity.sort_block_height,
       sort_tx_index: revertedActivity.sort_tx_index,
-      sort_activity_index: revertedActivity.sort_activity_index,
+      sort_activity_index: revertedActivity.sort_activity_index + 1_000_000,
       timestamp: detectedAt,
       balance_before: before.balance,
       balance_after: after?.balance,
@@ -711,6 +711,8 @@ export class ZekoIndexer {
       this.#store.upsertBatch(
         batch.target_ledger_hash,
         {
+          batch_height: targetHeight,
+          sort_batch_height: -targetHeight,
           first_tx_height: covered[0]?.block_height ?? 0,
           last_tx_height: covered.at(-1)?.block_height ?? 0,
           transaction_count: covered.length,
