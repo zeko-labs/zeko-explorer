@@ -9,6 +9,7 @@
   "dependencies": {
     "@zeko/database": "workspace:*",
     "@zeko/nats": "workspace:*",
+    "@nats-io/transport-node": "catalog:",
     "ulid": "catalog:",
     "valibot": "catalog:"
   },

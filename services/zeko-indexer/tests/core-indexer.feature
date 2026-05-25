@@ -328,7 +328,7 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-l1-rollback-replay" has no l1_tx_hash
     And batch for ledger "ledger-l1-rollback-replay" has no settlement_id
 
-  Scenario: L1 rollback before settlement tombstones the delayed settlement
+  Scenario: L1 rollback before settlement invalidates the delayed settlement ID
     Given the indexer consumed an L1 rollback affecting settlement "settlement-ledger-l1-rollback-before-batch"
     When the indexer consumes a settlement message for ledger "ledger-l1-rollback-before-batch"
     Then no batch row exists for ledger "ledger-l1-rollback-before-batch"

@@ -3,6 +3,12 @@ import type {
   AccountActivityRow,
   AccountRow,
   BatchRow,
+  BridgeOperationRow,
+  BridgeTransactionLinkRow,
+  InnerActionRow,
+  L1ActionLinkRow,
+  L2ActionLinkRow,
+  OuterActionRow,
   PendingDaAttestationRow,
   PendingFinalityRow,
   SyncStatusRow,
@@ -21,12 +27,20 @@ export type IndexerStore = {
   readonly accountActivities: Map<string, AccountActivityRow>;
   readonly zkappEvents: Map<string, ZkappEventRow>;
   readonly zkappActions: Map<string, ZkappActionRow>;
+  readonly outerActions: Map<string, OuterActionRow>;
+  readonly innerActions: Map<string, InnerActionRow>;
+  readonly bridgeOperations: Map<string, BridgeOperationRow>;
+  readonly l1ActionLinks: Map<string, L1ActionLinkRow>;
+  readonly l2ActionLinks: Map<string, L2ActionLinkRow>;
+  readonly bridgeTransactionLinks: Map<string, BridgeTransactionLinkRow>;
+  readonly bridgeEventOperationIds: Map<string, string>;
   readonly batches: Map<string, BatchRow>;
   readonly pendingDa: Map<string, PendingDaAttestationRow>;
   readonly pendingFinality: Map<string, PendingFinalityRow>;
   readonly syncStatus: Map<string, SyncStatusRow>;
   readonly ledgerOrder: string[];
-  readonly rolledBackSettlementIds: Set<string>;
+  readonly l1RollbackAffectedSettlementIds: Set<string>;
+  readonly l1RollbackAffectedBridgeEventIds: Set<string>;
   readonly idFactory: IdFactory;
 
   accountByPublicKey(publicKey: string, tokenId?: string): AccountRow | undefined;
@@ -38,10 +52,14 @@ export type IndexerStore = {
   zkappActionsByAccount(publicKey: string): ZkappActionRow[];
   zkappEventsByLedger(ledgerHash: string): ZkappEventRow[];
   zkappActionsByLedger(ledgerHash: string): ZkappActionRow[];
+  bridgeOperationsByAux(aux: string): BridgeOperationRow[];
+  bridgeOperationById(id: string): BridgeOperationRow | undefined;
+  innerActionByState(actionState: string): InnerActionRow | undefined;
   nextTransactionSequence(): number;
   nextBatchHeight(): number;
   nextEventSequence(): number;
   nextActionSequence(): number;
+  nextBridgeSequence(aux: string): number;
   upsertBatchForTest(ledgerHash: string, patch: Partial<BatchRow>): BatchRow;
   upsertBatch(ledgerHash: string, patch: Partial<BatchRow>, timestamp: string): BatchRow;
 };
@@ -79,12 +97,20 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly accountActivities = new Map<string, AccountActivityRow>();
   readonly zkappEvents = new Map<string, ZkappEventRow>();
   readonly zkappActions = new Map<string, ZkappActionRow>();
+  readonly outerActions = new Map<string, OuterActionRow>();
+  readonly innerActions = new Map<string, InnerActionRow>();
+  readonly bridgeOperations = new Map<string, BridgeOperationRow>();
+  readonly l1ActionLinks = new Map<string, L1ActionLinkRow>();
+  readonly l2ActionLinks = new Map<string, L2ActionLinkRow>();
+  readonly bridgeTransactionLinks = new Map<string, BridgeTransactionLinkRow>();
+  readonly bridgeEventOperationIds = new Map<string, string>();
   readonly batches = new Map<string, BatchRow>();
   readonly pendingDa = new Map<string, PendingDaAttestationRow>();
   readonly pendingFinality = new Map<string, PendingFinalityRow>();
   readonly syncStatus = new Map<string, SyncStatusRow>();
   readonly ledgerOrder: string[] = [];
-  readonly rolledBackSettlementIds = new Set<string>();
+  readonly l1RollbackAffectedSettlementIds = new Set<string>();
+  readonly l1RollbackAffectedBridgeEventIds = new Set<string>();
   readonly idFactory: IdFactory;
 
   constructor(idFactory: IdFactory = new UlidFactory()) {
@@ -137,6 +163,20 @@ export class InMemoryIndexerStore implements IndexerStore {
     );
   }
 
+  bridgeOperationsByAux(aux: string): BridgeOperationRow[] {
+    return [...this.bridgeOperations.values()]
+      .filter((operation) => operation.aux === aux)
+      .sort((left, right) => left.aux_sequence - right.aux_sequence);
+  }
+
+  bridgeOperationById(id: string): BridgeOperationRow | undefined {
+    return [...this.bridgeOperations.values()].find((operation) => operation.id === id);
+  }
+
+  innerActionByState(actionState: string): InnerActionRow | undefined {
+    return this.innerActions.get(actionState);
+  }
+
   nextTransactionSequence(): number {
     return this.transactions.size + 1;
   }
@@ -151,6 +191,10 @@ export class InMemoryIndexerStore implements IndexerStore {
 
   nextActionSequence(): number {
     return this.zkappActions.size + 1;
+  }
+
+  nextBridgeSequence(aux: string): number {
+    return this.bridgeOperationsByAux(aux).length;
   }
 
   upsertBatchForTest(ledgerHash: string, patch: Partial<BatchRow>): BatchRow {

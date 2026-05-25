@@ -10,7 +10,7 @@ import {
   ZekoIndexer,
 } from "../src/index";
 
-const feature = await loadFeature("tests/unified-indexer.feature");
+const feature = await loadFeature("tests/core-indexer.feature");
 
 const timestamp = "2026-05-13T00:00:00.000Z";
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
@@ -2363,7 +2363,7 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
-    "L1 rollback before settlement tombstones the delayed settlement",
+    "L1 rollback before settlement invalidates the delayed settlement ID",
     ({ Given, When, Then }) => {
       Given(
         "the indexer consumed an L1 rollback affecting settlement {string}",

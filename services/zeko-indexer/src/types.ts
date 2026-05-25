@@ -1,5 +1,7 @@
 import type {
   DaSignatureEvent,
+  L1BridgeEvent,
+  L1OuterActionEvent,
   L1RollbackEvent,
   L1SettlementEvent,
   L2FinalityEvent,
@@ -9,6 +11,16 @@ import type {
 export type DaSource = "proved" | "da-direct" | "settlement";
 export type DaStatus = "attested";
 export type TransactionStatus = "applied" | "reverted";
+export type BridgeOperationStatus =
+  | "submitted"
+  | "l1_witnessed"
+  | "l2_witnessed"
+  | "committed"
+  | "delay_passed"
+  | "completed"
+  | "timed_out"
+  | "cancelled"
+  | "rolled_back";
 
 export type L2AccountChangeInput = {
   index: number;
@@ -107,6 +119,9 @@ export type L1RollbackInput = {
     bridgeEventIds: string[];
   };
 };
+
+export type L1OuterActionInput = L1OuterActionEvent;
+export type L1BridgeEventInput = L1BridgeEvent;
 
 export type ZekoMultisigSignatureInput = {
   implementation: "zeko-multisig-v1";
@@ -242,6 +257,104 @@ export type ZkappActionRow = {
   target_ledger_hash: string;
 };
 
+export type OuterActionRow = {
+  id: string;
+  outer_action_id: string;
+  after_state: string;
+  before_state?: string;
+  kind: "commit" | "witness";
+  action_index: number;
+  block_height: number;
+  block_state_hash: string;
+  timestamp: string;
+  network: string;
+  provider: string;
+  global_slot?: number;
+  distance_from_max_block_height?: number;
+  txn_hash: string;
+  fields: string[];
+  slot_range_lower: number;
+  slot_range_upper: number;
+  marked_as_canonical_at?: string;
+  ledger?: string;
+  inner_action_state?: string;
+  inner_action_state_length?: number;
+  synchronized_outer_action_state?: string;
+  synchronized_outer_action_state_length?: number;
+  aux?: string;
+};
+
+export type InnerActionRow = {
+  id: string;
+  after_state: string;
+  before_state?: string;
+  action_index: number;
+  block_height: number;
+  timestamp: string;
+  txn_hash: string;
+  transaction?: string;
+  fields: string[];
+  aux: string;
+  marked_as_canonical_at?: string;
+  target_ledger_hash: string;
+};
+
+export type BridgeOperationRow = {
+  id: string;
+  type: "deposit" | "withdrawal";
+  status: BridgeOperationStatus;
+  aux: string;
+  aux_sequence: number;
+  sender: string;
+  recipient: string;
+  amount: string;
+  search_text?: string;
+  data_quality: "complete" | "partial" | "inferred" | "unrecoverable";
+  data_quality_reasons?: string[];
+  source_network?: string;
+  source_provider?: string;
+  submit_tx_hash?: string;
+  submit_block_height: number;
+  sort_submit_block_height: number;
+  submit_timestamp: string;
+  timeout_slot?: number;
+  holder_account_l1?: string;
+  l1_witness_action_state?: string;
+  l1_witness_tx_hash?: string;
+  l1_witness_block_height?: number;
+  l1_witness_timestamp?: string;
+  l1_slot_range_lower?: number;
+  l1_slot_range_upper?: number;
+  l2_action_state?: string;
+  l2_tx_hash?: string;
+  l2_block_height?: number;
+  l2_timestamp?: string;
+  commit_action_state?: string;
+  cancel_tx_hash?: string;
+  rollback_reason?: string;
+};
+
+export type L1ActionLinkRow = {
+  id: string;
+  in: string;
+  out: string;
+  role: "witness" | "commit";
+};
+
+export type L2ActionLinkRow = {
+  id: string;
+  in: string;
+  out: string;
+  role: "mint" | "burn";
+};
+
+export type BridgeTransactionLinkRow = {
+  id: string;
+  in: string;
+  out: string;
+  role: "submit" | "l1_witness" | "l2_finalize" | "cancel" | "rollback";
+};
+
 export type DaSignerRow = {
   publicKey: string;
   signedAt: string;
@@ -307,6 +420,8 @@ export type ConsumeEnvelope =
   | { subject: "zeko.l2.finality"; payload: L2FinalityEvent }
   | { subject: "zeko.l1.settlements"; payload: L1SettlementEvent }
   | { subject: "zeko.l1.rollbacks"; payload: L1RollbackEvent }
+  | { subject: "zeko.l1.outer-actions"; payload: L1OuterActionEvent }
+  | { subject: "zeko.l1.bridge-events"; payload: L1BridgeEvent }
   | { subject: "zeko.da.signatures"; payload: DaSignatureEvent };
 
 type IsEqual<Left, Right> =
@@ -324,5 +439,7 @@ type _ConsumePayloadsMatchNatsContracts = [
   AssertTrue<IsEqual<ConsumePayload<"zeko.l2.finality">, L2FinalityEvent>>,
   AssertTrue<IsEqual<ConsumePayload<"zeko.l1.settlements">, L1SettlementEvent>>,
   AssertTrue<IsEqual<ConsumePayload<"zeko.l1.rollbacks">, L1RollbackEvent>>,
+  AssertTrue<IsEqual<ConsumePayload<"zeko.l1.outer-actions">, L1OuterActionEvent>>,
+  AssertTrue<IsEqual<ConsumePayload<"zeko.l1.bridge-events">, L1BridgeEvent>>,
   AssertTrue<IsEqual<ConsumePayload<"zeko.da.signatures">, DaSignatureEvent>>,
 ];

@@ -1,5 +1,11 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
+import {
+  consumeBridgeInnerAction,
+  consumeBridgeRollback,
+  consumeL1BridgeEvent,
+  consumeL1OuterAction,
+} from "./bridge";
 import { accountKey, type IndexerStore, normalizeTimestamp } from "./store";
 import type {
   AccountActivityRow,
@@ -8,6 +14,8 @@ import type {
   DaSignatureInput,
   DaSignerRow,
   DaSource,
+  L1BridgeEventInput,
+  L1OuterActionInput,
   L1RollbackInput,
   L1SettlementInput,
   L2AccountUpdateInput,
@@ -24,6 +32,9 @@ export type ZekoIndexerOptions = {
     authorizedSigners?: Set<string>;
     quorum?: number;
     verifySignature?: (event: DaSignatureInput) => boolean;
+  };
+  bridge?: {
+    withdrawalDelaySlots?: number;
   };
 };
 
@@ -73,6 +84,16 @@ export class ZekoIndexer {
       case "zeko.l1.rollbacks":
         this.consumeL1Rollback(
           parse(EventSchemas.l1Rollbacks, envelope.payload) as unknown as L1RollbackInput,
+        );
+        break;
+      case "zeko.l1.outer-actions":
+        this.consumeL1OuterAction(
+          parse(EventSchemas.l1OuterActions, envelope.payload) as unknown as L1OuterActionInput,
+        );
+        break;
+      case "zeko.l1.bridge-events":
+        this.consumeL1BridgeEvent(
+          parse(EventSchemas.l1BridgeEvents, envelope.payload) as unknown as L1BridgeEventInput,
         );
         break;
       case "zeko.da.signatures":
@@ -286,7 +307,7 @@ export class ZekoIndexer {
   consumeL1Settlement(event: L1SettlementInput): void {
     const ledgerHash = event.commit.ledgerHash;
     const observedAt = event.observedAt;
-    if (this.#store.rolledBackSettlementIds.has(event.settlementId)) {
+    if (this.#store.l1RollbackAffectedSettlementIds.has(event.settlementId)) {
       return;
     }
     const incomingStatus = event.finalityLevel === "finalized" ? "finalized" : "settling";
@@ -330,8 +351,9 @@ export class ZekoIndexer {
   }
 
   consumeL1Rollback(event: L1RollbackInput): void {
+    consumeBridgeRollback(this.#store, event);
     for (const settlementId of event.affected.settlementIds) {
-      this.#store.rolledBackSettlementIds.add(settlementId);
+      this.#store.l1RollbackAffectedSettlementIds.add(settlementId);
       const batch = [...this.#store.batches.values()].find(
         (candidate) => candidate.settlement_id === settlementId,
       );
@@ -366,6 +388,14 @@ export class ZekoIndexer {
         event.detectedAt,
       );
     }
+  }
+
+  consumeL1OuterAction(event: L1OuterActionInput): void {
+    consumeL1OuterAction(this.#store, event, this.#options.bridge);
+  }
+
+  consumeL1BridgeEvent(event: L1BridgeEventInput): void {
+    consumeL1BridgeEvent(this.#store, event);
   }
 
   consumeDaSignature(event: DaSignatureInput): void {
@@ -807,10 +837,13 @@ export class ZekoIndexer {
           sequence_number: this.#store.nextActionSequence(),
           target_ledger_hash: event.target_ledger_hash,
         });
+        const actionRow = this.#store.zkappActions.get(key);
+        if (actionRow) {
+          consumeBridgeInnerAction(this.#store, transaction, actionRow);
+        }
       });
     }
   }
-
   private applyDaAttestation(ledgerHash: string, source: DaSource, attestedAt?: string): void {
     const batch = this.#store.batchByLedger(ledgerHash);
     if (!batch) {
