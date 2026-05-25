@@ -1,6 +1,7 @@
 import type { IndexerStore } from "../store";
 import type {
   BridgeOperationRow,
+  BridgeTransactionLinkRow,
   InnerActionRow,
   L1ActionLinkRow,
   L2ActionLinkRow,
@@ -63,12 +64,24 @@ export async function writeBridgeProjectionToSurreal(
   }
   for (const row of store.l1ActionLinks.values()) {
     statements.push(
-      relate("outer_action", row.in, "l1_action_link", "bridge_operation", row.out, row),
+      upsertRelation("outer_action", row.in, "l1_action_link", "bridge_operation", row.out, row),
     );
   }
   for (const row of store.l2ActionLinks.values()) {
     statements.push(
-      relate("bridge_operation", row.in, "l2_action_link", "inner_action", row.out, row),
+      upsertRelation("bridge_operation", row.in, "l2_action_link", "inner_action", row.out, row),
+    );
+  }
+  for (const row of store.bridgeTransactionLinks.values()) {
+    statements.push(
+      upsertRelation(
+        "bridge_operation",
+        row.in,
+        "bridge_transaction_link",
+        "transaction",
+        row.out,
+        row,
+      ),
     );
   }
   if (statements.length > 0) {
@@ -78,7 +91,6 @@ export async function writeBridgeProjectionToSurreal(
 
 function serializeOuterAction(row: OuterActionRow): Record<string, unknown> {
   return stripUndefined({
-    id: row.id,
     after_state: row.after_state,
     before_state: row.before_state,
     kind: row.kind,
@@ -108,7 +120,6 @@ function serializeOuterAction(row: OuterActionRow): Record<string, unknown> {
 
 function serializeInnerAction(row: InnerActionRow): Record<string, unknown> {
   return stripUndefined({
-    id: row.id,
     after_state: row.after_state,
     before_state: row.before_state,
     action_index: row.action_index,
@@ -126,7 +137,6 @@ function serializeInnerAction(row: InnerActionRow): Record<string, unknown> {
 
 function serializeBridgeOperation(row: BridgeOperationRow): Record<string, unknown> {
   return stripUndefined({
-    id: row.id,
     type: row.type,
     status: row.status,
     aux: row.aux,
@@ -161,15 +171,15 @@ function serializeBridgeOperation(row: BridgeOperationRow): Record<string, unkno
   });
 }
 
-function relate(
+function upsertRelation(
   inTable: string,
   inId: string,
   table: string,
   outTable: string,
   outId: string,
-  row: L1ActionLinkRow | L2ActionLinkRow,
+  row: L1ActionLinkRow | L2ActionLinkRow | BridgeTransactionLinkRow,
 ): string {
-  return `RELATE ${recordId(inTable, inId)}->${table}->${recordId(outTable, outId)} SET role = ${literal(row.role)};`;
+  return `INSERT RELATION INTO ${table} { id: ${recordId(table, row.id)}, in: ${recordId(inTable, inId)}, out: ${recordId(outTable, outId)}, role: ${literal(row.role)} } ON DUPLICATE KEY UPDATE role = $input.role RETURN NONE;`;
 }
 
 function upsertRecord(table: string, id: string, row: Record<string, unknown>): string {

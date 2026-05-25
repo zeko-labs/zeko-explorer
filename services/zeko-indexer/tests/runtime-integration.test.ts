@@ -10,6 +10,7 @@ import {
   syncSchema,
 } from "../../database/tests/lib/surreal-client";
 import {
+  type ConsumeEnvelope,
   consumeNatsEnvelopes,
   createSurrealHttpClient,
   InMemoryIndexerStore,
@@ -28,8 +29,8 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
   let db: string;
   let store: InMemoryIndexerStore;
   let indexer: ZekoIndexer;
-  let pendingEnvelope: ReturnType<AsyncIterator<unknown>["next"]> | undefined;
-  let envelopeSource: AsyncGenerator | undefined;
+  let pendingEnvelope: Promise<IteratorResult<ConsumeEnvelope>> | undefined;
+  let envelopeSource: AsyncGenerator<ConsumeEnvelope> | undefined;
 
   AfterAllScenarios(async () => {
     await envelopeSource?.return(undefined);
@@ -117,7 +118,80 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
     }
   };
 
-  Scenario("Bridge event flows from NATS into SurrealDB", ({ Given, When, And, Then }) => {
+  const publishWitness = async (aux: string) => {
+    const connection = await connect({ servers: natsUrl });
+    try {
+      connection.publish(
+        "zeko.l1.outer-actions",
+        textEncoder.encode(
+          JSON.stringify({
+            schemaVersion: 1,
+            provider: "mina",
+            network: "zeko-m-devnet",
+            source: "l1-watcher",
+            observedAt: timestamp,
+            block: {
+              height: 5010,
+              hash: "l1-block-5010",
+              parentHash: "l1-block-5009",
+              slot: 130,
+              timestamp,
+              confirmationDepth: 12,
+            },
+            subject: "zeko.l1.outer-actions",
+            outerActionId: `runtime-witness-${aux}`,
+            txHash: `l1-witness-${aux}`,
+            accountUpdateId: `runtime-witness-au-${aux}`,
+            actionIndex: 0,
+            actionKind: "witness",
+            actionState: {
+              current: `runtime-witness-${aux}`,
+              vector: ["a", "b", "c", "d", "e"],
+              before: `runtime-before-${aux}`,
+              after: `runtime-witness-${aux}`,
+            },
+            rawFields: ["1", aux],
+            parsed: {
+              kind: "witness",
+              aux,
+              slotRange: { lower: 100, upper: 130 },
+            },
+            archive: {
+              transactionSequenceNumber: 5010,
+              chainStatus: "canonical",
+              distanceFromMaxBlockHeight: 0,
+            },
+          }),
+        ),
+      );
+      await connection.flush();
+    } finally {
+      await connection.close();
+    }
+  };
+
+  const consumeNextNatsMessage = async () => {
+    if (!envelopeSource) {
+      throw new Error("NATS envelope source is not started");
+    }
+    const nextEnvelope = pendingEnvelope ?? envelopeSource.next();
+    pendingEnvelope = undefined;
+    const result = await Promise.race([
+      nextEnvelope,
+      delay(5_000).then(() => {
+        throw new Error("Timed out waiting for NATS message");
+      }),
+    ]);
+    if (!result || result.done || !result.value) {
+      throw new Error("NATS envelope source ended before receiving a message");
+    }
+    await indexer.consume(result.value);
+  };
+
+  const RuntimeScenario =
+    process.env.ZEKO_INDEXER_RUN_RUNTIME_INTEGRATION === "1" ? Scenario : Scenario.skip;
+
+  RuntimeScenario("Bridge event flows from NATS into SurrealDB", ({ Given, When, And, Then }) => {
     Given("local NATS and SurrealDB are running", async () => {
       await startNats();
       surrealEndpoint = await startSurreal();
@@ -125,7 +199,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
       await syncSchema(db);
       store = new InMemoryIndexerStore();
       indexer = new ZekoIndexer(store);
-      envelopeSource = consumeNatsEnvelopes({ servers: natsUrl, subject: "zeko.l1.bridge-events" });
+      envelopeSource = consumeNatsEnvelopes({ servers: natsUrl, subject: "zeko.l1.*" });
       pendingEnvelope = envelopeSource.next();
       await delay(100);
     });
@@ -135,29 +209,23 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         await publishDeposit(aux);
       },
     );
-    And("the indexer consumes one NATS message", async () => {
-      const result = await Promise.race([
-        pendingEnvelope,
-        delay(5_000).then(() => {
-          throw new Error("Timed out waiting for NATS message");
-        }),
-      ]);
-      if (!result || result.done || !result.value) {
-        throw new Error("NATS envelope source ended before receiving a message");
-      }
-      await indexer.consume(result.value);
+    And("an L1 witness is published on NATS for aux {string}", async (_context, aux: string) => {
+      await publishWitness(aux);
     });
-    And("the bridge projection is flushed to SurrealDB", async () => {
-      await writeBridgeProjectionToSurreal(
-        createSurrealHttpClient({
-          endpoint: surrealEndpoint,
-          namespace: "database_test",
-          database: db,
-          username: "root",
-          password: "root",
-        }),
-        store,
-      );
+    And("the indexer consumes two NATS messages", async () => {
+      await consumeNextNatsMessage();
+      await consumeNextNatsMessage();
+    });
+    And("the bridge projection is flushed to SurrealDB twice", async () => {
+      const client = createSurrealHttpClient({
+        endpoint: surrealEndpoint,
+        namespace: "database_test",
+        database: db,
+        username: "root",
+        password: "root",
+      });
+      await writeBridgeProjectionToSurreal(client, store);
+      await writeBridgeProjectionToSurreal(client, store);
     });
     Then(
       "SurrealDB stores a bridge operation for aux {string} with status {string}",
@@ -170,5 +238,13 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         expect(rows).toEqual([{ aux, status }]);
       },
     );
+    And("SurrealDB stores one L1 witness link", async () => {
+      const result = await runSql<Array<{ count: number }>>(
+        db,
+        'SELECT count() AS count FROM l1_action_link WHERE role = "witness" GROUP ALL;',
+      );
+      const rows = result.at(-1)?.result ?? [];
+      expect(rows).toEqual([{ count: 1 }]);
+    });
   });
 });

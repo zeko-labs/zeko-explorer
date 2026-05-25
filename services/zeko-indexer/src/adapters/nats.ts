@@ -33,7 +33,8 @@ export async function* consumeNatsEnvelopes(
       }
     }
   } finally {
-    await connection.drain();
+    subscription.unsubscribe();
+    await connection.close();
   }
 }
 
