@@ -16,6 +16,10 @@ Feature: Unified Zeko indexer
     Then exactly 1 transaction row exists
     And exactly 2 account activity rows exist
 
+  Scenario: Account activity preserves the sequencer changed account index
+    When the indexer consumes an account update for "B62qIndexed" with changed account index 42
+    Then account activity for "B62qIndexed" has activity_index 42
+
   Scenario: zkApp ingestion is schema-blind and stores raw event and action fields
     When the indexer consumes a zkApp transaction for ledger "ledger-zk-1"
     Then one zkapp_event row exists for account "B62qContract"
@@ -64,6 +68,10 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-finalized-replay" has settlement_status "finalized"
     And batch for ledger "ledger-finalized-replay" keeps settled_at "2026-05-13T00:00:00.000Z"
 
+  Scenario: Settlement stores the source L1 provider
+    When the indexer consumes an "ethereum" settlement message for ledger "ledger-ethereum-settlement"
+    Then batch for ledger "ledger-ethereum-settlement" has l1_chain "ethereum"
+
   Scenario: L2 rollback deletes derived zkApp rows and restores account snapshots
     Given the indexer consumed a zkApp transaction for ledger "ledger-keep"
     And the indexer consumed a follow-up zkApp transaction for ledger "ledger-reverted"
@@ -72,6 +80,7 @@ Feature: Unified Zeko indexer
     And no zkapp_event rows remain for target ledger "ledger-reverted"
     And no zkapp_action rows remain for target ledger "ledger-reverted"
     And account "B62qContract" has zkapp_state ["1", "1", "1", "1", "1", "1", "1", "1"]
+    And account "B62qContract" has last_activity_height 1
 
   Scenario: L2 rollback removes accounts first created by the reverted range
     Given the indexer consumed a payment transaction for ledger "ledger-account-keep"

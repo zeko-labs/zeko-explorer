@@ -22,8 +22,9 @@ const changedAccount = (
   nonce: number,
   zkappState?: readonly string[],
   actionState?: readonly string[],
+  index = 0,
 ): L2AccountChangeInput => ({
-  index: 0,
+  index,
   account: {
     public_key: publicKey,
     balance,
@@ -224,6 +225,29 @@ describeFeature(feature, ({ Scenario }) => {
     And("exactly {int} account activity rows exist", (_context, count: number) => {
       expect(store.accountActivities.size).toBe(count);
     });
+  });
+
+  Scenario("Account activity preserves the sequencer changed account index", ({ When, Then }) => {
+    When(
+      "the indexer consumes an account update for {string} with changed account index {int}",
+      async (_context, publicKey: string, activityIndex: number) => {
+        reset();
+        await consumePayment("ledger-indexed-account", undefined, [
+          changedAccount(publicKey, "100", 0, undefined, undefined, activityIndex),
+        ]);
+      },
+    );
+
+    Then(
+      "account activity for {string} has activity_index {int}",
+      (_context, publicKey: string, activityIndex: number) => {
+        expect(
+          [...store.accountActivities.values()].find(
+            (activity) => activity.account_public_key === publicKey,
+          )?.activity_index,
+        ).toBe(activityIndex);
+      },
+    );
   });
 
   Scenario(
@@ -528,6 +552,26 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("Settlement stores the source L1 provider", ({ When, Then }) => {
+    When(
+      "the indexer consumes an {string} settlement message for ledger {string}",
+      async (_context, provider: "mina" | "ethereum", ledger: string) => {
+        reset();
+        await indexer.consume({
+          subject: "zeko.l1.settlements",
+          payload: settlement(ledger, "settling", provider),
+        });
+      },
+    );
+
+    Then(
+      "batch for ledger {string} has l1_chain {string}",
+      (_context, ledger: string, provider: string) => {
+        expect(store.batchByLedger(ledger)?.l1_chain).toBe(provider);
+      },
+    );
+  });
+
   Scenario(
     "L2 rollback deletes derived zkApp rows and restores account snapshots",
     ({ Given, When, Then, And }) => {
@@ -568,6 +612,13 @@ describeFeature(feature, ({ Scenario }) => {
       And('account "B62qContract" has zkapp_state ["1", "1", "1", "1", "1", "1", "1", "1"]', () => {
         expect(store.accountByPublicKey("B62qContract")?.zkapp_state).toEqual([...oneState]);
       });
+
+      And(
+        "account {string} has last_activity_height {int}",
+        (_context, publicKey: string, height: number) => {
+          expect(store.accountByPublicKey(publicKey)?.last_activity_height).toBe(height);
+        },
+      );
     },
   );
 
@@ -904,9 +955,13 @@ const tsFilesUnder = async (dir: string): Promise<string[]> => {
   return files.flat();
 };
 
-const settlement = (ledger: string, finalityLevel: "settling" | "finalized" = "settling") => ({
+const settlement = (
+  ledger: string,
+  finalityLevel: "settling" | "finalized" = "settling",
+  provider: "mina" | "ethereum" = "mina",
+) => ({
   schemaVersion: 1,
-  provider: "mina",
+  provider,
   network: "zeko-m-devnet",
   source: "l1-watcher",
   subject: "zeko.l1.settlements",

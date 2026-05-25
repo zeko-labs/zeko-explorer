@@ -109,7 +109,8 @@ export class ZekoIndexer {
     this.#store.transactions.set(txHash, row);
     this.#store.ledgerOrder.push(event.target_ledger_hash);
 
-    event.changed_accounts.forEach((change, index) => {
+    event.changed_accounts.forEach((change) => {
+      const activityIndex = change.index;
       const publicKey = change.account.public_key;
       const previous = this.#store.accountByPublicKey(publicKey);
       const account: AccountRow = {
@@ -130,7 +131,7 @@ export class ZekoIndexer {
         search_text: publicKey,
       };
       this.#store.accounts.set(publicKey, account);
-      this.#store.accountActivities.set(`${txHash}:${publicKey}:${index}`, {
+      this.#store.accountActivities.set(`${txHash}:${publicKey}:${activityIndex}`, {
         id: this.#store.idFactory.newId(timestamp),
         account: account.id,
         account_public_key: publicKey,
@@ -138,10 +139,10 @@ export class ZekoIndexer {
         role: accountRole(event.command, publicKey),
         block_height: sequence,
         tx_index: 0,
-        activity_index: index,
+        activity_index: activityIndex,
         sort_block_height: -sequence,
         sort_tx_index: 0,
-        sort_activity_index: index,
+        sort_activity_index: activityIndex,
         timestamp,
         balance_before: previous?.balance,
         balance_after: account.balance,
@@ -205,7 +206,7 @@ export class ZekoIndexer {
         settlement_id: event.settlementId,
         proof_status: "proved",
         settlement_status: settlementStatus,
-        l1_chain: "mina",
+        l1_chain: event.provider,
         l1_block_height: event.block.height,
         l1_block_hash: event.block.hash,
         l1_tx_hash: event.txHash,
@@ -386,6 +387,8 @@ export class ZekoIndexer {
       account.action_state = latest.action_state_after;
       account.verification_key_hash = latest.verification_key_hash_after;
       account.zkapp_uri = latest.zkapp_uri_after;
+      account.last_activity_height = latest.block_height;
+      account.last_activity_at = latest.timestamp;
       this.#store.accounts.set(publicKey, account);
     }
   }

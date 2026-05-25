@@ -66,6 +66,7 @@ export type L2FinalityInput = {
 };
 
 export type L1SettlementInput = {
+  provider: "mina" | "ethereum";
   settlementId: string;
   eventType: "detected" | "finalized";
   finalityLevel: "settling" | "finalized";
