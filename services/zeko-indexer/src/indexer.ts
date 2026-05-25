@@ -323,6 +323,7 @@ export class ZekoIndexer {
         batch.target_ledger_hash,
         {
           settlement_status: "pending",
+          settlement_id: undefined,
           l1_tx_hash: undefined,
           l1_block_hash: undefined,
           l1_block_height: undefined,
@@ -450,8 +451,9 @@ export class ZekoIndexer {
     const rolledBack = this.#store.ledgerOrder.splice(ancestorIndex + 1);
     const rollbackScope = new Set(rolledBack);
     const detectedAt = normalizeTimestamp(event.timestamp);
+    const preRollbackAccounts = this.snapshotAccountsForRollback(rollbackScope);
     for (const ledgerHash of rolledBack) {
-      this.rollbackL2Ledger(ledgerHash, rollbackScope, detectedAt);
+      this.rollbackL2Ledger(ledgerHash, rollbackScope, detectedAt, preRollbackAccounts);
     }
   }
 
@@ -459,6 +461,7 @@ export class ZekoIndexer {
     ledgerHash: string,
     rollbackScope = new Set([ledgerHash]),
     detectedAt = normalizeTimestamp(Date.now()),
+    preRollbackAccounts = this.snapshotAccountsForRollback(rollbackScope),
   ): void {
     const invalidatedBatchIds = new Set(
       [...this.#store.batches.values()]
@@ -534,17 +537,17 @@ export class ZekoIndexer {
           );
         })
         .sort((left, right) => right.block_height - left.block_height)[0];
-      const account = this.#store.accountByPublicKey(publicKey);
-      if (!account) {
+      const beforeRollback = preRollbackAccounts.get(publicKey);
+      if (!beforeRollback) {
         continue;
       }
+      const account = this.#store.accountByPublicKey(publicKey) ?? { ...beforeRollback };
       const revertedActivity = [...this.#store.accountActivities.values()]
         .filter(
           (activity) =>
             activity.account_public_key === publicKey && activity.target_ledger_hash === ledgerHash,
         )
         .sort((left, right) => right.block_height - left.block_height)[0];
-      const beforeRollback = { ...account };
       if (!latest) {
         if (revertedActivity) {
           this.writeRollbackActivity(
@@ -578,6 +581,20 @@ export class ZekoIndexer {
         );
       }
     }
+  }
+
+  private snapshotAccountsForRollback(rollbackScope: Set<string>): Map<string, AccountRow> {
+    const publicKeys = new Set(
+      [...this.#store.accountActivities.values()]
+        .filter((activity) => rollbackScope.has(activity.target_ledger_hash))
+        .map((activity) => activity.account_public_key),
+    );
+    return new Map(
+      [...publicKeys]
+        .map((publicKey) => this.#store.accountByPublicKey(publicKey))
+        .filter((account): account is AccountRow => account !== undefined)
+        .map((account) => [account.public_key, { ...account }]),
+    );
   }
 
   private writeRollbackActivity(

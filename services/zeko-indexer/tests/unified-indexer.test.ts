@@ -1409,6 +1409,63 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "Multi-ledger L2 rollback activity uses the pre-rollback account snapshot",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed an account update for {string} with balance {string} on ledger {string}",
+        async (_context, publicKey: string, balance: string, ledger: string) => {
+          reset();
+          await consumePayment(ledger, undefined, [changedAccount(publicKey, balance, 0)]);
+        },
+      );
+
+      And(
+        "the indexer consumed an account update for {string} with balance {string} on ledger {string}",
+        async (_context, publicKey: string, balance: string, ledger: string) => {
+          await consumePayment(ledger, undefined, [changedAccount(publicKey, balance, 0)]);
+        },
+      );
+
+      And(
+        "the indexer consumed another account update for {string} with balance {string} on ledger {string}",
+        async (_context, publicKey: string, balance: string, ledger: string) => {
+          await consumePayment(ledger, undefined, [changedAccount(publicKey, balance, 0)]);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source, [changedAccount("B62qsender", "150", 0)]);
+        },
+      );
+
+      Then(
+        "rollback account activity for {string} on target ledger {string} records balance_before {string} and balance_after {string}",
+        (
+          _context,
+          publicKey: string,
+          ledger: string,
+          balanceBefore: string,
+          balanceAfter: string,
+        ) => {
+          expect(
+            [...store.accountActivities.values()].find(
+              (activity) =>
+                activity.account_public_key === publicKey &&
+                activity.target_ledger_hash === ledger &&
+                activity.role === "rollback",
+            ),
+          ).toMatchObject({
+            balance_before: balanceBefore,
+            balance_after: balanceAfter,
+          });
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Replayed reverted L2 messages do not replace the canonical ledger",
     ({ Given, And, When, Then }) => {
       Given(
@@ -2004,6 +2061,10 @@ describeFeature(feature, ({ Scenario }) => {
 
       And("batch for ledger {string} has no l1_tx_hash", (_context, ledger: string) => {
         expect(store.batchByLedger(ledger)?.l1_tx_hash).toBeUndefined();
+      });
+
+      And("batch for ledger {string} has no settlement_id", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.settlement_id).toBeUndefined();
       });
     },
   );

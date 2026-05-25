@@ -202,6 +202,13 @@ Feature: Unified Zeko indexer
     When the indexer consumes a replacement transaction from source ledger "ledger-canonical-a" to target ledger "ledger-canonical-d"
     Then account "B62qsender" has balance "100"
 
+  Scenario: Multi-ledger L2 rollback activity uses the pre-rollback account snapshot
+    Given the indexer consumed an account update for "B62qAudit" with balance "100" on ledger "ledger-audit-keep"
+    And the indexer consumed an account update for "B62qAudit" with balance "200" on ledger "ledger-audit-reverted-1"
+    And the indexer consumed another account update for "B62qAudit" with balance "300" on ledger "ledger-audit-reverted-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-audit-keep" to target ledger "ledger-audit-replacement"
+    Then rollback account activity for "B62qAudit" on target ledger "ledger-audit-reverted-2" records balance_before "300" and balance_after "100"
+
   Scenario: Replayed reverted L2 messages do not replace the canonical ledger
     Given the indexer consumed a payment transaction for ledger "ledger-replay-a"
     And the indexer consumed a payment transaction for ledger "ledger-replay-b"
@@ -286,6 +293,7 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-l1-rollback-replay" has settlement_status "pending"
     And batch for ledger "ledger-l1-rollback-replay" has no da_status
     And batch for ledger "ledger-l1-rollback-replay" has no l1_tx_hash
+    And batch for ledger "ledger-l1-rollback-replay" has no settlement_id
 
   Scenario: L1 rollback before settlement tombstones the delayed settlement
     Given the indexer consumed an L1 rollback affecting settlement "settlement-ledger-l1-rollback-before-batch"
