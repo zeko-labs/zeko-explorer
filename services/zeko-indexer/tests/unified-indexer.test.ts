@@ -193,6 +193,63 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeRepeatedZkappUpdates = async (targetLedgerHash: string, publicKey: string) => {
+    await indexer.consume({
+      subject: "zeko.l2.transactions",
+      payload: {
+        source_ledger_hash: store.syncStatus.get("l2-transactions")?.last_hash ?? "ledger-0",
+        target_ledger_hash: targetLedgerHash,
+        timestamp,
+        acc_set: "acc-set",
+        command: {
+          type: "zkapp_command",
+          hash: `tx-${targetLedgerHash}`,
+          sender: "B62qsender",
+          fee: "1",
+          nonce: 1,
+          account_updates: [
+            zkappUpdate(
+              publicKey,
+              oneState,
+              "action-repeat-1",
+              [["10"]],
+              [
+                {
+                  fields: ["100"],
+                  before_action_state: "action-repeat-0",
+                  action_state: "action-repeat-1",
+                },
+              ],
+            ),
+            zkappUpdate(
+              publicKey,
+              oneState,
+              "action-repeat-2",
+              [["20"]],
+              [
+                {
+                  fields: ["200"],
+                  before_action_state: "action-repeat-1",
+                  action_state: "action-repeat-2",
+                },
+              ],
+            ),
+          ],
+        },
+        changed_accounts: [
+          changedAccount("B62qsender", "999", 2),
+          changedAccount(publicKey, "500", 0, oneState, [
+            "action-repeat-2",
+            "action-repeat-1",
+            "action-repeat-0",
+            "0",
+            "0",
+          ]),
+        ],
+      },
+    });
+  };
+
   const consumeCommandlessDiff = async (
     targetLedgerHash: string,
     genesis = false,
@@ -446,6 +503,58 @@ describeFeature(feature, ({ Scenario }) => {
       },
     );
   });
+
+  Scenario(
+    "Repeated zkApp account updates for one account preserve all child rows",
+    ({ When, Then, And }) => {
+      When(
+        "the indexer consumes a zkApp transaction with repeated updates for {string} on ledger {string}",
+        async (_context, publicKey: string, ledger: string) => {
+          reset();
+          await consumeRepeatedZkappUpdates(ledger, publicKey);
+        },
+      );
+
+      Then(
+        "{int} zkapp_event rows exist for account {string}",
+        (_context, count: number, publicKey: string) => {
+          expect(store.zkappEventsByAccount(publicKey)).toHaveLength(count);
+        },
+      );
+
+      And('the zkapp_event rows store raw fields ["10"] and ["20"]', () => {
+        expect(
+          store.zkappEventsByAccount("B62qRepeatedContract").map((event) => event.fields),
+        ).toEqual([["10"], ["20"]]);
+      });
+
+      And(
+        "{int} zkapp_action rows exist for account {string}",
+        (_context, count: number, publicKey: string) => {
+          expect(store.zkappActionsByAccount(publicKey)).toHaveLength(count);
+        },
+      );
+
+      And('the zkapp_action rows store raw fields ["100"] and ["200"]', () => {
+        expect(
+          store.zkappActionsByAccount("B62qRepeatedContract").map((action) => action.fields),
+        ).toEqual([["100"], ["200"]]);
+      });
+
+      And(
+        "the zkapp child rows for {string} use indexes {int} and {int}",
+        (_context, publicKey: string, firstIndex: number, secondIndex: number) => {
+          expect(store.zkappEventsByAccount(publicKey).map((event) => event.event_index)).toEqual([
+            firstIndex,
+            secondIndex,
+          ]);
+          expect(
+            store.zkappActionsByAccount(publicKey).map((action) => action.action_index),
+          ).toEqual([firstIndex, secondIndex]);
+        },
+      );
+    },
+  );
 
   Scenario(
     "Fee transfer and genesis diffs are classified without commands",

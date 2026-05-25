@@ -48,6 +48,14 @@ Feature: Unified Zeko indexer
     And the zkapp_action row stores raw fields ["77"]
     And the zkapp_action row has before_action_state "0" and action_state "action-after-first-body"
 
+  Scenario: Repeated zkApp account updates for one account preserve all child rows
+    When the indexer consumes a zkApp transaction with repeated updates for "B62qRepeatedContract" on ledger "ledger-zk-repeated"
+    Then 2 zkapp_event rows exist for account "B62qRepeatedContract"
+    And the zkapp_event rows store raw fields ["10"] and ["20"]
+    And 2 zkapp_action rows exist for account "B62qRepeatedContract"
+    And the zkapp_action rows store raw fields ["100"] and ["200"]
+    And the zkapp child rows for "B62qRepeatedContract" use indexes 0 and 1
+
   Scenario: Fee transfer and genesis diffs are classified without commands
     When the indexer consumes a fee transfer diff for ledger "ledger-fee-1"
     Then the latest commandless transaction row has type "fee_transfer"

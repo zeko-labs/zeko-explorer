@@ -731,6 +731,8 @@ export class ZekoIndexer {
 
   private writeZkappChildren(event: L2TransactionInput, transaction: TransactionRow): void {
     const updates = event.command?.account_updates ?? [];
+    const eventIndexesByPublicKey = new Map<string, number>();
+    const actionIndexesByPublicKey = new Map<string, number>();
     for (const update of updates) {
       const publicKey = accountUpdatePublicKey(update);
       if (!publicKey) {
@@ -745,7 +747,9 @@ export class ZekoIndexer {
           candidate.transaction === transaction.id && candidate.account_public_key === publicKey,
       );
       const events = normalizeFieldArrays(update.events ?? update.body?.events ?? []);
-      events.forEach((fields, eventIndex) => {
+      events.forEach((fields) => {
+        const eventIndex = eventIndexesByPublicKey.get(publicKey) ?? 0;
+        eventIndexesByPublicKey.set(publicKey, eventIndex + 1);
         const key = `${transaction.hash}:${publicKey}:event:${eventIndex}`;
         if (this.#store.zkappEvents.has(key)) {
           return;
@@ -773,7 +777,9 @@ export class ZekoIndexer {
         beforeHead: activity?.action_state_before?.[0],
         afterHeads: activity?.action_state_after,
       });
-      actions.forEach((action, actionIndex) => {
+      actions.forEach((action) => {
+        const actionIndex = actionIndexesByPublicKey.get(publicKey) ?? 0;
+        actionIndexesByPublicKey.set(publicKey, actionIndex + 1);
         const key = `${transaction.hash}:${publicKey}:action:${actionIndex}`;
         if (this.#store.zkappActions.has(key)) {
           return;
