@@ -270,6 +270,8 @@ DEFINE INDEX OVERWRITE idx_batch_settlement ON TABLE batch FIELDS settlement_sta
 DEFINE INDEX OVERWRITE idx_batch_l1_tx ON TABLE batch FIELDS l1_chain, l1_tx_hash UNIQUE;
 DEFINE INDEX OVERWRITE idx_batch_da ON TABLE batch FIELDS da_status, sort_batch_height, id;
 
+-- DA attestations can arrive before the matching batch is indexed. This holding
+-- table lets the indexer make the later batch update idempotent by ledger hash.
 DEFINE TABLE OVERWRITE pending_da_attestation SCHEMAFULL;
 DEFINE FIELD OVERWRITE ledger_hash ON TABLE pending_da_attestation TYPE string;
 DEFINE FIELD OVERWRITE source ON TABLE pending_da_attestation TYPE "settlement" | "proved" | "da-direct";
@@ -286,6 +288,8 @@ DEFINE FIELD OVERWRITE updated_at ON TABLE pending_da_attestation TYPE datetime 
 DEFINE INDEX OVERWRITE idx_pending_da_hash ON TABLE pending_da_attestation FIELDS ledger_hash UNIQUE;
 DEFINE INDEX OVERWRITE idx_pending_da_received_at ON TABLE pending_da_attestation FIELDS received_at, ledger_hash;
 
+-- Immutable provider observation records. Batch rows carry the current explorer
+-- status; these rows preserve the raw evidence used to derive that status.
 DEFINE TABLE OVERWRITE da_attestation SCHEMAFULL;
 DEFINE FIELD OVERWRITE id ON TABLE da_attestation TYPE string;
 DEFINE FIELD OVERWRITE batch ON TABLE da_attestation TYPE record<batch>;
@@ -309,6 +313,8 @@ DEFINE INDEX OVERWRITE idx_da_attestation_batch ON TABLE da_attestation FIELDS b
 -- but their primary record IDs remain ULIDs for Relay consistency.
 --------------------------------------------------------------------------------
 
+-- L1 OUTER_PK commit/witness actions. Natural state-chain fields are indexed so
+-- bridge correlation can walk neighboring actions without materialized feeds.
 DEFINE TABLE OVERWRITE outer_action SCHEMAFULL;
 DEFINE FIELD OVERWRITE id ON TABLE outer_action TYPE string;
 DEFINE FIELD OVERWRITE after_state ON TABLE outer_action TYPE string;
@@ -343,6 +349,8 @@ DEFINE INDEX OVERWRITE idx_oa_kind_order ON TABLE outer_action FIELDS kind, bloc
 DEFINE INDEX OVERWRITE idx_oa_block_order ON TABLE outer_action FIELDS block_height, action_index, id;
 DEFINE INDEX OVERWRITE idx_oa_txn_hash ON TABLE outer_action FIELDS txn_hash;
 
+-- L2 INNER_PK actions parsed from L2 transactions. These are separate from
+-- `zkapp_action` because bridge matching relies on aux/action-state semantics.
 DEFINE TABLE OVERWRITE inner_action SCHEMAFULL;
 DEFINE FIELD OVERWRITE id ON TABLE inner_action TYPE string;
 DEFINE FIELD OVERWRITE after_state ON TABLE inner_action TYPE string;
@@ -377,6 +385,8 @@ DEFINE INDEX OVERWRITE idx_ia_ledger ON TABLE inner_action FIELDS target_ledger_
 -- hashes so reducer action chains can be walked by indexed lookup.
 --------------------------------------------------------------------------------
 
+-- Raw zkApp events keyed for transaction-detail fanout and emitting-account
+-- pagination. Contract-specific decoding stays outside the database model.
 DEFINE TABLE OVERWRITE zkapp_event SCHEMAFULL;
 DEFINE FIELD OVERWRITE id ON TABLE zkapp_event TYPE string;
 DEFINE FIELD OVERWRITE transaction ON TABLE zkapp_event TYPE record<transaction>;
@@ -401,6 +411,8 @@ DEFINE INDEX OVERWRITE idx_event_hash_order ON TABLE zkapp_event FIELDS transact
 DEFINE INDEX OVERWRITE idx_event_seq ON TABLE zkapp_event FIELDS sequence_number;
 DEFINE INDEX OVERWRITE idx_event_ledger ON TABLE zkapp_event FIELDS target_ledger_hash;
 
+-- Raw zkApp actions keyed for transaction-detail fanout, emitting-account
+-- pagination, and reducer action-state lookups.
 DEFINE TABLE OVERWRITE zkapp_action SCHEMAFULL;
 DEFINE FIELD OVERWRITE id ON TABLE zkapp_action TYPE string;
 DEFINE FIELD OVERWRITE transaction ON TABLE zkapp_action TYPE record<transaction>;
@@ -601,6 +613,8 @@ DEFINE INDEX OVERWRITE idx_bo_count ON TABLE bridge_operation COUNT;
 -- bridge correlations across L1/L2 actions and user-facing transactions.
 --------------------------------------------------------------------------------
 
+-- Transaction-account role edges for bounded transaction detail traversal.
+-- High-volume account feeds use scalar public-key indexes instead.
 DEFINE TABLE OVERWRITE account_transaction TYPE RELATION IN transaction OUT account ENFORCED SCHEMAFULL;
 DEFINE FIELD OVERWRITE role ON TABLE account_transaction TYPE "sender" | "receiver" | "fee_payer" | "touched";
 DEFINE FIELD OVERWRITE amount_delta ON TABLE account_transaction TYPE option<string>;
@@ -615,12 +629,16 @@ DEFINE INDEX OVERWRITE idx_account_tx_public_key_all_order ON TABLE account_tran
 DEFINE INDEX OVERWRITE idx_account_tx_public_key_role_order ON TABLE account_transaction FIELDS account_public_key, role, sort_block_height, sort_tx_index, in;
 DEFINE INDEX OVERWRITE idx_account_tx_unique ON TABLE account_transaction FIELDS in, out, role UNIQUE;
 
+-- Batch containment edges preserve per-batch transaction position while letting
+-- the transaction table remain the canonical query source.
 DEFINE TABLE OVERWRITE batch_transaction TYPE RELATION IN batch OUT transaction ENFORCED SCHEMAFULL;
 DEFINE FIELD OVERWRITE position ON TABLE batch_transaction TYPE int;
 DEFINE FIELD OVERWRITE created_at ON TABLE batch_transaction TYPE datetime DEFAULT time::now() READONLY;
 DEFINE INDEX OVERWRITE idx_batch_tx_batch ON TABLE batch_transaction FIELDS in, position UNIQUE;
 DEFINE INDEX OVERWRITE idx_batch_tx_transaction ON TABLE batch_transaction FIELDS out UNIQUE;
 
+-- L1 action-to-bridge evidence edges. The role distinguishes witness and commit
+-- evidence when rendering bridge operation detail.
 DEFINE TABLE OVERWRITE l1_action_link TYPE RELATION IN outer_action OUT bridge_operation ENFORCED SCHEMAFULL;
 DEFINE FIELD OVERWRITE role ON TABLE l1_action_link TYPE "witness" | "commit";
 DEFINE FIELD OVERWRITE created_at ON TABLE l1_action_link TYPE datetime DEFAULT time::now() READONLY;
@@ -628,6 +646,7 @@ DEFINE INDEX OVERWRITE idx_l1_link_in ON TABLE l1_action_link FIELDS in, role;
 DEFINE INDEX OVERWRITE idx_l1_link_out ON TABLE l1_action_link FIELDS out, role;
 DEFINE INDEX OVERWRITE idx_l1_link_unique ON TABLE l1_action_link FIELDS in, out, role UNIQUE;
 
+-- L2 bridge action evidence edges for mint/burn correlation.
 DEFINE TABLE OVERWRITE l2_action_link TYPE RELATION IN bridge_operation OUT inner_action ENFORCED SCHEMAFULL;
 DEFINE FIELD OVERWRITE role ON TABLE l2_action_link TYPE "mint" | "burn";
 DEFINE FIELD OVERWRITE created_at ON TABLE l2_action_link TYPE datetime DEFAULT time::now() READONLY;
@@ -635,6 +654,8 @@ DEFINE INDEX OVERWRITE idx_l2_link_in ON TABLE l2_action_link FIELDS in, role;
 DEFINE INDEX OVERWRITE idx_l2_link_out ON TABLE l2_action_link FIELDS out, role;
 DEFINE INDEX OVERWRITE idx_l2_link_unique ON TABLE l2_action_link FIELDS in, out, role UNIQUE;
 
+-- Optional links from bridge operations to the user-facing transactions that
+-- submitted, finalized, cancelled, or rolled back the operation.
 DEFINE TABLE OVERWRITE bridge_transaction_link TYPE RELATION IN bridge_operation OUT transaction ENFORCED SCHEMAFULL;
 DEFINE FIELD OVERWRITE role ON TABLE bridge_transaction_link TYPE "submit" | "l1_witness" | "l2_finalize" | "cancel" | "rollback";
 DEFINE FIELD OVERWRITE created_at ON TABLE bridge_transaction_link TYPE datetime DEFAULT time::now() READONLY;

@@ -17,5 +17,8 @@ config-variables: null
 # "ignore" is an array of regular expression patterns. Matched error messages
 # are ignored. This is similar to the "-ignore" command line option.
 paths:
-#  .github/workflows/**/*.yml:
-#    ignore: []
+  .github/workflows/ci.yaml:
+    ignore:
+      # GitHub Actions added service-container command support before the pinned
+      # actionlint version learned the key.
+      - 'unexpected key "command" for "services" section'

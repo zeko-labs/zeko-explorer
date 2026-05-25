@@ -2,12 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
+    "outDir": "../../.moon/cache/types/services/bridge-api",
+    "tsBuildInfoFile": "../../.moon/cache/types/services/bridge-api/tsconfig.tsbuildinfo",
     "paths": {
       "@zeko/domain": ["../../packages/domain/src/index.ts"],
       "@zeko/domain/*": ["../../packages/domain/src/*"]
-    },
-    "outDir": "../../.moon/cache/types/services/bridge-api",
-    "tsBuildInfoFile": "../../.moon/cache/types/services/bridge-api/tsconfig.tsbuildinfo"
+    }
   },
   "include": ["src/**/*.ts"],
   "references": [

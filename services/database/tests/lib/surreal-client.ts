@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -103,14 +103,14 @@ function toSurrealLiteral(value: SurrealParam): string {
   return JSON.stringify(value);
 }
 
-function queryParamNames(sql: string): Set<string> {
+function queryParamNames(surql: string): Set<string> {
   const referenced = new Set(
-    Array.from(sql.matchAll(/\$([a-zA-Z_][a-zA-Z0-9_]*)/g), (match) => match[1]).filter(
+    Array.from(surql.matchAll(/\$([a-zA-Z_][a-zA-Z0-9_]*)/g), (match) => match[1]).filter(
       (value): value is string => value !== undefined,
     ),
   );
   const localLets = new Set(
-    Array.from(sql.matchAll(/\bLET\s+\$([a-zA-Z_][a-zA-Z0-9_]*)/gi), (match) => match[1]).filter(
+    Array.from(surql.matchAll(/\bLET\s+\$([a-zA-Z_][a-zA-Z0-9_]*)/gi), (match) => match[1]).filter(
       (value): value is string => value !== undefined,
     ),
   );
@@ -119,10 +119,10 @@ function queryParamNames(sql: string): Set<string> {
 }
 
 export function buildLetBindings(
-  sql: string,
+  surql: string,
   params: Readonly<Record<string, SurrealParam>>,
 ): string {
-  const names = queryParamNames(sql);
+  const names = queryParamNames(surql);
   const bindings: string[] = [];
   for (const name of names) {
     assert.ok(Object.hasOwn(params, name), `Missing query param ${name}`);
@@ -133,11 +133,11 @@ export function buildLetBindings(
   return bindings.join("\n");
 }
 
-export function bindSqlParams(
-  sql: string,
+export function bindSurqlParams(
+  surql: string,
   params: Readonly<Record<string, SurrealParam>> = {},
 ): string {
-  return `${buildLetBindings(sql, params)}\n${sql}`;
+  return `${buildLetBindings(surql, params)}\n${surql}`;
 }
 
 async function waitForServer(url: string): Promise<void> {
@@ -179,7 +179,7 @@ export async function startSurreal(): Promise<string> {
     "--name",
     dockerContainer,
     "--publish",
-    `127.0.0.1:${port}:8000`,
+    `${port}:8000`,
     dockerImage,
     "start",
     "--no-banner",
@@ -211,6 +211,9 @@ export async function stopSurreal(): Promise<void> {
 }
 
 function surrealKitHost(): string {
+  if (process.env.DATABASE_TEST_SURREALKIT_HOST !== undefined) {
+    return process.env.DATABASE_TEST_SURREALKIT_HOST.replace(/\/$/, "");
+  }
   assert.ok(endpoint !== undefined, "SurrealDB server is not started");
   const url = new URL(endpoint);
   if (url.hostname === "127.0.0.1" || url.hostname === "localhost") {
@@ -258,35 +261,64 @@ async function runSurrealKit(
 ): Promise<void> {
   assert.ok(endpoint !== undefined, "SurrealDB server is not started");
   const image = process.env.SURREALKIT_IMAGE ?? "ghcr.io/surrealdb/surrealkit:latest";
-  await runProcess("docker", [
-    "run",
-    "--rm",
-    "--add-host",
-    "host.docker.internal:host-gateway",
-    "-v",
-    `${projectDir}:/work`,
-    "--workdir",
-    "/work",
-    image,
-    "--host",
-    surrealKitHost(),
-    "--ns",
-    surrealNamespace,
-    "--db",
-    db,
-    "--user",
-    "root",
-    "--pass",
-    "root",
-    ...args,
-  ]);
+  const copiedProjectDir =
+    projectDir === surrealKitDir ? await writableProjectCopy(projectDir) : undefined;
+  const workDir = copiedProjectDir ?? projectDir;
+  await chmodRecursive(workDir);
+  try {
+    await runProcess("docker", [
+      "run",
+      "--rm",
+      "--add-host",
+      "host.docker.internal:host-gateway",
+      "-v",
+      `${workDir}:/work`,
+      "--workdir",
+      "/work",
+      image,
+      "--host",
+      surrealKitHost(),
+      "--ns",
+      surrealNamespace,
+      "--db",
+      db,
+      "--user",
+      "root",
+      "--pass",
+      "root",
+      ...args,
+    ]);
+  } finally {
+    if (copiedProjectDir !== undefined) {
+      await rm(copiedProjectDir, { recursive: true, force: true });
+    }
+  }
+}
+
+async function writableProjectCopy(projectDir: string): Promise<string> {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), `zeko-surrealkit-${process.pid}-`));
+  await cp(projectDir, tempDir, { recursive: true });
+  return tempDir;
+}
+
+async function chmodRecursive(dir: string): Promise<void> {
+  await chmod(dir, 0o777);
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await chmodRecursive(entryPath);
+    } else {
+      await chmod(entryPath, 0o666);
+    }
+  }
 }
 
 export async function syncSchema(db: string): Promise<void> {
   await runSurrealKit(db, ["sync", "--fail-fast"]);
 }
 
-export async function seedSqlWithSurrealKit(db: string, sql: string): Promise<void> {
+export async function seedSurqlWithSurrealKit(db: string, surql: string): Promise<void> {
   const projectDir = await mkdtemp(path.join(os.tmpdir(), `spike008-surrealkit-${process.pid}-`));
   await mkdir(path.join(projectDir, "database", "seed"), { recursive: true });
   await writeFile(
@@ -294,7 +326,7 @@ export async function seedSqlWithSurrealKit(db: string, sql: string): Promise<vo
     "# Generated by spike 008 harness.\n",
     "utf8",
   );
-  await writeFile(path.join(projectDir, "database", "seed", "seed.surql"), sql, "utf8");
+  await writeFile(path.join(projectDir, "database", "seed", "seed.surql"), surql, "utf8");
   try {
     await runSurrealKit(db, ["seed"], projectDir);
   } finally {
@@ -302,9 +334,9 @@ export async function seedSqlWithSurrealKit(db: string, sql: string): Promise<vo
   }
 }
 
-export async function runSql<T = unknown>(
+export async function runSurql<T = unknown>(
   db: string,
-  sql: string,
+  surql: string,
   options: { readonly allowError?: boolean } = {},
 ): Promise<SurrealResult<T>[]> {
   assert.ok(endpoint !== undefined, "SurrealDB server is not started");
@@ -316,7 +348,7 @@ export async function runSql<T = unknown>(
       "Surreal-DB": db,
       Accept: "application/json",
     },
-    body: sql,
+    body: surql,
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`SurrealDB HTTP ${response.status}: ${text}`);
@@ -333,9 +365,9 @@ export async function queryFile<T = unknown>(
   name: string,
   params: Readonly<Record<string, SurrealParam>> = {},
 ): Promise<T> {
-  const sql = await readFile(path.join(serviceDir, "queries", `${name}.surql`), "utf8");
-  const boundSql = bindSqlParams(sql, params);
-  const result = await runSql<T>(db, boundSql);
+  const surql = await readFile(path.join(serviceDir, "queries", `${name}.surql`), "utf8");
+  const boundSurql = bindSurqlParams(surql, params);
+  const result = await runSurql<T>(db, boundSurql);
   const last = result.at(-1);
   assert.ok(last !== undefined, `Query ${name} produced no SurrealDB response`);
   return last.result;

@@ -4,12 +4,9 @@ layer: "library"
 stack: "backend"
 tags: ["surrealdb", "database"]
 
-dependsOn:
-  - "domain"
-
 fileGroups:
   tests:
-    - "tests/**/*.feature"
+    - "tests/features/**/*.feature"
     - "tests/**/*.ts"
     - "queries/**/*.surql"
     - "surrealkit/**/*.surql"
@@ -29,14 +26,17 @@ tasks:
     args: ["run", "--passWithNoTests", "--testTimeout=60000", "--hookTimeout=60000"]
     inputs:
       - "@group(tests)"
+      - "$DATABASE_TEST_SURREAL_ENDPOINT"
+      - "$DATABASE_TEST_SURREALKIT_HOST"
+      - "$DATABASE_TEST_SURREAL_IMAGE"
+      - "$DATABASE_TEST_SURREAL_PORT"
     options:
-      cache: false
       mergeArgs: "replace"
       mergeInputs: "replace"
 
-  migrate-local:
+  sync-local:
     command: "nu"
-    args: ["scripts/migrate-local.nu"]
+    args: ["scripts/sync-local.nu"]
     options:
       cache: false
       runInCI: false

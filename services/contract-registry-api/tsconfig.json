@@ -2,12 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
+    "outDir": "../../.moon/cache/types/services/contract-registry-api",
+    "tsBuildInfoFile": "../../.moon/cache/types/services/contract-registry-api/tsconfig.tsbuildinfo",
     "paths": {
       "@zeko/contract-schema": ["../../packages/contract-schema/src/index.ts"],
       "@zeko/contract-schema/*": ["../../packages/contract-schema/src/*"]
-    },
-    "outDir": "../../.moon/cache/types/services/contract-registry-api",
-    "tsBuildInfoFile": "../../.moon/cache/types/services/contract-registry-api/tsconfig.tsbuildinfo"
+    }
   },
   "include": ["worker-configuration.d.ts", "src/**/*.ts"],
   "references": [

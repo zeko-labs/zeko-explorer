@@ -62,9 +62,9 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: surrealdb-bootstrap
+  name: surrealdb-surrealkit
   labels:
-    app.kubernetes.io/name: surrealdb-bootstrap
+    app.kubernetes.io/name: surrealdb-surrealkit
     {{- include "zeko-explorer.labels" . | nindent 4 }}
 data:
   surrealkit.toml: |-
@@ -75,13 +75,17 @@ data:
 {{ .Files.Get "surrealkit/database/schema/000_schema.surql" | indent 4 }}
   seed.surql: |-
 {{ .Files.Get "surrealkit/database/seed/seed.surql" | indent 4 }}
+{{- range $path, $_ := .Files.Glob "surrealkit/migrations/*.surql" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: surrealdb-bootstrap
+  name: surrealdb-surrealkit
   labels:
-    app.kubernetes.io/name: surrealdb-bootstrap
+    app.kubernetes.io/name: surrealdb-surrealkit
     {{- include "zeko-explorer.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
@@ -90,11 +94,11 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: surrealdb-bootstrap
+        app.kubernetes.io/name: surrealdb-surrealkit
     spec:
       restartPolicy: OnFailure
       containers:
-        - name: surrealdb-bootstrap
+        - name: surrealdb-surrealkit
           image: {{ .Values.images.surrealkit | quote }}
           workingDir: /work
           command: ["/bin/sh", "-ceu"]
@@ -102,12 +106,12 @@ spec:
             - |
               surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} sync --fail-fast
           volumeMounts:
-            - name: bootstrap
+            - name: surrealkit
               mountPath: /work
       volumes:
-        - name: bootstrap
+        - name: surrealkit
           configMap:
-            name: surrealdb-bootstrap
+            name: surrealdb-surrealkit
             items:
               - key: surrealkit.toml
                 path: surrealkit.toml
@@ -117,3 +121,7 @@ spec:
                 path: database/schema/000_schema.surql
               - key: seed.surql
                 path: database/seed/seed.surql
+{{- range $path, $_ := .Files.Glob "surrealkit/migrations/*.surql" }}
+              - key: {{ base $path }}
+                path: migrations/{{ base $path }}
+{{- end }}

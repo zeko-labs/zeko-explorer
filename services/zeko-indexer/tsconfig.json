@@ -2,14 +2,14 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
+    "outDir": "../../.moon/cache/types/services/zeko-indexer",
+    "tsBuildInfoFile": "../../.moon/cache/types/services/zeko-indexer/tsconfig.tsbuildinfo",
     "paths": {
       "@zeko/database": ["../database/src/index.ts"],
       "@zeko/database/*": ["../database/src/*"],
       "@zeko/nats": ["../nats/src/index.ts"],
       "@zeko/nats/*": ["../nats/src/*"]
-    },
-    "outDir": "../../.moon/cache/types/services/zeko-indexer",
-    "tsBuildInfoFile": "../../.moon/cache/types/services/zeko-indexer/tsconfig.tsbuildinfo"
+    }
   },
   "include": ["src/**/*.ts"],
   "references": [

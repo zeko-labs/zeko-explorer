@@ -132,10 +132,6 @@ importers:
         version: link:../../packages/contract-schema
 
   services/database:
-    dependencies:
-      '@zeko/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
     devDependencies:
       '@amiceli/vitest-cucumber':
         specifier: 'catalog:'

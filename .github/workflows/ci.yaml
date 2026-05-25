@@ -11,6 +11,21 @@ jobs:
     permissions:
       contents: read
     runs-on: warp-ubuntu-latest-x64-8x
+    env:
+      DATABASE_TEST_SURREAL_ENDPOINT: http://127.0.0.1:8000
+      DATABASE_TEST_SURREALKIT_HOST: http://host.docker.internal:8000
+    services:
+      surrealdb:
+        image: surrealdb/surrealdb:v3
+        ports:
+          - 8000:8000
+        command: >-
+          start
+          --no-banner
+          --bind 0.0.0.0:8000
+          --username root
+          --password root
+          memory
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,5 +34,17 @@ jobs:
       - uses: moonrepo/setup-toolchain@v0
         with:
           auto-install: true
+
+      - name: Wait for SurrealDB service
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health >/dev/null; then
+              exit 0
+            fi
+            echo "Waiting for SurrealDB service (${attempt}/60)"
+            sleep 1
+          done
+
+          exit 1
 
       - run: moon ci --summary normal
