@@ -353,13 +353,17 @@ export class ZekoIndexer {
       signer,
     );
     if (batch) {
+      if (batch.settlement_status === "rolled_back") {
+        return;
+      }
       const patch =
         signers.length >= quorum
           ? {
               da_status: "attested" as const,
               da_source: chooseDaSource(batch.da_source, "da-direct"),
-              da_attested_at:
-                batch.da_source === "settlement" ? batch.da_attested_at : event.signedAt,
+              da_attested_at: shouldReplaceAttestedAt(batch.da_source, "da-direct")
+                ? event.signedAt
+                : batch.da_attested_at,
               da_implementation: event.implementation,
               da_quorum_threshold: quorum,
               da_signers: signers,
@@ -409,6 +413,7 @@ export class ZekoIndexer {
     for (const [ledgerHash, pending] of this.#store.pendingDa) {
       if (Date.parse(pending.received_at) <= cutoff) {
         this.#store.pendingDa.delete(ledgerHash);
+        this.#pendingDaSigners.delete(ledgerHash);
       }
     }
   }

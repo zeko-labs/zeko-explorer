@@ -202,6 +202,12 @@ Feature: Unified Zeko indexer
     Then after settlement batch for ledger "ledger-da-2" has da_status "attested" and da_source "settlement"
     And batch for ledger "ledger-da-2" records DA signers "PK_A" and "PK_B"
 
+  Scenario: Additional direct DA signers preserve the quorum attestation time
+    Given batch for ledger "ledger-da-time" is attested from source "da-direct" at "2026-05-13T00:00:00.000Z" with signers "PK_A" and "PK_B"
+    When the indexer consumes a valid DA signature for ledger "ledger-da-time" from "PK_C" at "2026-05-14T00:00:00.000Z"
+    Then batch for ledger "ledger-da-time" keeps da_attested_at "2026-05-13T00:00:00.000Z"
+    And batch for ledger "ledger-da-time" records DA signers "PK_A", "PK_B", and "PK_C"
+
   Scenario: Pending direct DA signatures keep precedence when proved finality creates the batch
     Given the indexer consumed valid DA signatures for ledger "ledger-da-direct-first" from "PK_A" and "PK_B"
     And the indexer consumed a payment transaction for ledger "ledger-da-direct-first"
@@ -232,6 +238,13 @@ Feature: Unified Zeko indexer
     Given pending DA attestation for "ledger-da-stale" was received 31 days ago
     When the pending DA pruner runs with a 30 day max age
     Then no pending DA attestation remains for "ledger-da-stale"
+
+  Scenario: Pruning stale pending direct DA signatures clears signer buffers
+    Given the indexer consumed a valid DA signature for ledger "ledger-da-pruned-signers" from "PK_A" at "2026-04-12T00:00:00.000Z"
+    When the pending DA pruner runs with a 30 day max age
+    And the indexer consumes a valid DA signature for ledger "ledger-da-pruned-signers" from "PK_B" at "2026-05-13T00:00:00.000Z"
+    Then pending DA attestation for "ledger-da-pruned-signers" records only DA signer "PK_B"
+    And pending DA attestation for "ledger-da-pruned-signers" has no attested_at
 
   Scenario: Restart resumes from durable sync state
     Given the indexer consumes a payment transaction for ledger "ledger-before-restart"

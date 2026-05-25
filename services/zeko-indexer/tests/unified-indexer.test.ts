@@ -81,7 +81,7 @@ describeFeature(feature, ({ Scenario }) => {
     store = new InMemoryIndexerStore();
     indexer = new ZekoIndexer(store, {
       da: {
-        authorizedSigners: new Set(["PK_A", "PK_B"]),
+        authorizedSigners: new Set(["PK_A", "PK_B", "PK_C"]),
         quorum: 2,
         verifySignature: () => true,
       },
@@ -1377,6 +1377,61 @@ describeFeature(feature, ({ Scenario }) => {
   });
 
   Scenario(
+    "Additional direct DA signers preserve the quorum attestation time",
+    ({ Given, When, Then, And }) => {
+      Given(
+        "batch for ledger {string} is attested from source {string} at {string} with signers {string} and {string}",
+        (
+          _context,
+          ledger: string,
+          source: "proved" | "settlement" | "da-direct",
+          attestedAt: string,
+          first: string,
+          second: string,
+        ) => {
+          reset();
+          store.upsertBatchForTest(ledger, {
+            da_status: "attested",
+            da_source: source,
+            da_attested_at: attestedAt,
+            da_quorum_threshold: 2,
+            da_signers: [
+              { publicKey: first, signedAt: attestedAt, instanceId: `instance-${first}` },
+              { publicKey: second, signedAt: attestedAt, instanceId: `instance-${second}` },
+            ],
+          });
+        },
+      );
+
+      When(
+        "the indexer consumes a valid DA signature for ledger {string} from {string} at {string}",
+        async (_context, ledger: string, publicKey: string, signedAt: string) => {
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey, signedAt),
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} keeps da_attested_at {string}",
+        (_context, ledger: string, attestedAt: string) => {
+          expect(store.batchByLedger(ledger)?.da_attested_at).toBe(attestedAt);
+        },
+      );
+
+      And(
+        "batch for ledger {string} records DA signers {string}, {string}, and {string}",
+        (_context, ledger: string, first: string, second: string, third: string) => {
+          expect(
+            store.batchByLedger(ledger)?.da_signers?.map((signer) => signer.publicKey),
+          ).toEqual([first, second, third]);
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Pending direct DA signatures keep precedence when proved finality creates the batch",
     ({ Given, And, When, Then }) => {
       Given(
@@ -1604,6 +1659,52 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario(
+    "Pruning stale pending direct DA signatures clears signer buffers",
+    ({ Given, When, And, Then }) => {
+      Given(
+        "the indexer consumed a valid DA signature for ledger {string} from {string} at {string}",
+        async (_context, ledger: string, publicKey: string, signedAt: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey, signedAt),
+          });
+        },
+      );
+
+      When(
+        "the pending DA pruner runs with a {int} day max age",
+        (_context, maxAgeDays: number) => {
+          indexer.prunePendingDa("2026-05-13T00:00:00.000Z", maxAgeDays);
+        },
+      );
+
+      And(
+        "the indexer consumes a valid DA signature for ledger {string} from {string} at {string}",
+        async (_context, ledger: string, publicKey: string, signedAt: string) => {
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey, signedAt),
+          });
+        },
+      );
+
+      Then(
+        "pending DA attestation for {string} records only DA signer {string}",
+        (_context, ledger: string, publicKey: string) => {
+          expect(store.pendingDa.get(ledger)?.signers?.map((signer) => signer.publicKey)).toEqual([
+            publicKey,
+          ]);
+        },
+      );
+
+      And("pending DA attestation for {string} has no attested_at", (_context, ledger: string) => {
+        expect(store.pendingDa.get(ledger)?.attested_at).toBeUndefined();
+      });
+    },
+  );
+
   Scenario("Restart resumes from durable sync state", ({ Given, When, And, Then }) => {
     Given(
       "the indexer consumes a payment transaction for ledger {string}",
@@ -1690,7 +1791,7 @@ const settlement = (
   },
 });
 
-const daSignature = (ledger: string, publicKey: string) => ({
+const daSignature = (ledger: string, publicKey: string, signedAt = timestamp) => ({
   schemaVersion: 1,
   implementation: "zeko-multisig-v1",
   ledgerHash: ledger,
@@ -1698,5 +1799,5 @@ const daSignature = (ledger: string, publicKey: string) => ({
   publicKey,
   signature: `sig-${publicKey}`,
   instanceId: `instance-${publicKey}`,
-  signedAt: timestamp,
+  signedAt,
 });
