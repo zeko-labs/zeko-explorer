@@ -21,6 +21,9 @@ Implementation choices not explicitly described in the PRD:
 - L2 `block_height` and `sequence_number` currently come from local consumption
   order because the current `zeko.l2.transactions` contract does not carry an
   explicit L2 height.
+- The in-memory account projection keys rows by `(public_key, token_id)` and
+  defaults public-key lookups to token `"1"` so custom-token accounts do not
+  overwrite the default token account.
 - zkApp actions with raw action arrays bind `before_action_state` / `action_state`
   from the pre/post account `action_state` snapshot vector. This slice does not
   port Poseidon action-state derivation.

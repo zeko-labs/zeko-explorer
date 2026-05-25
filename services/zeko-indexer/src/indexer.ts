@@ -1,6 +1,6 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
-import { type IndexerStore, normalizeTimestamp } from "./store";
+import { accountKey, type IndexerStore, normalizeTimestamp } from "./store";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -130,11 +130,12 @@ export class ZekoIndexer {
     event.changed_accounts.forEach((change) => {
       const activityIndex = change.index;
       const publicKey = change.account.public_key;
-      const previous = this.#store.accountByPublicKey(publicKey);
+      const tokenId = change.account.token_id ?? "1";
+      const previous = this.#store.accountByPublicKey(publicKey, tokenId);
       const account: AccountRow = {
         id: previous?.id ?? this.#store.idFactory.newId(timestamp),
         public_key: publicKey,
-        token_id: change.account.token_id ?? previous?.token_id ?? "1",
+        token_id: tokenId,
         balance: change.account.balance,
         nonce: change.account.nonce,
         delegate: change.account.delegate ?? previous?.delegate,
@@ -148,36 +149,39 @@ export class ZekoIndexer {
         last_activity_at: timestamp,
         search_text: publicKey,
       };
-      this.#store.accounts.set(publicKey, account);
-      this.#store.accountActivities.set(`${txHash}:${publicKey}:${activityIndex}`, {
-        id: this.#store.idFactory.newId(timestamp),
-        account: account.id,
-        account_public_key: publicKey,
-        transaction: row.id,
-        role: accountRole(event.command, publicKey),
-        block_height: sequence,
-        tx_index: 0,
-        activity_index: activityIndex,
-        sort_block_height: -sequence,
-        sort_tx_index: 0,
-        sort_activity_index: activityIndex,
-        timestamp,
-        balance_before: previous?.balance,
-        balance_after: account.balance,
-        nonce_before: previous?.nonce,
-        nonce_after: account.nonce,
-        delegate_before: previous?.delegate,
-        delegate_after: account.delegate,
-        zkapp_state_before: previous?.zkapp_state,
-        zkapp_state_after: account.zkapp_state,
-        action_state_before: previous?.action_state,
-        action_state_after: account.action_state,
-        verification_key_hash_before: previous?.verification_key_hash,
-        verification_key_hash_after: account.verification_key_hash,
-        zkapp_uri_before: previous?.zkapp_uri,
-        zkapp_uri_after: account.zkapp_uri,
-        target_ledger_hash: event.target_ledger_hash,
-      });
+      this.#store.accounts.set(accountKey(publicKey, account.token_id), account);
+      this.#store.accountActivities.set(
+        `${txHash}:${publicKey}:${account.token_id}:${activityIndex}`,
+        {
+          id: this.#store.idFactory.newId(timestamp),
+          account: account.id,
+          account_public_key: publicKey,
+          transaction: row.id,
+          role: accountRole(event.command, publicKey),
+          block_height: sequence,
+          tx_index: 0,
+          activity_index: activityIndex,
+          sort_block_height: -sequence,
+          sort_tx_index: 0,
+          sort_activity_index: activityIndex,
+          timestamp,
+          balance_before: previous?.balance,
+          balance_after: account.balance,
+          nonce_before: previous?.nonce,
+          nonce_after: account.nonce,
+          delegate_before: previous?.delegate,
+          delegate_after: account.delegate,
+          zkapp_state_before: previous?.zkapp_state,
+          zkapp_state_after: account.zkapp_state,
+          action_state_before: previous?.action_state,
+          action_state_after: account.action_state,
+          verification_key_hash_before: previous?.verification_key_hash,
+          verification_key_hash_after: account.verification_key_hash,
+          zkapp_uri_before: previous?.zkapp_uri,
+          zkapp_uri_after: account.zkapp_uri,
+          target_ledger_hash: event.target_ledger_hash,
+        },
+      );
     });
 
     if (event.command?.type === "zkapp_command") {
@@ -550,30 +554,30 @@ export class ZekoIndexer {
     const affectedAccounts = new Set(
       [...this.#store.accountActivities.values()]
         .filter((activity) => activity.target_ledger_hash === ledgerHash)
-        .map((activity) => activity.account_public_key),
+        .map((activity) => activity.account),
     );
-    for (const publicKey of affectedAccounts) {
+    for (const accountId of affectedAccounts) {
       const latest = [...this.#store.accountActivities.values()]
         .filter((activity) => {
           const transaction = [...this.#store.transactions.values()].find(
             (candidate) => candidate.id === activity.transaction,
           );
           return (
-            activity.account_public_key === publicKey &&
+            activity.account === accountId &&
             !rollbackScope.has(activity.target_ledger_hash) &&
             transaction?.status !== "reverted"
           );
         })
         .sort((left, right) => right.block_height - left.block_height)[0];
-      const beforeRollback = preRollbackAccounts.get(publicKey);
+      const beforeRollback = preRollbackAccounts.get(accountId);
       if (!beforeRollback) {
         continue;
       }
-      const account = this.#store.accountByPublicKey(publicKey) ?? { ...beforeRollback };
+      const account = this.#store.accountById(accountId) ?? { ...beforeRollback };
       const revertedActivity = [...this.#store.accountActivities.values()]
         .filter(
           (activity) =>
-            activity.account_public_key === publicKey && activity.target_ledger_hash === ledgerHash,
+            activity.account === accountId && activity.target_ledger_hash === ledgerHash,
         )
         .sort((left, right) => right.block_height - left.block_height)[0];
       if (!latest) {
@@ -586,7 +590,7 @@ export class ZekoIndexer {
             detectedAt,
           );
         }
-        this.#store.accounts.delete(publicKey);
+        this.#store.accounts.delete(accountKey(beforeRollback.public_key, beforeRollback.token_id));
         continue;
       }
       account.balance = latest.balance_after ?? account.balance;
@@ -598,7 +602,7 @@ export class ZekoIndexer {
       account.zkapp_uri = latest.zkapp_uri_after;
       account.last_activity_height = latest.block_height;
       account.last_activity_at = latest.timestamp;
-      this.#store.accounts.set(publicKey, account);
+      this.#store.accounts.set(accountKey(account.public_key, account.token_id), account);
       if (revertedActivity) {
         this.writeRollbackActivity(
           ledgerHash,
@@ -612,16 +616,16 @@ export class ZekoIndexer {
   }
 
   private snapshotAccountsForRollback(rollbackScope: Set<string>): Map<string, AccountRow> {
-    const publicKeys = new Set(
+    const accountIds = new Set(
       [...this.#store.accountActivities.values()]
         .filter((activity) => rollbackScope.has(activity.target_ledger_hash))
-        .map((activity) => activity.account_public_key),
+        .map((activity) => activity.account),
     );
     return new Map(
-      [...publicKeys]
-        .map((publicKey) => this.#store.accountByPublicKey(publicKey))
+      [...accountIds]
+        .map((accountId) => this.#store.accountById(accountId))
         .filter((account): account is AccountRow => account !== undefined)
-        .map((account) => [account.public_key, { ...account }]),
+        .map((account) => [account.id, { ...account }]),
     );
   }
 

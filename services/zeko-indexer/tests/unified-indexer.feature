@@ -24,6 +24,12 @@ Feature: Unified Zeko indexer
     When the indexer consumes an account update for "B62qIndexed" with changed account index 42
     Then account activity for "B62qIndexed" has activity_index 42
 
+  Scenario: Token accounts with the same public key remain distinct
+    When the indexer consumes token account updates for "B62qTokenHolder" on ledger "ledger-token-accounts"
+    Then account "B62qTokenHolder" with token "1" has balance "100"
+    And account "B62qTokenHolder" with token "2" has balance "200"
+    And token account activity rows for "B62qTokenHolder" point to distinct account records
+
   Scenario: zkApp ingestion is schema-blind and stores raw event and action fields
     When the indexer consumes a zkApp transaction for ledger "ledger-zk-1"
     Then one zkapp_event row exists for account "B62qContract"

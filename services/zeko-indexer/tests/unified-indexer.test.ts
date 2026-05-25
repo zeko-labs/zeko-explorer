@@ -381,6 +381,49 @@ describeFeature(feature, ({ Scenario }) => {
     );
   });
 
+  Scenario("Token accounts with the same public key remain distinct", ({ When, Then, And }) => {
+    When(
+      "the indexer consumes token account updates for {string} on ledger {string}",
+      async (_context, publicKey: string, ledger: string) => {
+        reset();
+        await consumePayment(ledger, undefined, [
+          changedAccount(publicKey, "100", 0, undefined, undefined, 0),
+          {
+            ...changedAccount(publicKey, "200", 0, undefined, undefined, 1),
+            account: {
+              ...changedAccount(publicKey, "200", 0).account,
+              token_id: "2",
+            },
+          },
+        ]);
+      },
+    );
+
+    Then(
+      "account {string} with token {string} has balance {string}",
+      (_context, publicKey: string, tokenId: string, balance: string) => {
+        expect(store.accountByPublicKey(publicKey, tokenId)?.balance).toBe(balance);
+      },
+    );
+
+    And(
+      "account {string} with token {string} has balance {string}",
+      (_context, publicKey: string, tokenId: string, balance: string) => {
+        expect(store.accountByPublicKey(publicKey, tokenId)?.balance).toBe(balance);
+      },
+    );
+
+    And(
+      "token account activity rows for {string} point to distinct account records",
+      (_context, publicKey: string) => {
+        const accountIds = [...store.accountActivities.values()]
+          .filter((activity) => activity.account_public_key === publicKey)
+          .map((activity) => activity.account);
+        expect(new Set(accountIds).size).toBe(2);
+      },
+    );
+  });
+
   Scenario(
     "zkApp ingestion is schema-blind and stores raw event and action fields",
     ({ When, Then, And }) => {

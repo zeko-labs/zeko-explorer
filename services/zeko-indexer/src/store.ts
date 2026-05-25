@@ -29,7 +29,8 @@ export type IndexerStore = {
   readonly rolledBackSettlementIds: Set<string>;
   readonly idFactory: IdFactory;
 
-  accountByPublicKey(publicKey: string): AccountRow | undefined;
+  accountByPublicKey(publicKey: string, tokenId?: string): AccountRow | undefined;
+  accountById(id: string): AccountRow | undefined;
   transactionByHash(hash: string): TransactionRow | undefined;
   batchByLedger(ledgerHash: string): BatchRow | undefined;
   accountActivityByLedger(ledgerHash: string): AccountActivityRow[];
@@ -90,8 +91,12 @@ export class InMemoryIndexerStore implements IndexerStore {
     this.idFactory = idFactory;
   }
 
-  accountByPublicKey(publicKey: string): AccountRow | undefined {
-    return this.accounts.get(publicKey);
+  accountByPublicKey(publicKey: string, tokenId = "1"): AccountRow | undefined {
+    return this.accounts.get(accountKey(publicKey, tokenId));
+  }
+
+  accountById(id: string): AccountRow | undefined {
+    return [...this.accounts.values()].find((account) => account.id === id);
   }
 
   transactionByHash(hash: string): TransactionRow | undefined {
@@ -171,3 +176,5 @@ export class InMemoryIndexerStore implements IndexerStore {
     return batch;
   }
 }
+
+export const accountKey = (publicKey: string, tokenId = "1"): string => `${publicKey}:${tokenId}`;
