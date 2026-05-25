@@ -9,7 +9,6 @@ jobs:
     name: Valid title
     permissions:
       contents: read
-      issues: write
       pull-requests: read
     runs-on: warp-ubuntu-latest-x64-2x
     steps:
@@ -17,8 +16,6 @@ jobs:
         uses: ytanikin/PRConventionalCommits@1.1.0
         with:
           task_types: '["feat","fix","docs","test","ci","refactor","perf","chore","revert","release"]'
-          add_label: true
-          custom_labels: '{"feat":"feature","fix":"fix","docs":"documentation","test":"test","ci":"CI/CD","refactor":"refactor","perf":"performance","chore":"chore","revert":"revert","release":"release"}'
 
   label-conflicts:
     name: Has conflicts
