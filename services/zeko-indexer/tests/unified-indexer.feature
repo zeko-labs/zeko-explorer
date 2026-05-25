@@ -78,6 +78,14 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-finality-rollback-2" has proof_status "pending"
     And batch for ledger "ledger-finality-rollback-2" has no da_status
 
+  Scenario: Delayed proved finality does not create pending DA for an already rolled-back L2 ledger
+    Given the indexer consumed a payment transaction for ledger "ledger-finality-no-batch-1"
+    And the indexer consumed a payment transaction for ledger "ledger-finality-no-batch-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-finality-no-batch-1" to target ledger "ledger-finality-no-batch-3"
+    And the indexer consumes a proved finality message for ledger "ledger-finality-no-batch-2"
+    Then no batch row exists for ledger "ledger-finality-no-batch-2"
+    And no pending DA attestation remains for "ledger-finality-no-batch-2"
+
   Scenario: Committed finality does not derive DA attestation
     Given a pending batch row exists for ledger "ledger-committed-1"
     When the indexer consumes a committed finality message for ledger "ledger-committed-1"
@@ -128,6 +136,14 @@ Feature: Unified Zeko indexer
     And the indexer consumes a settlement message for ledger "ledger-stale-settlement-2"
     Then batch for ledger "ledger-stale-settlement-2" has settlement_status "rolled_back"
     And transaction "tx-ledger-stale-settlement-2" is not linked to a batch
+
+  Scenario: Stale settlement does not create a batch for an already rolled-back L2 ledger
+    Given the indexer consumed a payment transaction for ledger "ledger-stale-no-batch-1"
+    And the indexer consumed a payment transaction for ledger "ledger-stale-no-batch-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-stale-no-batch-1" to target ledger "ledger-stale-no-batch-3"
+    And the indexer consumes a settlement message for ledger "ledger-stale-no-batch-2"
+    Then no batch row exists for ledger "ledger-stale-no-batch-2"
+    And transaction "tx-ledger-stale-no-batch-2" is not linked to a batch
 
   Scenario: Replayed settling settlement does not downgrade finalized batch
     Given the indexer consumed a finalized settlement message for ledger "ledger-finalized-replay"

@@ -234,7 +234,10 @@ export class ZekoIndexer {
     }
 
     const batch = this.#store.batchByLedger(event.ledger_hash);
-    if (batch?.settlement_status === "rolled_back") {
+    if (
+      batch?.settlement_status === "rolled_back" ||
+      this.ledgerHasRevertedTransactions(event.ledger_hash)
+    ) {
       return;
     }
     const indexedTargetLedger = [...this.#store.transactions.values()].some(
@@ -263,7 +266,10 @@ export class ZekoIndexer {
     }
     const incomingStatus = event.finalityLevel === "finalized" ? "finalized" : "settling";
     const existing = this.#store.batchByLedger(ledgerHash);
-    if (existing?.settlement_status === "rolled_back") {
+    if (
+      existing?.settlement_status === "rolled_back" ||
+      this.ledgerHasRevertedTransactions(ledgerHash)
+    ) {
       return;
     }
     const settlementStatus = chooseSettlementStatus(existing?.settlement_status, incomingStatus);
@@ -597,6 +603,13 @@ export class ZekoIndexer {
       zkapp_uri_after: after?.zkapp_uri,
       target_ledger_hash: ledgerHash,
     });
+  }
+
+  private ledgerHasRevertedTransactions(ledgerHash: string): boolean {
+    return [...this.#store.transactions.values()].some(
+      (transaction) =>
+        transaction.target_ledger_hash === ledgerHash && transaction.status === "reverted",
+    );
   }
 
   private linkTransactionsToBatch(ledgerHash: string, timestamp: string): void {

@@ -658,6 +658,56 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Delayed proved finality does not create pending DA for an already rolled-back L2 ledger",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      Then("no batch row exists for ledger {string}", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)).toBeUndefined();
+      });
+
+      And("no pending DA attestation remains for {string}", (_context, ledger: string) => {
+        expect(store.pendingDa.get(ledger)).toBeUndefined();
+      });
+    },
+  );
+
   Scenario("Committed finality does not derive DA attestation", ({ Given, When, Then }) => {
     Given("a pending batch row exists for ledger {string}", (_context, ledger: string) => {
       reset();
@@ -965,6 +1015,48 @@ describeFeature(feature, ({ Scenario }) => {
           expect(store.batchByLedger(ledger)?.settlement_status).toBe(settlementStatus);
         },
       );
+
+      And("transaction {string} is not linked to a batch", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.batch).toBeUndefined();
+      });
+    },
+  );
+
+  Scenario(
+    "Stale settlement does not create a batch for an already rolled-back L2 ledger",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then("no batch row exists for ledger {string}", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)).toBeUndefined();
+      });
 
       And("transaction {string} is not linked to a batch", (_context, hash: string) => {
         expect(store.transactionByHash(hash)?.batch).toBeUndefined();
