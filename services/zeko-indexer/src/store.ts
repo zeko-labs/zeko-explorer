@@ -4,6 +4,7 @@ import type {
   AccountRow,
   BatchRow,
   PendingDaAttestationRow,
+  PendingFinalityRow,
   SyncStatusRow,
   TransactionRow,
   ZkappActionRow,
@@ -22,6 +23,7 @@ export type IndexerStore = {
   readonly zkappActions: Map<string, ZkappActionRow>;
   readonly batches: Map<string, BatchRow>;
   readonly pendingDa: Map<string, PendingDaAttestationRow>;
+  readonly pendingFinality: Map<string, PendingFinalityRow>;
   readonly syncStatus: Map<string, SyncStatusRow>;
   readonly ledgerOrder: string[];
   readonly rolledBackSettlementIds: Set<string>;
@@ -78,6 +80,7 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly zkappActions = new Map<string, ZkappActionRow>();
   readonly batches = new Map<string, BatchRow>();
   readonly pendingDa = new Map<string, PendingDaAttestationRow>();
+  readonly pendingFinality = new Map<string, PendingFinalityRow>();
   readonly syncStatus = new Map<string, SyncStatusRow>();
   readonly ledgerOrder: string[] = [];
   readonly rolledBackSettlementIds = new Set<string>();

@@ -1624,6 +1624,55 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Proved finality before L2 transaction is materialized when the ledger arrives",
+    ({ When, And, Then }) => {
+      When(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      And(
+        "the indexer consumes a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has proof_status {string}",
+        (_context, ledger: string, proofStatus: string) => {
+          expect(store.batchByLedger(ledger)?.proof_status).toBe(proofStatus);
+        },
+      );
+
+      And(
+        "batch for ledger {string} has da_status {string} and da_source {string}",
+        (_context, ledger: string, status: string, source: string) => {
+          expect(store.batchByLedger(ledger)).toMatchObject({
+            da_status: status,
+            da_source: source,
+          });
+        },
+      );
+
+      And("no pending DA attestation remains for {string}", (_context, ledger: string) => {
+        expect(store.pendingDa.has(ledger)).toBe(false);
+      });
+    },
+  );
+
   Scenario("Direct DA signatures respect source precedence", ({ Given, When, Then, And }) => {
     Given(
       "batch for ledger {string} is attested from source {string}",

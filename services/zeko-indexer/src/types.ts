@@ -286,6 +286,11 @@ export type PendingDaAttestationRow = {
   signers?: DaSignerRow[];
 };
 
+export type PendingFinalityRow = {
+  ledger_hash: string;
+  proved_at: string;
+};
+
 export type SyncStatusRow = {
   source: string;
   status: "healthy" | "degraded" | "paused" | "failed";

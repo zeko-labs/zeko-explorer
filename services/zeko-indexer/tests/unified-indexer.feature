@@ -238,6 +238,13 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-da-1" has da_status "attested" and da_source "settlement"
     And no pending DA attestation remains for "ledger-da-1"
 
+  Scenario: Proved finality before L2 transaction is materialized when the ledger arrives
+    When the indexer consumes a proved finality message for ledger "ledger-finality-before-l2"
+    And the indexer consumes a payment transaction for ledger "ledger-finality-before-l2"
+    Then batch for ledger "ledger-finality-before-l2" has proof_status "proved"
+    And batch for ledger "ledger-finality-before-l2" has da_status "attested" and da_source "proved"
+    And no pending DA attestation remains for "ledger-finality-before-l2"
+
   Scenario: Direct DA signatures respect source precedence
     Given batch for ledger "ledger-da-2" is attested from source "proved"
     When the indexer consumes valid DA signatures for ledger "ledger-da-2" from "PK_A" and "PK_B"

@@ -193,6 +193,7 @@ export class ZekoIndexer {
       last_processed_at: timestamp,
     });
     this.linkTransactionsToBatch(event.target_ledger_hash, timestamp);
+    this.materializePendingFinality(event.target_ledger_hash);
   }
 
   private assertNewZkappActionStates(event: L2TransactionInput): void {
@@ -245,6 +246,10 @@ export class ZekoIndexer {
         transaction.status === "applied" && transaction.target_ledger_hash === event.ledger_hash,
     );
     if (!batch && !indexedTargetLedger) {
+      this.#store.pendingFinality.set(event.ledger_hash, {
+        ledger_hash: event.ledger_hash,
+        proved_at: event.timestamp,
+      });
       this.upsertPendingDa(event.ledger_hash, "proved", event.timestamp);
       return;
     }
@@ -256,6 +261,22 @@ export class ZekoIndexer {
     );
     this.linkTransactionsToBatch(event.ledger_hash, event.timestamp);
     this.applyDaAttestation(event.ledger_hash, "proved", event.timestamp);
+  }
+
+  private materializePendingFinality(ledgerHash: string): void {
+    const pending = this.#store.pendingFinality.get(ledgerHash);
+    if (!pending || this.ledgerHasRevertedTransactions(ledgerHash)) {
+      return;
+    }
+
+    this.#store.upsertBatch(
+      ledgerHash,
+      { proof_status: "proved", proved_at: pending.proved_at },
+      pending.proved_at,
+    );
+    this.linkTransactionsToBatch(ledgerHash, pending.proved_at);
+    this.applyDaAttestation(ledgerHash, "proved", pending.proved_at);
+    this.#store.pendingFinality.delete(ledgerHash);
   }
 
   consumeL1Settlement(event: L1SettlementInput): void {
@@ -301,6 +322,7 @@ export class ZekoIndexer {
     this.linkTransactionsToBatch(ledgerHash, observedAt);
     this.applyDaAttestation(ledgerHash, "settlement", observedAt);
     this.#store.pendingDa.delete(ledgerHash);
+    this.#store.pendingFinality.delete(ledgerHash);
   }
 
   consumeL1Rollback(event: L1RollbackInput): void {
