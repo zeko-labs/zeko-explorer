@@ -258,6 +258,9 @@ export class ZekoIndexer {
   consumeL1Settlement(event: L1SettlementInput): void {
     const ledgerHash = event.commit.ledgerHash;
     const observedAt = event.observedAt;
+    if (this.#store.rolledBackSettlementIds.has(event.settlementId)) {
+      return;
+    }
     const incomingStatus = event.finalityLevel === "finalized" ? "finalized" : "settling";
     const existing = this.#store.batchByLedger(ledgerHash);
     if (existing?.settlement_status === "rolled_back") {
@@ -302,6 +305,7 @@ export class ZekoIndexer {
       if (!batch) {
         continue;
       }
+      this.#store.rolledBackSettlementIds.add(settlementId);
       if (batch.da_status === "attested" && batch.da_source) {
         this.upsertPendingDa(batch.target_ledger_hash, batch.da_source, batch.da_attested_at, {
           implementation: batch.da_implementation,

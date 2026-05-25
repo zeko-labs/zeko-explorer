@@ -1778,6 +1778,67 @@ describeFeature(feature, ({ Scenario }) => {
   });
 
   Scenario(
+    "Replayed rolled-back settlements do not restore orphaned L1 fields",
+    ({ Given, When, And, Then }) => {
+      Given(
+        "the indexer consumed a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      When(
+        "the indexer consumes an L1 rollback affecting settlement {string}",
+        async (_context, settlementId: string) => {
+          await indexer.consume({
+            subject: "zeko.l1.rollbacks",
+            payload: {
+              schemaVersion: 1,
+              provider: "mina",
+              network: "zeko-m-devnet",
+              source: "l1-watcher",
+              subject: "zeko.l1.rollbacks",
+              rollbackId: `rollback-${settlementId}`,
+              detectedAt: timestamp,
+              commonAncestor: { height: 1, hash: "ancestor" },
+              orphanedBlocks: [{ height: 2, hash: "old", parentHash: "ancestor" }],
+              replacementBlocks: [{ height: 2, hash: "new", parentHash: "ancestor" }],
+              affected: {
+                settlementIds: [settlementId],
+                outerActionIds: [],
+                bridgeEventIds: [],
+              },
+            },
+          });
+        },
+      );
+
+      And(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has settlement_status {string}",
+        (_context, ledger: string, settlementStatus: string) => {
+          expect(store.batchByLedger(ledger)?.settlement_status).toBe(settlementStatus);
+        },
+      );
+
+      And("batch for ledger {string} has no da_status", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.da_status).toBeUndefined();
+      });
+
+      And("batch for ledger {string} has no l1_tx_hash", (_context, ledger: string) => {
+        expect(store.batchByLedger(ledger)?.l1_tx_hash).toBeUndefined();
+      });
+    },
+  );
+
+  Scenario(
     "L1 rollback preserves direct DA signer details for later rebinding",
     ({ Given, When, Then, And }) => {
       Given(

@@ -24,6 +24,7 @@ export type IndexerStore = {
   readonly pendingDa: Map<string, PendingDaAttestationRow>;
   readonly syncStatus: Map<string, SyncStatusRow>;
   readonly ledgerOrder: string[];
+  readonly rolledBackSettlementIds: Set<string>;
   readonly idFactory: IdFactory;
 
   accountByPublicKey(publicKey: string): AccountRow | undefined;
@@ -79,6 +80,7 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly pendingDa = new Map<string, PendingDaAttestationRow>();
   readonly syncStatus = new Map<string, SyncStatusRow>();
   readonly ledgerOrder: string[] = [];
+  readonly rolledBackSettlementIds = new Set<string>();
   readonly idFactory: IdFactory;
 
   constructor(idFactory: IdFactory = new UlidFactory()) {

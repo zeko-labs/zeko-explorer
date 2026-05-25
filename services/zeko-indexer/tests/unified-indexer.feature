@@ -253,6 +253,14 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-da-3" has no da_status
     And pending DA attestation for "ledger-da-3" has source "settlement"
 
+  Scenario: Replayed rolled-back settlements do not restore orphaned L1 fields
+    Given the indexer consumed a settlement message for ledger "ledger-l1-rollback-replay"
+    When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-l1-rollback-replay"
+    And the indexer consumes a settlement message for ledger "ledger-l1-rollback-replay"
+    Then batch for ledger "ledger-l1-rollback-replay" has settlement_status "pending"
+    And batch for ledger "ledger-l1-rollback-replay" has no da_status
+    And batch for ledger "ledger-l1-rollback-replay" has no l1_tx_hash
+
   Scenario: L1 rollback preserves direct DA signer details for later rebinding
     Given batch for ledger "ledger-da-rollback-signers" is directly attested with signers "PK_A" and "PK_B"
     When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-rollback-signers"

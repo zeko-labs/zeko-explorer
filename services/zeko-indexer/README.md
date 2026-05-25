@@ -29,3 +29,6 @@ Implementation choices not explicitly described in the PRD:
 - Direct `zeko.da.signatures` ingestion is included because the WEB-426 schema
   already contains the additive Spike 007 columns, even though Milestone 1
   correctness only depends on proved and settlement-derived DA status.
+- L1 rollback settlement tombstones are tracked in the store boundary so
+  at-least-once replay of an orphaned settlement ID cannot rebind cleared L1
+  fields before raw rollback-fact projection exists.
