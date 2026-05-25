@@ -37,6 +37,19 @@ const changedAccount = (
   },
 });
 
+const delegatedAccount = (
+  publicKey: string,
+  delegate: string,
+  balance = "100",
+  nonce = 0,
+): L2AccountChangeInput => ({
+  ...changedAccount(publicKey, balance, nonce),
+  account: {
+    ...changedAccount(publicKey, balance, nonce).account,
+    delegate,
+  },
+});
+
 const zkappUpdate = (
   publicKey: string,
   _state: readonly string[],
@@ -148,6 +161,7 @@ describeFeature(feature, ({ Scenario }) => {
     targetLedgerHash: string,
     publicKey: string,
     sourceLedgerHash = store.syncStatus.get("l2-transactions")?.last_hash ?? "ledger-0",
+    actionState = "action-after-body",
   ) => {
     await indexer.consume({
       subject: "zeko.l2.transactions",
@@ -167,7 +181,7 @@ describeFeature(feature, ({ Scenario }) => {
         changed_accounts: [
           changedAccount("B62qsender", "999", 2),
           changedAccount(publicKey, "500", 0, oneState, [
-            "action-after-body",
+            actionState,
             "action-before-body",
             "0",
             "0",
@@ -386,6 +400,34 @@ describeFeature(feature, ({ Scenario }) => {
       );
     },
   );
+
+  Scenario("First raw zkApp action uses the genesis action state", ({ When, Then, And }) => {
+    When(
+      "the indexer consumes a first body-shaped zkApp transaction for {string} on ledger {string}",
+      async (_context, publicKey: string, ledger: string) => {
+        reset();
+        await consumeBodyShapedZkapp(ledger, publicKey, undefined, "action-after-first-body");
+      },
+    );
+
+    Then("one zkapp_action row exists for account {string}", (_context, publicKey: string) => {
+      expect(store.zkappActionsByAccount(publicKey)).toHaveLength(1);
+    });
+
+    And('the zkapp_action row stores raw fields ["77"]', () => {
+      expect(store.zkappActionsByAccount("B62qFirstBodyContract")[0]?.fields).toEqual(["77"]);
+    });
+
+    And(
+      "the zkapp_action row has before_action_state {string} and action_state {string}",
+      (_context, before: string, after: string) => {
+        expect(store.zkappActionsByAccount("B62qFirstBodyContract")[0]).toMatchObject({
+          before_action_state: before,
+          action_state: after,
+        });
+      },
+    );
+  });
 
   Scenario(
     "Fee transfer and genesis diffs are classified without commands",
@@ -742,6 +784,37 @@ describeFeature(feature, ({ Scenario }) => {
       });
     },
   );
+
+  Scenario("L2 rollback restores delegated account state", ({ Given, And, When, Then }) => {
+    Given(
+      "the indexer consumed an account update for {string} with delegate {string} on ledger {string}",
+      async (_context, publicKey: string, delegate: string, ledger: string) => {
+        reset();
+        await consumePayment(ledger, undefined, [delegatedAccount(publicKey, delegate)]);
+      },
+    );
+
+    And(
+      "the indexer consumed an account update for {string} with delegate {string} on ledger {string}",
+      async (_context, publicKey: string, delegate: string, ledger: string) => {
+        await consumePayment(ledger, undefined, [delegatedAccount(publicKey, delegate)]);
+      },
+    );
+
+    When(
+      "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+      async (_context, source: string, target: string) => {
+        await consumePayment(target, source, [changedAccount("B62qsender", "150", 0)]);
+      },
+    );
+
+    Then(
+      "account {string} has delegate {string}",
+      (_context, publicKey: string, delegate: string) => {
+        expect(store.accountByPublicKey(publicKey)?.delegate).toBe(delegate);
+      },
+    );
+  });
 
   Scenario(
     "Later rollbacks do not restore account state from reverted ledgers",

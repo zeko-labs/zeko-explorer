@@ -28,6 +28,7 @@ export type ZekoIndexerOptions = {
 };
 
 const L2_SOURCE = "l2-transactions";
+const GENESIS_ACTION_STATE = "0";
 const PRECEDENCE: Record<DaSource, number> = {
   proved: 1,
   "da-direct": 2,
@@ -155,6 +156,8 @@ export class ZekoIndexer {
         balance_after: account.balance,
         nonce_before: previous?.nonce,
         nonce_after: account.nonce,
+        delegate_before: previous?.delegate,
+        delegate_after: account.delegate,
         zkapp_state_before: previous?.zkapp_state,
         zkapp_state_after: account.zkapp_state,
         action_state_before: previous?.action_state,
@@ -390,6 +393,7 @@ export class ZekoIndexer {
       }
       account.balance = latest.balance_after ?? account.balance;
       account.nonce = latest.nonce_after ?? account.nonce;
+      account.delegate = latest.delegate_after;
       account.zkapp_state = latest.zkapp_state_after;
       account.action_state = latest.action_state_after;
       account.verification_key_hash = latest.verification_key_hash_after;
@@ -657,7 +661,7 @@ const actionStateBefore = (
   state: ActionStateContext,
 ): string | undefined => {
   if (actionIndex === 0) {
-    return state.beforeHead;
+    return state.beforeHead ?? GENESIS_ACTION_STATE;
   }
   return state.afterHeads?.[actionCount - actionIndex];
 };

@@ -38,6 +38,12 @@ Feature: Unified Zeko indexer
     And the zkapp_action row stores raw fields ["77"]
     And the zkapp_action row has before_action_state "action-before-body" and action_state "action-after-body"
 
+  Scenario: First raw zkApp action uses the genesis action state
+    When the indexer consumes a first body-shaped zkApp transaction for "B62qFirstBodyContract" on ledger "ledger-zk-body-first"
+    Then one zkapp_action row exists for account "B62qFirstBodyContract"
+    And the zkapp_action row stores raw fields ["77"]
+    And the zkapp_action row has before_action_state "0" and action_state "action-after-first-body"
+
   Scenario: Fee transfer and genesis diffs are classified without commands
     When the indexer consumes a fee transfer diff for ledger "ledger-fee-1"
     Then the latest commandless transaction row has type "fee_transfer"
@@ -96,6 +102,12 @@ Feature: Unified Zeko indexer
     And the indexer consumed a payment transaction creating account "B62qNewAccount" for ledger "ledger-account-reverted"
     When the indexer consumes a replacement transaction from source ledger "ledger-account-keep" to target ledger "ledger-account-replacement"
     Then account "B62qNewAccount" no longer exists
+
+  Scenario: L2 rollback restores delegated account state
+    Given the indexer consumed an account update for "B62qDelegator" with delegate "B62qDelegateA" on ledger "ledger-delegate-keep"
+    And the indexer consumed an account update for "B62qDelegator" with delegate "B62qDelegateB" on ledger "ledger-delegate-reverted"
+    When the indexer consumes a replacement transaction from source ledger "ledger-delegate-keep" to target ledger "ledger-delegate-replacement"
+    Then account "B62qDelegator" has delegate "B62qDelegateA"
 
   Scenario: Later rollbacks do not restore account state from reverted ledgers
     Given the indexer consumed an account update for "B62qsender" with balance "100" on ledger "ledger-canonical-a"

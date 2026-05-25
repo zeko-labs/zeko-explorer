@@ -183,6 +183,8 @@ export type AccountActivityRow = {
   balance_after?: string;
   nonce_before?: number;
   nonce_after?: number;
+  delegate_before?: string;
+  delegate_after?: string;
   zkapp_state_before?: string[];
   zkapp_state_after?: string[];
   action_state_before?: string[];
