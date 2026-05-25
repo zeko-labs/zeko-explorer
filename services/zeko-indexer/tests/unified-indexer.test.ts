@@ -694,6 +694,90 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "Replayed reverted L2 messages do not replace the canonical ledger",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      When(
+        "the indexer consumes a replayed reverted transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      Then("transaction {string} is marked reverted", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.status).toBe("reverted");
+      });
+
+      And("transaction {string} is still applied", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.status).toBe("applied");
+      });
+
+      And(
+        "sync status for {string} has last_hash {string}",
+        (_context, source: string, lastHash: string) => {
+          expect(store.syncStatus.get(source)?.last_hash).toBe(lastHash);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "The first observed L2 diff can roll back to its source ledger",
+    ({ Given, When, Then, And }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      Then("transaction {string} is marked reverted", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.status).toBe("reverted");
+      });
+
+      And("transaction {string} is still applied", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.status).toBe("applied");
+      });
+
+      And(
+        "sync status for {string} has last_hash {string}",
+        (_context, source: string, lastHash: string) => {
+          expect(store.syncStatus.get(source)?.last_hash).toBe(lastHash);
+        },
+      );
+    },
+  );
+
   Scenario("Unknown L2 source hash pauses indexing for backfill", ({ Given, When, Then, And }) => {
     Given(
       "the indexer consumed a payment transaction for ledger {string}",

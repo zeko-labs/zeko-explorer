@@ -95,6 +95,22 @@ Feature: Unified Zeko indexer
     When the indexer consumes a replacement transaction from source ledger "ledger-canonical-a" to target ledger "ledger-canonical-d"
     Then account "B62qsender" has balance "100"
 
+  Scenario: Replayed reverted L2 messages do not replace the canonical ledger
+    Given the indexer consumed a payment transaction for ledger "ledger-replay-a"
+    And the indexer consumed a payment transaction for ledger "ledger-replay-b"
+    And the indexer consumes a replacement transaction from source ledger "ledger-replay-a" to target ledger "ledger-replay-c"
+    When the indexer consumes a replayed reverted transaction from source ledger "ledger-replay-a" to target ledger "ledger-replay-b"
+    Then transaction "tx-ledger-replay-b" is marked reverted
+    And transaction "tx-ledger-replay-c" is still applied
+    And sync status for "l2-transactions" has last_hash "ledger-replay-c"
+
+  Scenario: The first observed L2 diff can roll back to its source ledger
+    Given the indexer consumed a payment transaction for ledger "ledger-first-reverted"
+    When the indexer consumes a replacement transaction from source ledger "ledger-0" to target ledger "ledger-first-replacement"
+    Then transaction "tx-ledger-first-reverted" is marked reverted
+    And transaction "tx-ledger-first-replacement" is still applied
+    And sync status for "l2-transactions" has last_hash "ledger-first-replacement"
+
   Scenario: Unknown L2 source hash pauses indexing for backfill
     Given the indexer consumed a payment transaction for ledger "ledger-gap-before"
     When the indexer consumes a payment transaction from source ledger "ledger-missing" to target ledger "ledger-gap-after"
@@ -119,7 +135,7 @@ Feature: Unified Zeko indexer
   Scenario: L1 rollback preserves DA facts for later rebinding
     Given batch for ledger "ledger-da-3" is attested from source "settlement"
     When the indexer consumes an L1 rollback affecting settlement "settlement-ledger-da-3"
-    Then batch for ledger "ledger-da-3" has settlement_status "rolled_back"
+    Then batch for ledger "ledger-da-3" has settlement_status "pending"
     And pending DA attestation for "ledger-da-3" has source "settlement"
 
   Scenario: Pending DA attestations are pruned after the max age

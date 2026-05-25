@@ -76,7 +76,11 @@ export class ZekoIndexer {
   consumeL2Transaction(event: L2TransactionInput): void {
     const txHash = event.command?.hash ?? `${event.target_ledger_hash}:diff`;
     const existing = this.#store.transactionByHash(txHash);
-    if (existing?.status === "applied") {
+    if (
+      existing &&
+      existing.source_ledger_hash === event.source_ledger_hash &&
+      existing.target_ledger_hash === event.target_ledger_hash
+    ) {
       return;
     }
 
@@ -107,6 +111,9 @@ export class ZekoIndexer {
       raw_command: event.command ?? undefined,
     };
     this.#store.transactions.set(txHash, row);
+    if (this.#store.ledgerOrder.length === 0) {
+      this.#store.ledgerOrder.push(event.source_ledger_hash);
+    }
     this.#store.ledgerOrder.push(event.target_ledger_hash);
 
     event.changed_accounts.forEach((change) => {
@@ -236,7 +243,7 @@ export class ZekoIndexer {
       this.#store.upsertBatch(
         batch.target_ledger_hash,
         {
-          settlement_status: "rolled_back",
+          settlement_status: "pending",
           l1_tx_hash: undefined,
           l1_block_hash: undefined,
           l1_block_height: undefined,
