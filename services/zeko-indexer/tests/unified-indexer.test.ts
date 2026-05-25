@@ -779,6 +779,58 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "Stale settlements do not resurrect L2 rolled-back batches",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And(
+        "the indexer consumed a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And(
+        "the indexer consumes a settlement message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has settlement_status {string}",
+        (_context, ledger: string, settlementStatus: string) => {
+          expect(store.batchByLedger(ledger)?.settlement_status).toBe(settlementStatus);
+        },
+      );
+
+      And("transaction {string} is not linked to a batch", (_context, hash: string) => {
+        expect(store.transactionByHash(hash)?.batch).toBeUndefined();
+      });
+    },
+  );
+
+  Scenario(
     "Replayed settling settlement does not downgrade finalized batch",
     ({ Given, When, Then, And }) => {
       Given(
@@ -1262,6 +1314,63 @@ describeFeature(feature, ({ Scenario }) => {
       And("no pending DA attestation remains for {string}", (_context, ledger: string) => {
         expect(store.pendingDa.has(ledger)).toBe(false);
       });
+    },
+  );
+
+  Scenario(
+    "Sub-quorum direct DA signatures do not override proved finality",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "the indexer consumed a valid DA signature for ledger {string} from {string}",
+        async (_context, ledger: string, publicKey: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.da.signatures",
+            payload: daSignature(ledger, publicKey),
+          });
+        },
+      );
+
+      And(
+        "the indexer consumed a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      When(
+        "the indexer consumes a proved finality message for ledger {string}",
+        async (_context, ledger: string) => {
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+        },
+      );
+
+      Then(
+        "batch for ledger {string} has da_status {string} and da_source {string}",
+        (_context, ledger: string, status: string, source: string) => {
+          expect(store.batchByLedger(ledger)).toMatchObject({
+            da_status: status,
+            da_source: source,
+          });
+        },
+      );
+
+      And(
+        "batch for ledger {string} records DA signer {string}",
+        (_context, ledger: string, publicKey: string) => {
+          expect(
+            store.batchByLedger(ledger)?.da_signers?.map((signer) => signer.publicKey),
+          ).toEqual([publicKey]);
+        },
+      );
     },
   );
 

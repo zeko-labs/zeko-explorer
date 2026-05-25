@@ -214,6 +214,9 @@ export class ZekoIndexer {
     const observedAt = event.observedAt;
     const incomingStatus = event.finalityLevel === "finalized" ? "finalized" : "settling";
     const existing = this.#store.batchByLedger(ledgerHash);
+    if (existing?.settlement_status === "rolled_back") {
+      return;
+    }
     const settlementStatus = chooseSettlementStatus(existing?.settlement_status, incomingStatus);
     const downgradeFromFinalized =
       existing?.settlement_status === "finalized" && incomingStatus !== "finalized";
@@ -313,9 +316,7 @@ export class ZekoIndexer {
     this.#store.pendingDa.set(event.ledgerHash, {
       ledger_hash: event.ledgerHash,
       source:
-        signers.length >= quorum
-          ? chooseDaSource(pending?.source, "da-direct")
-          : (pending?.source ?? "da-direct"),
+        signers.length >= quorum ? chooseDaSource(pending?.source, "da-direct") : pending?.source,
       received_at: pending?.received_at ?? event.signedAt,
       attested_at:
         signers.length >= quorum && shouldReplaceAttestedAt(pending?.source, "da-direct")
@@ -566,10 +567,12 @@ export class ZekoIndexer {
     }
 
     const pending = this.#store.pendingDa.get(ledgerHash);
-    const incomingSource = chooseDaSource(pending?.source, source);
+    const incomingSource = pending?.source ? chooseDaSource(pending.source, source) : source;
     const nextSource = chooseDaSource(batch.da_source, incomingSource);
     const incomingAttestedAt =
-      incomingSource === pending?.source ? (pending.attested_at ?? attestedAt) : attestedAt;
+      pending?.source && incomingSource === pending.source
+        ? (pending.attested_at ?? attestedAt)
+        : attestedAt;
     this.#store.upsertBatch(
       ledgerHash,
       {

@@ -96,6 +96,15 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-rollback-batch-3" has transaction_count 2
     And transactions "tx-ledger-rollback-batch-1" and "tx-ledger-rollback-batch-3" are linked to batch for ledger "ledger-rollback-batch-3"
 
+  Scenario: Stale settlements do not resurrect L2 rolled-back batches
+    Given the indexer consumed a payment transaction for ledger "ledger-stale-settlement-1"
+    And the indexer consumed a payment transaction for ledger "ledger-stale-settlement-2"
+    And the indexer consumed a settlement message for ledger "ledger-stale-settlement-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-stale-settlement-1" to target ledger "ledger-stale-settlement-3"
+    And the indexer consumes a settlement message for ledger "ledger-stale-settlement-2"
+    Then batch for ledger "ledger-stale-settlement-2" has settlement_status "rolled_back"
+    And transaction "tx-ledger-stale-settlement-2" is not linked to a batch
+
   Scenario: Replayed settling settlement does not downgrade finalized batch
     Given the indexer consumed a finalized settlement message for ledger "ledger-finalized-replay"
     When the indexer consumes a settlement message for ledger "ledger-finalized-replay"
@@ -179,6 +188,13 @@ Feature: Unified Zeko indexer
     When the indexer consumes a proved finality message for ledger "ledger-da-direct-first"
     Then batch for ledger "ledger-da-direct-first" has da_status "attested" and da_source "da-direct"
     And no pending DA attestation remains for "ledger-da-direct-first"
+
+  Scenario: Sub-quorum direct DA signatures do not override proved finality
+    Given the indexer consumed a valid DA signature for ledger "ledger-da-subquorum" from "PK_A"
+    And the indexer consumed a payment transaction for ledger "ledger-da-subquorum"
+    When the indexer consumes a proved finality message for ledger "ledger-da-subquorum"
+    Then batch for ledger "ledger-da-subquorum" has da_status "attested" and da_source "proved"
+    And batch for ledger "ledger-da-subquorum" records DA signer "PK_A"
 
   Scenario: L1 rollback preserves DA facts for later rebinding
     Given batch for ledger "ledger-da-3" is attested from source "settlement"

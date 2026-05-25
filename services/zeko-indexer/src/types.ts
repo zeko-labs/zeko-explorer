@@ -270,7 +270,7 @@ export type BatchRow = {
 
 export type PendingDaAttestationRow = {
   ledger_hash: string;
-  source: DaSource;
+  source?: DaSource;
   attested_at?: string;
   received_at: string;
   implementation?: string;
