@@ -1,4 +1,4 @@
-import { describeFeature, type loadFeature } from "@amiceli/vitest-cucumber";
+import { describeFeature, type loadFeature, type StepTest } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
   parseParam,
@@ -29,7 +29,7 @@ type TestWorld = {
 };
 
 type DatabaseFeature = Awaited<ReturnType<typeof loadFeature>>;
-type StepDefinitions = Parameters<Parameters<typeof describeFeature>[1]>[0];
+type StepDefinition = StepTest["Given"];
 
 let scenarioCount = 0;
 let world: TestWorld = newWorld();
@@ -307,7 +307,7 @@ UPDATE batch SET da_status = "attested", da_source = "da-direct", da_attested_at
             world.db,
             `SELECT * FROM account WHERE public_key = "${publicKey}";`,
           );
-          const result = rows.at(-1)?.result;
+          const result = rows.at(-1)?.result ?? [];
           expect(result).toEqual(expect.any(Array));
           expect(result).toHaveLength(2);
           world.lastResult = await queryFile<Row[]>(world.db, "account-profile-overview", {
@@ -440,17 +440,22 @@ async function findBatchByTargetLedgerHash(targetLedgerHash: string): Promise<Ro
     world.db,
     `SELECT * FROM batch WHERE target_ledger_hash = "${targetLedgerHash}";`,
   );
-  const result = rows.at(-1)?.result;
+  const result = rows.at(-1)?.result ?? [];
   expect(result).toEqual(expect.any(Array));
   return result[0];
 }
 
 function firstExactSearchResult(): Row {
-  const first = Array.isArray(world.lastResult)
-    ? world.lastResult[0]
-    : (world.lastResult as unknown as Row);
-  expect(first).toBeDefined();
-  return first as Row;
+  const result: unknown = world.lastResult;
+  const first = Array.isArray(result) ? result[0] : result;
+  if (!isRow(first)) {
+    throw new Error("Expected exact search result row");
+  }
+  return first;
+}
+
+function isRow(value: unknown): value is Row {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function reIncludedTransactionSurql(
@@ -465,10 +470,7 @@ CREATE transaction:${id} SET hash = "${hash}", sequence_number = 1000, type = "p
 `;
 }
 
-function defineAliases(
-  first: StepDefinitions["Given"],
-  second: StepDefinitions["And"],
-): StepDefinitions["Given"] {
+function defineAliases(first: StepDefinition, second: StepDefinition): StepDefinition {
   return (name, callback) => {
     first(name, callback);
     second(name, callback);

@@ -1,5 +1,5 @@
-import type { IndexerStore } from "./store";
-import type { DaSignatureInput, DaSignerRow } from "./types";
+import type { IndexerStore } from "#src/store";
+import type { DaSignatureInput, DaSignerRow } from "#src/types";
 
 export type ZekoIndexerOptions = {
   da?: {

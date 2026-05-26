@@ -83,6 +83,40 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario("Runtime config propagates NATS throughput limits", ({ When, Then, And }) => {
+    When(
+      "the runtime config is resolved with NATS batch size {int} and max in-flight {int}",
+      async (_context, batchSize: number, maxInFlight: number) => {
+        sourceConfigs = [];
+        config = resolveIndexerRuntimeConfig({
+          ZEKO_INDEXER_NATS_BATCH_SIZE: String(batchSize),
+          ZEKO_INDEXER_NATS_MAX_IN_FLIGHT: String(maxInFlight),
+        });
+        const runtime = createIndexerRuntime(config, {
+          createEnvelopeSource: (sourceConfig) => {
+            sourceConfigs.push(sourceConfig);
+            return finiteSource([]);
+          },
+          writeProjection: async () => {},
+        });
+        await runtime.done;
+      },
+    );
+
+    Then("every runtime source reader pulls batches of {int} messages", (_context, batchSize) => {
+      expect(sourceConfigs).toHaveLength(3);
+      expect(sourceConfigs.every((sourceConfig) => sourceConfig.batchSize === batchSize)).toBe(
+        true,
+      );
+    });
+
+    And("every runtime source reader allows {int} in-flight messages", (_context, maxInFlight) => {
+      expect(sourceConfigs.every((sourceConfig) => sourceConfig.maxInFlight === maxInFlight)).toBe(
+        true,
+      );
+    });
+  });
+
   Scenario("Runtime config wires direct DA signature verification", ({ When, Then, And }) => {
     When("the runtime config is resolved with a signed direct DA event", () => {
       const privateKey = PrivateKey.random();

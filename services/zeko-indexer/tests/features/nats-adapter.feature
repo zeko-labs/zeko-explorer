@@ -12,6 +12,11 @@ Feature: NATS envelope source configuration
     Then the source consumes stream "zeko-l2"
     And the source filters subject "zeko.l2.*"
 
+  Scenario: Source config exposes pull batch and in-flight limits
+    When the NATS envelope source config is resolved with batch size 25 and max in-flight 50
+    Then the source pulls batches of 25 messages
+    And the source allows 50 in-flight messages
+
   Scenario: Invalid subscribed payloads are acknowledged and dropped
     When a schema-invalid NATS message is consumed on subject "zeko.da.signatures"
     Then the NATS message is acknowledged

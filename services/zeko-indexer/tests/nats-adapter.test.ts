@@ -46,6 +46,27 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("Source config exposes pull batch and in-flight limits", ({ When, Then, And }) => {
+    When(
+      "the NATS envelope source config is resolved with batch size {int} and max in-flight {int}",
+      (_context, batchSize: number, maxInFlight: number) => {
+        resolved = resolveNatsEnvelopeSourceConfig({
+          servers: "nats://127.0.0.1:4222",
+          batchSize,
+          maxInFlight,
+        });
+      },
+    );
+
+    Then("the source pulls batches of {int} messages", (_context, batchSize: number) => {
+      expect(resolved.batchSize).toBe(batchSize);
+    });
+
+    And("the source allows {int} in-flight messages", (_context, maxInFlight: number) => {
+      expect(resolved.maxInFlight).toBe(maxInFlight);
+    });
+  });
+
   Scenario("Invalid subscribed payloads are acknowledged and dropped", ({ When, Then, And }) => {
     When(
       "a schema-invalid NATS message is consumed on subject {string}",

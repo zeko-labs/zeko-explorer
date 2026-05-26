@@ -540,16 +540,15 @@ function datetime(value: string): DateTimeSurql {
 }
 
 function isRaw(value: SurqlValue): value is RawSurql {
-  return (
-    typeof value === "object" && value !== null && !Array.isArray(value) && value.kind === "raw"
-  );
+  return isSurqlObject(value) && value.kind === "raw";
 }
 
 function isDateTime(value: SurqlValue): value is DateTimeSurql {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    value.kind === "datetime"
-  );
+  return isSurqlObject(value) && value.kind === "datetime";
+}
+
+function isSurqlObject(
+  value: SurqlValue,
+): value is RawSurql | DateTimeSurql | { readonly [key: string]: SurqlValue } {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

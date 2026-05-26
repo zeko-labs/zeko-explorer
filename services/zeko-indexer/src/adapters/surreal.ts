@@ -1,7 +1,5 @@
 import { Surreal } from "surrealdb";
-import type { BridgeProjectionRemovals, CoreProjectionRemovals, IndexerStore } from "../store";
-import type { BridgeOperationRow, InnerActionRow, OuterActionRow, TransactionRow } from "../types";
-import { coreProjectionStatements } from "./surreal-core";
+import { coreProjectionStatements } from "#src/adapters/surreal-core";
 import {
   date,
   deleteRecord,
@@ -9,7 +7,14 @@ import {
   stripUndefined,
   upsertRecord,
   upsertRelation,
-} from "./surrealql";
+} from "#src/adapters/surrealql";
+import type { BridgeProjectionRemovals, CoreProjectionRemovals, IndexerStore } from "#src/store";
+import type {
+  BridgeOperationRow,
+  InnerActionRow,
+  OuterActionRow,
+  TransactionRow,
+} from "#src/types";
 
 export type SurrealConfig = {
   endpoint: string;

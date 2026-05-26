@@ -13,6 +13,11 @@ Feature: Indexer runtime process
     Then the runtime consumes streams "zeko-l1,zeko-l2,zeko-da"
     And the runtime uses durable name "zeko-indexer"
 
+  Scenario: Runtime config propagates NATS throughput limits
+    When the runtime config is resolved with NATS batch size 32 and max in-flight 64
+    Then every runtime source reader pulls batches of 32 messages
+    And every runtime source reader allows 64 in-flight messages
+
   Scenario: Runtime config wires direct DA signature verification
     When the runtime config is resolved with a signed direct DA event
     Then the runtime direct DA quorum is 2

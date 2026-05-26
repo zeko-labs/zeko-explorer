@@ -34,8 +34,8 @@ export type L2AccountChangeInput = {
     action_state?: string[];
     verification_key_hash?: string;
     zkapp_uri?: string;
-    permissions?: Record<string, string>;
-    timing?: Record<string, string>;
+    permissions?: Record<string, unknown>;
+    timing?: Record<string, unknown>;
   };
 };
 
@@ -68,7 +68,7 @@ export type L2CommandInput = {
   fee?: string;
   nonce?: number;
   memo?: string;
-  account_updates?: L2AccountUpdateInput[];
+  account_updates?: unknown[];
 };
 
 export type L2TransactionInput = {
@@ -99,7 +99,7 @@ export type L1SettlementInput = {
     height: number;
     hash: string;
     slot?: number;
-    timestamp: string;
+    timestamp?: string;
     confirmationDepth: number;
   };
   commit: {

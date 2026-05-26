@@ -2,7 +2,7 @@ import { AckPolicy, DeliverPolicy, jetstream, jetstreamManager } from "@nats-io/
 import transportNode from "@nats-io/transport-node";
 import { EventSchemas, NATS_SUBJECTS } from "@zeko/nats";
 import { parse } from "valibot";
-import type { ConsumeEnvelope } from "../types";
+import type { ConsumeEnvelope } from "#src/types";
 
 const textDecoder = new TextDecoder();
 const { connect } = transportNode;
@@ -23,6 +23,8 @@ export type NatsEnvelopeSourceConfig = {
   stream?: string;
   durableName?: string;
   nextExpiresMs?: number;
+  batchSize?: number;
+  maxInFlight?: number;
   replayFromStart?: boolean;
   signal?: AbortSignal;
 };
@@ -32,6 +34,8 @@ export type ResolvedNatsEnvelopeSourceConfig = NatsEnvelopeSourceConfig & {
   stream: string;
   durableName: string;
   nextExpiresMs: number;
+  batchSize: number;
+  maxInFlight: number;
 };
 
 export type NatsEnvelopeMessage = {
@@ -51,28 +55,31 @@ export async function* consumeNatsEnvelopes(
     resolved.stream,
     resolved.durableName,
     resolved.subject,
+    resolved.maxInFlight,
     resolved.replayFromStart,
   );
   const client = jetstream(connection);
   const consumer = await client.consumers.get(resolved.stream, resolved.durableName);
   try {
     while (!config.signal?.aborted) {
-      const message = await abortable(
-        consumer.next({ expires: resolved.nextExpiresMs }),
+      const messages = await abortable(
+        consumer.fetch({
+          expires: resolved.nextExpiresMs,
+          max_messages: resolved.batchSize,
+        }),
         config.signal,
       );
-      if (message === ABORTED) {
+      if (messages === ABORTED) {
         return;
       }
-      if (!message) {
-        continue;
+      for await (const message of messages) {
+        const envelope = consumeNatsMessage(message);
+        if (!envelope) {
+          continue;
+        }
+        yield envelope;
+        message.ack();
       }
-      const envelope = consumeNatsMessage(message);
-      if (!envelope) {
-        continue;
-      }
-      yield envelope;
-      message.ack();
     }
   } finally {
     await connection.close();
@@ -114,6 +121,8 @@ export function resolveNatsEnvelopeSourceConfig(
     stream,
     durableName: config.durableName ?? "zeko-indexer",
     nextExpiresMs: config.nextExpiresMs ?? 1_000,
+    batchSize: positiveInteger(config.batchSize, 1),
+    maxInFlight: positiveInteger(config.maxInFlight, positiveInteger(config.batchSize, 1)),
   };
 }
 
@@ -158,6 +167,7 @@ async function ensureDurableConsumer(
   stream: string,
   durableName: string,
   filterSubject: string,
+  maxInFlight: number,
   replayFromStart = false,
 ): Promise<void> {
   if (replayFromStart) {
@@ -165,7 +175,6 @@ async function ensureDurableConsumer(
   }
   try {
     await manager.consumers.info(stream, durableName);
-    return;
   } catch {
     await manager.consumers.add(stream, {
       durable_name: durableName,
@@ -173,8 +182,13 @@ async function ensureDurableConsumer(
       ack_policy: AckPolicy.Explicit,
       deliver_policy: DeliverPolicy.All,
       filter_subject: filterSubject,
+      max_ack_pending: maxInFlight,
     });
+    return;
   }
+  await manager.consumers.update(stream, durableName, {
+    max_ack_pending: maxInFlight,
+  });
 }
 
 async function deleteDurableConsumerIfPresent(
@@ -213,4 +227,8 @@ function subjectForStream(stream: string): string {
     default:
       throw new Error(`NATS subject is required for stream ${stream}`);
   }
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
 }

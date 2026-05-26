@@ -1,6 +1,6 @@
-import type { ZekoIndexerState } from "./indexer-state";
-import type { IndexerStore } from "./store";
-import type { AccountActivityRow, TransactionRow } from "./types";
+import type { ZekoIndexerState } from "#src/indexer-state";
+import type { IndexerStore } from "#src/store";
+import type { AccountActivityRow, TransactionRow } from "#src/types";
 
 export function ledgerHasAppliedTransactions(state: ZekoIndexerState, ledgerHash: string): boolean {
   for (const transaction of state.store.transactions.values()) {

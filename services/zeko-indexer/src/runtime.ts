@@ -1,15 +1,15 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Field, PublicKey, Signature } from "o1js";
-import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats";
+import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "#src/adapters/nats";
 import {
   createSurrealClient,
   type SurrealClient,
   writeIndexerProjectionToSurreal,
-} from "./adapters/surreal";
-import { createZekoIndexer, type ZekoIndexer, type ZekoIndexerOptions } from "./indexer";
-import { type IndexerStore, InMemoryIndexerStore } from "./store";
-import type { ConsumeEnvelope, DaSignatureInput } from "./types";
+} from "#src/adapters/surreal";
+import { createZekoIndexer, type ZekoIndexer, type ZekoIndexerOptions } from "#src/indexer";
+import { type IndexerStore, InMemoryIndexerStore } from "#src/store";
+import type { ConsumeEnvelope, DaSignatureInput } from "#src/types";
 
 export type RuntimeStreamConfig = {
   stream: string;
@@ -20,6 +20,8 @@ export type IndexerRuntimeConfig = {
   natsServers: string | string[];
   natsDurableName: string;
   natsNextExpiresMs: number;
+  natsBatchSize: number;
+  natsMaxInFlight: number;
   natsReplayFromStart: boolean;
   streams: RuntimeStreamConfig[];
   surreal: {
@@ -69,6 +71,11 @@ export function resolveIndexerRuntimeConfig(
     natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? env.NATS_URL ?? "nats://127.0.0.1:4222"),
     natsDurableName: env.ZEKO_INDEXER_NATS_DURABLE ?? "zeko-indexer",
     natsNextExpiresMs: positiveInteger(env.ZEKO_INDEXER_NATS_NEXT_EXPIRES_MS, 1_000),
+    natsBatchSize: positiveInteger(env.ZEKO_INDEXER_NATS_BATCH_SIZE, 1),
+    natsMaxInFlight: positiveInteger(
+      env.ZEKO_INDEXER_NATS_MAX_IN_FLIGHT,
+      positiveInteger(env.ZEKO_INDEXER_NATS_BATCH_SIZE, 1),
+    ),
     natsReplayFromStart,
     streams: [...DEFAULT_STREAMS],
     surreal: {
@@ -147,6 +154,8 @@ function createRuntimeEnvelopeSources(
       subject: stream.subject,
       durableName: `${config.natsDurableName}-${stream.stream}`,
       nextExpiresMs: config.natsNextExpiresMs,
+      batchSize: config.natsBatchSize,
+      maxInFlight: config.natsMaxInFlight,
       replayFromStart: config.natsReplayFromStart,
       signal,
     }),

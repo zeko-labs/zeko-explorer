@@ -17,7 +17,7 @@ import type {
   TransactionRow,
   ZkappActionRow,
   ZkappEventRow,
-} from "./types";
+} from "#src/types";
 
 export type IdFactory = {
   newId(timestamp: string | number, stableKey?: string): string;
@@ -137,14 +137,17 @@ type IndexedMapHooks<Key, Value> = {
 };
 
 class IndexedMap<Key, Value> extends Map<Key, Value> {
-  constructor(private readonly hooks: IndexedMapHooks<Key, Value>) {
+  readonly #hooks: IndexedMapHooks<Key, Value>;
+
+  constructor(hooks: IndexedMapHooks<Key, Value>) {
     super();
+    this.#hooks = hooks;
   }
 
   override set(key: Key, value: Value): this {
     const previous = super.get(key);
     super.set(key, value);
-    this.hooks.set?.(key, value, previous);
+    this.#hooks.set?.(key, value, previous);
     return this;
   }
 
@@ -152,7 +155,7 @@ class IndexedMap<Key, Value> extends Map<Key, Value> {
     const previous = super.get(key);
     const deleted = super.delete(key);
     if (deleted && previous !== undefined) {
-      this.hooks.delete?.(key, previous);
+      this.#hooks.delete?.(key, previous);
     }
     return deleted;
   }
@@ -162,7 +165,7 @@ class IndexedMap<Key, Value> extends Map<Key, Value> {
       return;
     }
     super.clear();
-    this.hooks.clear?.();
+    this.#hooks.clear?.();
   }
 }
 

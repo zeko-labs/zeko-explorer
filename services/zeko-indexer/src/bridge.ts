@@ -6,9 +6,9 @@ import {
   isCancellableDeposit,
   withdrawalRollbackStatus,
   withdrawalStatus,
-} from "./bridge-status";
-import type { IndexerStore } from "./store";
-import { normalizeTimestamp } from "./store";
+} from "#src/bridge-status";
+import type { IndexerStore } from "#src/store";
+import { normalizeTimestamp } from "#src/store";
 import type {
   BridgeOperationRow,
   InnerActionRow,
@@ -17,7 +17,7 @@ import type {
   OuterActionRow,
   TransactionRow,
   ZkappActionRow,
-} from "./types";
+} from "#src/types";
 
 export type BridgeProjectorOptions = {
   withdrawalDelaySlots?: number;
