@@ -1,7 +1,7 @@
 # Agent Notes
 
 - At the beginning of each agent session, validate the toolchain environment once: `which proto`, `proto --version`, `which moon`, and `moon --version` must resolve to the versions pinned in `.prototools`. If they do not, fix shell activation or install/sync the Proto toolchain before running project tasks. Make sure that the changes that you make stick, so that every tool call and command you run inherits the proper environment.
-- Treat `docs/PRD.html` and `docs/spikes/` as source of truth; Linear issue description is never authoritative, unless explicitly told so.
+- Treat `docs/PRD.md`, which is generated from `docs/PRD.html` and `docs/spikes/` content as source of truth; Linear issue description is never authoritative, unless explicitly told so.
 - Run tool commands directly, for example `moon ci`, `pnpm install`, `node ...`, and `nu ...`. If a command only works when wrapped with `proto run`, the session environment is misconfigured; fix shell activation or install/sync the Proto toolchain so every command inherits the pinned tools from `.prototools`.
 - Use Moon tasks as the command source of truth. Do not add `package.json` scripts.
 - Keep tool versions in `.prototools`. Do not duplicate Node or PNPM versions in Moon toolchain config.
