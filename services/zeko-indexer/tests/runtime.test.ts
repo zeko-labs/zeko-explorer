@@ -96,7 +96,7 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then("every runtime source reader replays its stream from the beginning", () => {
-        expect(sourceConfigs).toHaveLength(3);
+        expect(sourceConfigs).toHaveLength(2);
         expect(sourceConfigs.every((sourceConfig) => sourceConfig.replayFromStart === true)).toBe(
           true,
         );

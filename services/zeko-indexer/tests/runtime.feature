@@ -10,7 +10,7 @@ Feature: Indexer runtime process
 
   Scenario: Runtime config creates one durable reader per source stream
     When the runtime config is resolved from the environment
-    Then the runtime consumes streams "zeko-l1,zeko-l2,zeko-da"
+    Then the runtime consumes streams "zeko-l1,zeko-l2"
     And the runtime uses durable name "zeko-indexer"
 
   Scenario: Runtime rebuilds in-memory state from the start of durable streams

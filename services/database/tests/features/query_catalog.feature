@@ -73,6 +73,14 @@ Feature: Query catalog
       | limit | 3           |
     Then the exact search account result should have token id "1"
 
+  Scenario: Exact identifier search returns every re-included transaction hash
+    Given I insert another transaction with hash "tx-005" on target ledger "ledger-reincluded"
+    When I run query "search-exact-identifiers" with:
+      | key   | value    |
+      | term  | "tx-005" |
+      | limit | 3        |
+    Then the exact search transaction result should contain target ledgers "ledger-reincluded,ledger-105"
+
   Scenario: Smart contract transaction feed is receiver-indexed
     When I run query "transactions-by-receiver-first-page" with:
       | key | value |

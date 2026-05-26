@@ -45,7 +45,6 @@ export type IndexerRuntime = {
 const DEFAULT_STREAMS: RuntimeStreamConfig[] = [
   { stream: "zeko-l1", subject: "zeko.l1.*" },
   { stream: "zeko-l2", subject: "zeko.l2.*" },
-  { stream: "zeko-da", subject: "zeko.da.*" },
 ];
 
 export function resolveIndexerRuntimeConfig(
