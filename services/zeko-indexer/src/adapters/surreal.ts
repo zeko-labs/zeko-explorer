@@ -6,6 +6,7 @@ import type {
   L1ActionLinkRow,
   L2ActionLinkRow,
   OuterActionRow,
+  TransactionRow,
 } from "../types.ts";
 
 export type SurrealHttpConfig = {
@@ -68,6 +69,14 @@ export async function writeBridgeProjectionToSurreal(
   }
   for (const row of store.bridgeOperations.values()) {
     statements.push(upsertRecord("bridge_operation", row.id, serializeBridgeOperation(row)));
+  }
+  const linkedTransactionIds = new Set(
+    [...store.bridgeTransactionLinks.values()].map((row) => row.out),
+  );
+  for (const row of store.transactions.values()) {
+    if (linkedTransactionIds.has(row.id)) {
+      statements.push(upsertRecord("transaction", row.id, serializeTransaction(row)));
+    }
   }
   for (const row of store.l1ActionLinks.values()) {
     statements.push(
@@ -138,6 +147,32 @@ function serializeInnerAction(row: InnerActionRow): Record<string, unknown> {
       ? date(row.marked_as_canonical_at)
       : undefined,
     target_ledger_hash: row.target_ledger_hash,
+  });
+}
+
+function serializeTransaction(row: TransactionRow): Record<string, unknown> {
+  return stripUndefined({
+    hash: row.hash,
+    sequence_number: row.sequence_number,
+    type: row.type,
+    status: row.status,
+    sender_public_key: row.sender_public_key,
+    receiver_public_key: row.receiver_public_key,
+    fee_payer_public_key: row.fee_payer_public_key,
+    amount: row.amount,
+    fee: row.fee,
+    nonce: row.nonce,
+    memo: row.memo,
+    block_height: row.block_height,
+    tx_index: row.tx_index,
+    sort_block_height: row.sort_block_height,
+    sort_tx_index: row.sort_tx_index,
+    timestamp: date(row.timestamp),
+    source_ledger_hash: row.source_ledger_hash,
+    target_ledger_hash: row.target_ledger_hash,
+    batch: row.batch ? record("batch", row.batch) : undefined,
+    rollback_reason: row.rollback_reason,
+    raw_command: row.raw_command,
   });
 }
 

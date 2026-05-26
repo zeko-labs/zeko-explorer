@@ -81,6 +81,54 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario(
+    "Bridge transaction links write transaction rows before enforced relations",
+    ({ Given, When, Then }) => {
+      Given("the in-memory projection has a bridge transaction link to a transaction row", () => {
+        reset();
+        store.transactions.set("tx-1:ledger-1", {
+          id: "tx-1",
+          hash: "tx-1",
+          sequence_number: 1,
+          type: "zkapp_command",
+          status: "applied",
+          sender_public_key: "B62qSender",
+          receiver_public_key: "B62qReceiver",
+          amount: "42",
+          block_height: 10,
+          tx_index: 0,
+          sort_block_height: -10,
+          sort_tx_index: 0,
+          timestamp: "2026-05-13T00:00:00.000Z",
+          source_ledger_hash: "ledger-0",
+          target_ledger_hash: "ledger-1",
+        });
+        store.bridgeTransactionLinks.set("bridge-1:tx-1:l2_finalize", {
+          id: "bridge-1:tx-1:l2_finalize",
+          in: "bridge-1",
+          out: "tx-1",
+          role: "l2_finalize",
+        });
+      });
+
+      When("the bridge projection is flushed once", async () => {
+        await writeBridgeProjectionToSurreal(client, store);
+      });
+
+      Then(
+        "the SurrealDB SQL writes the transaction before the bridge transaction relation",
+        () => {
+          const sql = statements.join("\n");
+          const transactionIndex = sql.indexOf("UPSERT transaction:tx_1");
+          expect(transactionIndex).toBeGreaterThanOrEqual(0);
+          expect(sql.indexOf("INSERT RELATION INTO bridge_transaction_link")).toBeGreaterThan(
+            transactionIndex,
+          );
+        },
+      );
+    },
+  );
+
   Scenario("Inner actions retain their source transaction record", ({ Given, When, Then }) => {
     Given(
       "the in-memory projection has an inner action from transaction {string}",

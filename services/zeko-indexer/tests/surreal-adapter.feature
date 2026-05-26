@@ -12,6 +12,11 @@ Feature: Surreal bridge adapter
     When the bridge projection is flushed once
     Then the SurrealDB SQL contains a bridge transaction relation
 
+  Scenario: Bridge transaction links write transaction rows before enforced relations
+    Given the in-memory projection has a bridge transaction link to a transaction row
+    When the bridge projection is flushed once
+    Then the SurrealDB SQL writes the transaction before the bridge transaction relation
+
   Scenario: Inner actions retain their source transaction record
     Given the in-memory projection has an inner action from transaction "tx-1"
     When the bridge projection is flushed once

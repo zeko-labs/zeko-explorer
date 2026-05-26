@@ -15,6 +15,7 @@ Feature: Bridge operation projection
     And the indexer consumes an L2 inner action for aux "aux-deposit-2" with action state "inner-state-2"
     And the indexer consumes an L1 commit covering inner action state "inner-state-2"
     Then bridge operation for aux "aux-deposit-2" sequence 0 has status "completed"
+    And bridge operation for aux "aux-deposit-2" sequence 0 has search text containing "completed"
     And one L1 witness link exists for aux "aux-deposit-2"
     And one L1 commit link exists for aux "aux-deposit-2"
     And one L2 "mint" link exists for aux "aux-deposit-2"

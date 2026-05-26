@@ -384,6 +384,12 @@ describeFeature(feature, ({ Scenario }) => {
         expect(operation(aux, sequence).status).toBe(status);
       },
     );
+    And(
+      "bridge operation for aux {string} sequence {int} has search text containing {string}",
+      (_, aux: string, sequence: number, value: string) => {
+        expect(operation(aux, sequence).search_text).toContain(value);
+      },
+    );
     And("one L1 witness link exists for aux {string}", (_, aux: string) => {
       const row = operation(aux, 0);
       expect(

@@ -127,7 +127,7 @@ export function consumeBridgeInnerAction(
     existingDeposit.l2_tx_hash = transaction.hash;
     existingDeposit.l2_block_height = transaction.block_height;
     existingDeposit.l2_timestamp = transaction.timestamp;
-    existingDeposit.status = depositStatus(existingDeposit);
+    setBridgeStatus(existingDeposit, depositStatus(existingDeposit));
     linkL2Action(store, existingDeposit, row, "mint");
     linkBridgeTransaction(store, existingDeposit, transaction, "l2_finalize");
     replayKnownCommits(store);
@@ -164,7 +164,7 @@ export function consumeBridgeInnerAction(
   operation.l2_tx_hash = transaction.hash;
   operation.l2_block_height = transaction.block_height;
   operation.l2_timestamp = transaction.timestamp;
-  operation.status = withdrawalStatus(operation);
+  setBridgeStatus(operation, withdrawalStatus(operation));
   linkL2Action(store, operation, row, "burn");
   linkBridgeTransaction(store, operation, transaction, "submit");
   replayKnownCommits(store);
@@ -219,7 +219,7 @@ export function consumeBridgeRollback(
       const previous = cloneBridgeOperation(effect.previous);
       store.bridgeOperations.set(bridgeKey(previous.aux, previous.aux_sequence), previous);
     } else {
-      operation.status = "rolled_back";
+      setBridgeStatus(operation, "rolled_back");
       operation.rollback_reason = event.rollbackId;
     }
   }
@@ -248,8 +248,10 @@ export function consumeBridgeRollback(
         affected = true;
       }
       if (affected) {
-        operation.status =
-          operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation);
+        setBridgeStatus(
+          operation,
+          operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation),
+        );
       }
     }
   }
@@ -303,8 +305,10 @@ export function consumeBridgeL2Rollback(
     }
     operation.commit_action_state = undefined;
     deleteCommitLinksForOperation(store, operation.id);
-    operation.status =
-      operation.type === "deposit" ? depositStatus(operation) : withdrawalRollbackStatus(operation);
+    setBridgeStatus(
+      operation,
+      operation.type === "deposit" ? depositStatus(operation) : withdrawalRollbackStatus(operation),
+    );
     if (operation.status === "rolled_back") {
       operation.rollback_reason = event.rollbackId;
     }
@@ -344,7 +348,7 @@ function upsertDepositSubmission(store: IndexerStore, event: L1BridgeEventInput)
     data_quality_reasons:
       event.amount && event.recipient ? undefined : ["bridge_event_missing_amount_or_recipient"],
   });
-  operation.status = depositStatus(operation);
+  setBridgeStatus(operation, depositStatus(operation));
   store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
   recordBridgeEventEffect(store, event, operation, previous);
 }
@@ -374,7 +378,7 @@ function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
   }
   const previous = cloneBridgeOperation(operation);
   operation.cancel_tx_hash = event.txHash;
-  operation.status = "cancelled";
+  setBridgeStatus(operation, "cancelled");
   store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
   recordBridgeEventEffect(store, event, operation, previous);
 }
@@ -408,7 +412,7 @@ function upsertWithdrawalFinalization(store: IndexerStore, event: L1BridgeEventI
   operation.l1_witness_tx_hash = event.txHash;
   operation.l1_witness_block_height = event.block.height;
   operation.l1_witness_timestamp = normalizeTimestamp(event.observedAt);
-  operation.status = withdrawalStatus(operation);
+  setBridgeStatus(operation, withdrawalStatus(operation));
   store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
   recordBridgeEventEffect(store, event, operation, previous);
 }
@@ -457,7 +461,7 @@ function applyOuterWitness(
     existingWithdrawal.l1_witness_timestamp = outerAction.timestamp;
     existingWithdrawal.l1_slot_range_lower = outerAction.slot_range_lower;
     existingWithdrawal.l1_slot_range_upper = outerAction.slot_range_upper;
-    existingWithdrawal.status = "completed";
+    setBridgeStatus(existingWithdrawal, "completed");
     linkL1Action(store, outerAction.id, existingWithdrawal, "witness");
     return;
   }
@@ -488,7 +492,7 @@ function applyOuterWitness(
   operation.l1_witness_timestamp = outerAction.timestamp;
   operation.l1_slot_range_lower = outerAction.slot_range_lower;
   operation.l1_slot_range_upper = outerAction.slot_range_upper;
-  operation.status = depositStatus(operation);
+  setBridgeStatus(operation, depositStatus(operation));
   linkL1Action(store, outerAction.id, operation, "witness");
 }
 
@@ -511,8 +515,10 @@ function applyOuterCommit(
     }
     operation.commit_action_state = outerAction.after_state;
     operation.l1_slot_range_upper = outerAction.slot_range_upper;
-    operation.status =
-      operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation);
+    setBridgeStatus(
+      operation,
+      operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation),
+    );
     linkL1Action(store, outerAction.id, operation, "commit");
   }
 }
@@ -559,7 +565,7 @@ function markTimedOutDeposits(store: IndexerStore, currentSlot: number | undefin
       operation.timeout_slot < currentSlot &&
       ["submitted", "l1_witnessed", "committed"].includes(operation.status)
     ) {
-      operation.status = "timed_out";
+      setBridgeStatus(operation, "timed_out");
     }
   }
 }
@@ -579,7 +585,7 @@ function markWithdrawalDelayPassed(
       operation.l1_slot_range_upper !== undefined &&
       currentSlot > operation.l1_slot_range_upper + withdrawalDelaySlots
     ) {
-      operation.status = "delay_passed";
+      setBridgeStatus(operation, "delay_passed");
     }
   }
 }
@@ -624,9 +630,6 @@ function createBridgeOperation(
     sender: input.sender,
     recipient: input.recipient,
     amount: input.amount,
-    search_text: [input.aux, input.status, input.type, input.sender, input.recipient]
-      .filter((value) => value && value !== UNKNOWN)
-      .join(" "),
     data_quality: input.data_quality,
     data_quality_reasons: input.data_quality_reasons,
     source_network: input.source_network,
@@ -638,8 +641,29 @@ function createBridgeOperation(
     timeout_slot: input.timeout_slot,
     holder_account_l1: input.holder_account_l1,
   };
+  refreshBridgeSearchText(operation);
   store.bridgeOperations.set(bridgeKey(input.aux, auxSequence), operation);
   return operation;
+}
+
+function setBridgeStatus(
+  operation: BridgeOperationRow,
+  status: BridgeOperationRow["status"],
+): void {
+  operation.status = status;
+  refreshBridgeSearchText(operation);
+}
+
+function refreshBridgeSearchText(operation: BridgeOperationRow): void {
+  operation.search_text = [
+    operation.aux,
+    operation.status,
+    operation.type,
+    operation.sender,
+    operation.recipient,
+  ]
+    .filter((value) => value && value !== UNKNOWN)
+    .join(" ");
 }
 
 function firstOperationNeeding(
