@@ -37,6 +37,11 @@ Feature: Surreal bridge adapter
     When the bridge projection is flushed once
     Then the SurrealDB SQL deletes only the removed L2 relation
 
+  Scenario: Concurrent flushes preserve removals recorded during an in-flight write
+    Given the in-memory projection has a removed L2 action link
+    When a second removed L2 action link is recorded while the first flush is in flight
+    Then the next SurrealDB flush deletes the second removed L2 relation
+
   Scenario: Record IDs preserve source identifier uniqueness
     Given the in-memory projection has outer actions with punctuation-variant IDs
     When the bridge projection is flushed once

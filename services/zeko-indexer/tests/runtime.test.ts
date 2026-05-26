@@ -4,6 +4,7 @@ import {
   type ConsumeEnvelope,
   createIndexerRuntime,
   InMemoryIndexerStore,
+  type NatsEnvelopeSourceConfig,
   resolveIndexerRuntimeConfig,
 } from "../src/index";
 
@@ -15,6 +16,7 @@ describeFeature(feature, ({ Scenario }) => {
   let flushes: number;
   let config: ReturnType<typeof resolveIndexerRuntimeConfig>;
   let source: AsyncIterable<ConsumeEnvelope>;
+  let sourceConfigs: NatsEnvelopeSourceConfig[];
 
   Scenario(
     "Runtime consumes envelopes and flushes projection after each message",
@@ -67,6 +69,30 @@ describeFeature(feature, ({ Scenario }) => {
       expect(config.natsDurableName).toBe(durableName);
     });
   });
+
+  Scenario(
+    "Runtime rebuilds in-memory state from the start of durable streams",
+    ({ When, Then }) => {
+      When("the runtime source readers are created", async () => {
+        sourceConfigs = [];
+        const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
+          createEnvelopeSource: (sourceConfig) => {
+            sourceConfigs.push(sourceConfig);
+            return finiteSource([]);
+          },
+          writeProjection: async () => {},
+        });
+        await runtime.done;
+      });
+
+      Then("every runtime source reader replays its stream from the beginning", () => {
+        expect(sourceConfigs).toHaveLength(3);
+        expect(sourceConfigs.every((sourceConfig) => sourceConfig.replayFromStart === true)).toBe(
+          true,
+        );
+      });
+    },
+  );
 
   Scenario("Runtime config honors deployment environment variables", ({ When, Then, And }) => {
     When("the runtime config is resolved from the deployment environment", () => {

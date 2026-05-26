@@ -22,6 +22,7 @@ export type NatsEnvelopeSourceConfig = {
   stream?: string;
   durableName?: string;
   nextExpiresMs?: number;
+  replayFromStart?: boolean;
   signal?: AbortSignal;
 };
 
@@ -38,7 +39,13 @@ export async function* consumeNatsEnvelopes(
   const resolved = resolveNatsEnvelopeSourceConfig(config);
   const connection = await connect({ servers: config.servers });
   const manager = await jetstreamManager(connection);
-  await ensureDurableConsumer(manager, resolved.stream, resolved.durableName, resolved.subject);
+  await ensureDurableConsumer(
+    manager,
+    resolved.stream,
+    resolved.durableName,
+    resolved.subject,
+    resolved.replayFromStart,
+  );
   const client = jetstream(connection);
   const consumer = await client.consumers.get(resolved.stream, resolved.durableName);
   try {
@@ -129,7 +136,11 @@ async function ensureDurableConsumer(
   stream: string,
   durableName: string,
   filterSubject: string,
+  replayFromStart = false,
 ): Promise<void> {
+  if (replayFromStart) {
+    await deleteDurableConsumerIfPresent(manager, stream, durableName);
+  }
   try {
     await manager.consumers.info(stream, durableName);
     return;
@@ -141,6 +152,18 @@ async function ensureDurableConsumer(
       deliver_policy: DeliverPolicy.All,
       filter_subject: filterSubject,
     });
+  }
+}
+
+async function deleteDurableConsumerIfPresent(
+  manager: Awaited<ReturnType<typeof jetstreamManager>>,
+  stream: string,
+  durableName: string,
+): Promise<void> {
+  try {
+    await manager.consumers.delete(stream, durableName);
+  } catch {
+    // Absence is the desired precondition before recreating from DeliverPolicy.All.
   }
 }
 

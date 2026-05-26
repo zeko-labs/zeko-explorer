@@ -710,7 +710,7 @@ function firstOperationNeeding(
 }
 
 function isActiveBridgeOperation(operation: BridgeOperationRow): boolean {
-  return operation.status !== "rolled_back" && operation.status !== "cancelled";
+  return !["rolled_back", "cancelled", "timed_out"].includes(operation.status);
 }
 
 function isActiveDeposit(operation: BridgeOperationRow): boolean {
@@ -718,7 +718,7 @@ function isActiveDeposit(operation: BridgeOperationRow): boolean {
 }
 
 function depositStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {
-  if (operation.status === "rolled_back" || operation.status === "cancelled") {
+  if (["rolled_back", "cancelled", "timed_out"].includes(operation.status)) {
     return operation.status;
   }
   if (operation.l2_action_state && operation.commit_action_state) {

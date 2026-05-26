@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { consumeNatsEnvelopes } from "./adapters/nats.ts";
+import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats.ts";
 import { createSurrealHttpClient, writeBridgeProjectionToSurreal } from "./adapters/surreal.ts";
 import { ZekoIndexer, type ZekoIndexerOptions } from "./indexer.ts";
 import { type IndexerStore, InMemoryIndexerStore } from "./store.ts";
@@ -15,6 +15,7 @@ export type IndexerRuntimeConfig = {
   natsServers: string | string[];
   natsDurableName: string;
   natsNextExpiresMs: number;
+  natsReplayFromStart: boolean;
   streams: RuntimeStreamConfig[];
   surreal: {
     endpoint: string;
@@ -30,6 +31,7 @@ export type IndexerRuntimeDependencies = {
   store?: IndexerStore;
   indexer?: ZekoIndexer;
   envelopeSources?: AsyncIterable<ConsumeEnvelope>[];
+  createEnvelopeSource?: (config: NatsEnvelopeSourceConfig) => AsyncIterable<ConsumeEnvelope>;
   writeProjection?: (store: IndexerStore) => Promise<void>;
   signal?: AbortSignal;
 };
@@ -53,6 +55,7 @@ export function resolveIndexerRuntimeConfig(
     natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? env.NATS_URL ?? "nats://127.0.0.1:4222"),
     natsDurableName: env.ZEKO_INDEXER_NATS_DURABLE ?? "zeko-indexer",
     natsNextExpiresMs: positiveInteger(env.ZEKO_INDEXER_NATS_NEXT_EXPIRES_MS, 1_000),
+    natsReplayFromStart: booleanEnv(env.ZEKO_INDEXER_NATS_REPLAY_FROM_START, true),
     streams: [...DEFAULT_STREAMS],
     surreal: {
       endpoint: env.ZEKO_INDEXER_SURREAL_ENDPOINT ?? env.SURREAL_URL ?? "http://127.0.0.1:8000",
@@ -85,15 +88,10 @@ export function createIndexerRuntime(
     ((state: IndexerStore) => writeBridgeProjectionToSurreal(surrealClient, state));
   const envelopeSources =
     dependencies.envelopeSources ??
-    config.streams.map((stream) =>
-      consumeNatsEnvelopes({
-        servers: config.natsServers,
-        stream: stream.stream,
-        subject: stream.subject,
-        durableName: `${config.natsDurableName}-${stream.stream}`,
-        nextExpiresMs: config.natsNextExpiresMs,
-        signal: abortController.signal,
-      }),
+    createRuntimeEnvelopeSources(
+      config,
+      dependencies.createEnvelopeSource ?? consumeNatsEnvelopes,
+      abortController.signal,
     );
 
   return {
@@ -107,6 +105,24 @@ export function createIndexerRuntime(
       abortController.abort();
     },
   };
+}
+
+function createRuntimeEnvelopeSources(
+  config: IndexerRuntimeConfig,
+  createEnvelopeSource: (config: NatsEnvelopeSourceConfig) => AsyncIterable<ConsumeEnvelope>,
+  signal: AbortSignal,
+): AsyncIterable<ConsumeEnvelope>[] {
+  return config.streams.map((stream) =>
+    createEnvelopeSource({
+      servers: config.natsServers,
+      stream: stream.stream,
+      subject: stream.subject,
+      durableName: `${config.natsDurableName}-${stream.stream}`,
+      nextExpiresMs: config.natsNextExpiresMs,
+      replayFromStart: config.natsReplayFromStart,
+      signal,
+    }),
+  );
 }
 
 export async function runIndexerFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<void> {
@@ -179,4 +195,11 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function booleanEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }

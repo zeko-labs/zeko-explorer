@@ -13,6 +13,10 @@ Feature: Indexer runtime process
     Then the runtime consumes streams "zeko-l1,zeko-l2,zeko-da"
     And the runtime uses durable name "zeko-indexer"
 
+  Scenario: Runtime rebuilds in-memory state from the start of durable streams
+    When the runtime source readers are created
+    Then every runtime source reader replays its stream from the beginning
+
   Scenario: Runtime config honors deployment environment variables
     When the runtime config is resolved from the deployment environment
     Then the runtime uses NATS server "nats://nats:4222"

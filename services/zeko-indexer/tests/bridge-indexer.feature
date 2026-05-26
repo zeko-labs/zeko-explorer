@@ -143,6 +143,12 @@ Feature: Bridge operation projection
     When the indexer consumes an L1 settlement at slot 600
     Then bridge operation for aux "aux-settlement-timeout" sequence 0 has status "timed_out"
 
+  Scenario: Timed-out deposits are not completed by late L2 evidence
+    Given the indexer consumed a deposit submission for aux "aux-timeout-late-evidence"
+    And the indexer consumes an L1 settlement at slot 600
+    When the indexer consumes an L2 inner action for aux "aux-timeout-late-evidence" with action state "inner-timeout-late-evidence"
+    Then bridge operation for aux "aux-timeout-late-evidence" sequence 0 has status "timed_out"
+
   Scenario: Settlement slots advance withdrawal delay
     Given the indexer consumed an L2 inner action for aux "aux-settlement-delay" with action state "inner-settlement-delay"
     And the indexer consumed an L1 commit covering inner action state "inner-settlement-delay"
@@ -215,4 +221,4 @@ Feature: Bridge operation projection
     And the indexer observes L1 slot 600
     When the indexer consumes an L1 rollback affecting outer action "outer-witness-aux-rollback-unrelated"
     Then bridge operation for aux "aux-timed-out" sequence 0 has status "timed_out"
-    And bridge operation for aux "aux-rollback-unrelated" sequence 0 has status "submitted"
+    And bridge operation for aux "aux-rollback-unrelated" sequence 0 has status "timed_out"

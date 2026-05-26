@@ -53,7 +53,8 @@ export async function writeBridgeProjectionToSurreal(
   client: SurrealHttpClient,
   store: IndexerStore,
 ): Promise<void> {
-  const statements: string[] = bridgeRemovalStatements(store.bridgeProjectionRemovals);
+  const removals = snapshotBridgeProjectionRemovals(store.bridgeProjectionRemovals);
+  const statements: string[] = bridgeRemovalStatements(removals);
   for (const row of store.outerActions.values()) {
     statements.push(upsertRecord("outer_action", row.id, serializeOuterAction(row)));
   }
@@ -97,7 +98,20 @@ export async function writeBridgeProjectionToSurreal(
     return;
   }
   await client.query(statements.join("\n"));
-  clearBridgeProjectionRemovals(store.bridgeProjectionRemovals);
+  clearSubmittedBridgeProjectionRemovals(store.bridgeProjectionRemovals, removals);
+}
+
+function snapshotBridgeProjectionRemovals(
+  removals: BridgeProjectionRemovals,
+): BridgeProjectionRemovals {
+  return {
+    outerActionIds: new Set(removals.outerActionIds),
+    innerActionIds: new Set(removals.innerActionIds),
+    bridgeOperationIds: new Set(removals.bridgeOperationIds),
+    l1ActionLinkIds: new Set(removals.l1ActionLinkIds),
+    l2ActionLinkIds: new Set(removals.l2ActionLinkIds),
+    bridgeTransactionLinkIds: new Set(removals.bridgeTransactionLinkIds),
+  };
 }
 
 function bridgeRemovalStatements(removals: BridgeProjectionRemovals): string[] {
@@ -113,13 +127,22 @@ function bridgeRemovalStatements(removals: BridgeProjectionRemovals): string[] {
   ];
 }
 
-function clearBridgeProjectionRemovals(removals: BridgeProjectionRemovals): void {
-  removals.bridgeTransactionLinkIds.clear();
-  removals.l2ActionLinkIds.clear();
-  removals.l1ActionLinkIds.clear();
-  removals.outerActionIds.clear();
-  removals.innerActionIds.clear();
-  removals.bridgeOperationIds.clear();
+function clearSubmittedBridgeProjectionRemovals(
+  pending: BridgeProjectionRemovals,
+  submitted: BridgeProjectionRemovals,
+): void {
+  clearSubmittedIds(pending.bridgeTransactionLinkIds, submitted.bridgeTransactionLinkIds);
+  clearSubmittedIds(pending.l2ActionLinkIds, submitted.l2ActionLinkIds);
+  clearSubmittedIds(pending.l1ActionLinkIds, submitted.l1ActionLinkIds);
+  clearSubmittedIds(pending.outerActionIds, submitted.outerActionIds);
+  clearSubmittedIds(pending.innerActionIds, submitted.innerActionIds);
+  clearSubmittedIds(pending.bridgeOperationIds, submitted.bridgeOperationIds);
+}
+
+function clearSubmittedIds(pending: Set<string>, submitted: Set<string>): void {
+  for (const id of submitted) {
+    pending.delete(id);
+  }
 }
 
 function serializeOuterAction(row: OuterActionRow): Record<string, unknown> {

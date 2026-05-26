@@ -966,6 +966,29 @@ describeFeature(feature, ({ Scenario }) => {
     );
   });
 
+  Scenario(
+    "Timed-out deposits are not completed by late L2 evidence",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumes an L1 settlement at slot {int}", (_context, slot: number) =>
+        consumeSettlementAtSlot(slot),
+      );
+      When(
+        "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
+
   Scenario("Settlement slots advance withdrawal delay", ({ Given, And, When, Then }) => {
     reset();
     Given(

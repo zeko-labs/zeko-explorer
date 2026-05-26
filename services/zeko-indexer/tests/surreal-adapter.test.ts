@@ -255,6 +255,47 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario(
+    "Concurrent flushes preserve removals recorded during an in-flight write",
+    ({ Given, When, Then }) => {
+      let releaseFirstFlush: (() => void) | undefined;
+
+      Given("the in-memory projection has a removed L2 action link", () => {
+        reset();
+        store.bridgeProjectionRemovals.l2ActionLinkIds.add("bridge-1:inner-1:mint");
+        client = {
+          async query(sql: string): Promise<void> {
+            statements.push(sql);
+            if (releaseFirstFlush) {
+              return;
+            }
+            await new Promise<void>((resolve) => {
+              releaseFirstFlush = resolve;
+            });
+          },
+        };
+      });
+
+      When(
+        "a second removed L2 action link is recorded while the first flush is in flight",
+        async () => {
+          const firstFlush = writeBridgeProjectionToSurreal(client, store);
+          await eventually(() => expect(statements).toHaveLength(1));
+          store.bridgeProjectionRemovals.l2ActionLinkIds.add("bridge-2:inner-2:mint");
+          releaseFirstFlush?.();
+          await firstFlush;
+          await writeBridgeProjectionToSurreal(client, store);
+        },
+      );
+
+      Then("the next SurrealDB flush deletes the second removed L2 relation", () => {
+        expect(statements).toHaveLength(2);
+        expect(statements[0]).toContain(encodedRecordId("bridge-1:inner-1:mint"));
+        expect(statements[1]).toContain(encodedRecordId("bridge-2:inner-2:mint"));
+      });
+    },
+  );
+
   Scenario("Record IDs preserve source identifier uniqueness", ({ Given, When, Then }) => {
     Given("the in-memory projection has outer actions with punctuation-variant IDs", () => {
       reset();
@@ -291,4 +332,22 @@ function outerAction(id: string) {
     slot_range_lower: 100,
     slot_range_upper: 130,
   };
+}
+
+function encodedRecordId(id: string): string {
+  return `hex_${Buffer.from(id, "utf8").toString("hex")}`;
+}
+
+async function eventually(assertion: () => void): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      if (attempt === 19) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
 }
