@@ -1,17 +1,14 @@
-import { Field, Poseidon } from "o1js";
+import { AccountUpdate, Field } from "o1js";
 
-const MINA_ZKAPP_ACTIONS_PREFIX = "MinaZkappActions*******";
+export const EMPTY_ZKAPP_ACTION_STATE = AccountUpdate.Actions.emptyActionState().toString();
 
 export function deriveZkappActionState(
   beforeActionState: string,
   fields: readonly string[],
 ): string {
   const before = Field(beforeActionState);
-  const actionCommitment = Poseidon.hashWithPrefix(
-    MINA_ZKAPP_ACTIONS_PREFIX,
-    fields.map((field) => Field(field)),
-  );
-  return Poseidon.hash([before, actionCommitment]).toString();
+  const actionHash = AccountUpdate.Actions.hash([fields.map((field) => Field(field))]);
+  return AccountUpdate.Actions.updateSequenceState(before, actionHash).toString();
 }
 
 export function tryDeriveZkappActionState(

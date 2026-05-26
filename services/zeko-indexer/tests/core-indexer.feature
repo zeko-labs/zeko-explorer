@@ -48,11 +48,17 @@ Feature: Unified Zeko indexer
     And the zkapp_action row stores raw fields ["77"]
     And the zkapp_action row has before_action_state "action-before-body" and action_state "action-after-body"
 
-  Scenario: First raw zkApp action uses the genesis action state
+  Scenario: First raw zkApp action uses the Mina empty action state
     When the indexer consumes a first body-shaped zkApp transaction for "B62qFirstBodyContract" on ledger "ledger-zk-body-first"
     Then one zkapp_action row exists for account "B62qFirstBodyContract"
     And the zkapp_action row stores raw fields ["77"]
-    And the zkapp_action row has before_action_state "0" and action_state "action-after-first-body"
+    And the zkapp_action row starts from the Mina empty action state
+
+  Scenario: Raw zkApp action batches use Mina protocol action-state hashing
+    Given account "B62qProtocolActionContract" has prior Mina action_state head
+    When the indexer consumes a body-shaped zkApp transaction with 3 protocol raw actions for "B62qProtocolActionContract" on ledger "ledger-protocol-actions"
+    Then 3 zkapp_action rows exist for account "B62qProtocolActionContract"
+    And the raw zkapp_action chain for "B62qProtocolActionContract" matches Mina protocol action-state hashing
 
   Scenario: Raw zkApp action batches beyond the retained vector are indexed
     Given account "B62qLongActionContract" has prior numeric action_state head "0"

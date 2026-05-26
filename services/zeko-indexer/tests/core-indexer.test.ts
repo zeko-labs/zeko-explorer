@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
-import { Field, Poseidon } from "o1js";
+import { AccountUpdate, Field } from "o1js";
 import { expect } from "vitest";
 import {
   InMemoryIndexerStore,
@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
 const serviceRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const timestamp = "2026-05-13T00:00:00.000Z";
-const minaZkappActionsPrefix = "MinaZkappActions*******";
+const minaEmptyActionState = AccountUpdate.Actions.emptyActionState().toString();
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
 const twoState = ["2", "2", "2", "2", "2", "2", "2", "2"] as const;
 
@@ -85,11 +85,8 @@ const deriveActionChain = (actions: string[][], beforeHead: string) => {
   let cursor = Field(beforeHead);
   return actions.map((fields) => {
     const before = cursor.toString();
-    const commitment = Poseidon.hashWithPrefix(
-      minaZkappActionsPrefix,
-      fields.map((field) => Field(field)),
-    );
-    cursor = Poseidon.hash([cursor, commitment]);
+    const actionHash = AccountUpdate.Actions.hash([fields.map((field) => Field(field))]);
+    cursor = AccountUpdate.Actions.updateSequenceState(cursor, actionHash);
     return {
       fields,
       before_action_state: before,
@@ -587,7 +584,7 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
-  Scenario("First raw zkApp action uses the genesis action state", ({ When, Then, And }) => {
+  Scenario("First raw zkApp action uses the Mina empty action state", ({ When, Then, And }) => {
     When(
       "the indexer consumes a first body-shaped zkApp transaction for {string} on ledger {string}",
       async (_context, publicKey: string, ledger: string) => {
@@ -604,16 +601,65 @@ describeFeature(feature, ({ Scenario }) => {
       expect(store.zkappActionsByAccount("B62qFirstBodyContract")[0]?.fields).toEqual(["77"]);
     });
 
-    And(
-      "the zkapp_action row has before_action_state {string} and action_state {string}",
-      (_context, before: string, after: string) => {
-        expect(store.zkappActionsByAccount("B62qFirstBodyContract")[0]).toMatchObject({
-          before_action_state: before,
-          action_state: after,
-        });
-      },
-    );
+    And("the zkapp_action row starts from the Mina empty action state", () => {
+      expect(store.zkappActionsByAccount("B62qFirstBodyContract")[0]?.before_action_state).toBe(
+        minaEmptyActionState,
+      );
+    });
   });
+
+  Scenario(
+    "Raw zkApp action batches use Mina protocol action-state hashing",
+    ({ Given, When, Then, And }) => {
+      const actionFields = [["201"], ["202"], ["203"]];
+      const priorActionState = minaEmptyActionState;
+      let expectedChain: ReturnType<typeof deriveActionChain>;
+
+      Given(
+        "account {string} has prior Mina action_state head",
+        async (_context, publicKey: string) => {
+          reset();
+          expectedChain = deriveActionChain(actionFields, priorActionState);
+          await consumePayment("ledger-protocol-actions-prior", undefined, [
+            changedAccount(publicKey, "500", 0, oneState, [priorActionState, "0", "0", "0", "0"]),
+          ]);
+        },
+      );
+
+      When(
+        "the indexer consumes a body-shaped zkApp transaction with {int} protocol raw actions for {string} on ledger {string}",
+        async (_context, count: number, publicKey: string, ledger: string) => {
+          await consumeBodyShapedZkappWithRawActions(
+            ledger,
+            publicKey,
+            actionFields.slice(0, count),
+            priorActionState,
+          );
+        },
+      );
+
+      Then(
+        "{int} zkapp_action rows exist for account {string}",
+        (_context, count: number, publicKey: string) => {
+          expect(store.zkappActionsByAccount(publicKey)).toHaveLength(count);
+        },
+      );
+
+      And(
+        "the raw zkapp_action chain for {string} matches Mina protocol action-state hashing",
+        (_context, publicKey: string) => {
+          const actions = store.zkappActionsByAccount(publicKey);
+          expect(
+            actions.map(({ fields, before_action_state, action_state }) => ({
+              fields,
+              before_action_state,
+              action_state,
+            })),
+          ).toEqual(expectedChain);
+        },
+      );
+    },
+  );
 
   Scenario(
     "Raw zkApp action batches beyond the retained vector are indexed",

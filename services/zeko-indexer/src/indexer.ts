@@ -1,6 +1,10 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
-import { isZkappFieldElement, tryDeriveZkappActionState } from "./action-state.ts";
+import {
+  EMPTY_ZKAPP_ACTION_STATE,
+  isZkappFieldElement,
+  tryDeriveZkappActionState,
+} from "./action-state.ts";
 import {
   advanceBridgeClock,
   consumeBridgeInnerAction,
@@ -43,7 +47,6 @@ export type ZekoIndexerOptions = {
 };
 
 const L2_SOURCE = "l2-transactions";
-const GENESIS_ACTION_STATE = "0";
 const PRECEDENCE: Record<DaSource, number> = {
   proved: 1,
   "da-direct": 2,
@@ -992,7 +995,7 @@ const normalizeObservedActions = (
   state: ActionStateContext = {},
 ): ObservedZkappActionInput[] => {
   const observed: ObservedZkappActionInput[] = [];
-  let cursor = state.beforeHead ?? GENESIS_ACTION_STATE;
+  let cursor = state.beforeHead ?? EMPTY_ZKAPP_ACTION_STATE;
 
   items.forEach((item, index) => {
     const rawFields = rawActionFields(item);
