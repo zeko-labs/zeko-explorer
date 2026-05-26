@@ -1,4 +1,5 @@
-import { monotonicFactory } from "ulid";
+import { createHash } from "node:crypto";
+import { encodeTime, monotonicFactory } from "ulid";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -19,7 +20,7 @@ import type {
 } from "./types.ts";
 
 export type IdFactory = {
-  newId(timestamp: string | number): string;
+  newId(timestamp: string | number, stableKey?: string): string;
 };
 
 export type BridgeProjectionRemovals = {
@@ -80,10 +81,26 @@ export type IndexerStore = {
 export class UlidFactory implements IdFactory {
   readonly #factory = monotonicFactory();
 
-  newId(timestamp: string | number): string {
+  newId(timestamp: string | number, stableKey?: string): string {
+    if (stableKey) {
+      return stableUlid(timestamp, stableKey);
+    }
     return this.#factory(timestampToMillis(timestamp));
   }
 }
+
+const CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+const stableUlid = (timestamp: string | number, key: string): string => {
+  const digest = createHash("sha256").update(key).digest("hex").slice(0, 20);
+  let entropy = BigInt(`0x${digest}`);
+  let suffix = "";
+  for (let index = 0; index < 16; index += 1) {
+    suffix = CROCKFORD_BASE32[Number(entropy & 31n)] + suffix;
+    entropy >>= 5n;
+  }
+  return `${encodeTime(timestampToMillis(timestamp), 10)}${suffix}`;
+};
 
 export const timestampToMillis = (timestamp: string | number): number => {
   if (typeof timestamp === "number") {
@@ -230,7 +247,7 @@ export class InMemoryIndexerStore implements IndexerStore {
   upsertBatch(ledgerHash: string, patch: Partial<BatchRow>, timestamp: string): BatchRow {
     const existing = this.batches.get(ledgerHash);
     const batch: BatchRow = {
-      id: existing?.id ?? this.idFactory.newId(timestamp),
+      id: existing?.id ?? this.idFactory.newId(timestamp, `batch:${ledgerHash}`),
       target_ledger_hash: ledgerHash,
       batch_height: existing?.batch_height ?? this.nextBatchHeight(),
       sort_batch_height: existing?.sort_batch_height ?? -this.nextBatchHeight(),

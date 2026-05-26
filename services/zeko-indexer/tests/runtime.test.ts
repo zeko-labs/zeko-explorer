@@ -21,6 +21,7 @@ describeFeature(feature, ({ Scenario }) => {
   let surrealSql: string[];
   let siblingCancelled: boolean;
   let runtimeError: unknown;
+  let projectionEvents: string[];
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -209,6 +210,41 @@ describeFeature(feature, ({ Scenario }) => {
       expect(siblingCancelled).toBe(true);
     });
   });
+
+  Scenario("Runtime serializes projection flushes across sources", ({ Given, When, Then }) => {
+    Given("two finite runtime envelope sources with bridge deposits", () => {
+      projectionEvents = [];
+    });
+
+    When("the runtime processes them through a delayed projection writer", async () => {
+      const firstFlushCanFinish = deferred<void>();
+      let flushCount = 0;
+      const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
+        envelopeSources: [
+          finiteSource([depositSubmission("aux-serialized-a")]),
+          finiteSource([depositSubmission("aux-serialized-b")]),
+        ],
+        writeProjection: async () => {
+          flushCount += 1;
+          const currentFlush = flushCount;
+          projectionEvents.push(`start-${currentFlush}`);
+          if (currentFlush === 1) {
+            await firstFlushCanFinish.promise;
+          }
+          projectionEvents.push(`finish-${currentFlush}`);
+        },
+      });
+
+      await eventually(() => projectionEvents.includes("start-1"));
+      await delay(10);
+      firstFlushCanFinish.resolve();
+      await runtime.done;
+    });
+
+    Then("projection flushes do not overlap", () => {
+      expect(projectionEvents).toEqual(["start-1", "finish-1", "start-2", "finish-2"]);
+    });
+  });
 });
 
 async function* finiteSource(envelopes: ConsumeEnvelope[]): AsyncGenerator<ConsumeEnvelope> {
@@ -240,6 +276,30 @@ function cancellableIdleSource(onReturn: () => void): AsyncIterable<ConsumeEnvel
       };
     },
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function eventually(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!predicate()) {
+    if (Date.now() > deadline) {
+      throw new Error("Condition was not met");
+    }
+    await delay(1);
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function ordinaryL2Transaction(txHash: string): ConsumeEnvelope {

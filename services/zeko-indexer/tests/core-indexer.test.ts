@@ -22,6 +22,12 @@ const minaEmptyActionState = AccountUpdate.Actions.emptyActionState().toString()
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
 const twoState = ["2", "2", "2", "2", "2", "2", "2", "2"] as const;
 
+type ReplayProjectionIds = {
+  transactions: string[];
+  accounts: string[];
+  accountActivities: string[];
+};
+
 const changedAccount = (
   publicKey: string,
   balance: string,
@@ -94,6 +100,12 @@ const deriveActionChain = (actions: string[][], beforeHead: string) => {
     };
   });
 };
+
+const replayProjectionIds = (store: InMemoryIndexerStore): ReplayProjectionIds => ({
+  transactions: [...store.transactions.values()].map((transaction) => transaction.id).sort(),
+  accounts: [...store.accounts.values()].map((account) => account.id).sort(),
+  accountActivities: [...store.accountActivities.values()].map((activity) => activity.id).sort(),
+});
 
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
@@ -420,6 +432,36 @@ describeFeature(feature, ({ Scenario }) => {
 
     And("exactly {int} account activity rows exist", (_context, count: number) => {
       expect(store.accountActivities.size).toBe(count);
+    });
+  });
+
+  Scenario("Replayed L2 transactions use stable row identities", ({ When, Then, And }) => {
+    let firstProjection: ReplayProjectionIds;
+    let replayedProjection: ReplayProjectionIds;
+
+    When(
+      "two fresh indexers consume the same payment transaction for ledger {string}",
+      async (_context, ledger: string) => {
+        reset();
+        await consumePayment(ledger);
+        firstProjection = replayProjectionIds(store);
+
+        reset();
+        await consumePayment(ledger);
+        replayedProjection = replayProjectionIds(store);
+      },
+    );
+
+    Then("replayed transaction ids are identical", () => {
+      expect(replayedProjection.transactions).toEqual(firstProjection.transactions);
+    });
+
+    And("replayed account ids are identical", () => {
+      expect(replayedProjection.accounts).toEqual(firstProjection.accounts);
+    });
+
+    And("replayed account activity ids are identical", () => {
+      expect(replayedProjection.accountActivities).toEqual(firstProjection.accountActivities);
     });
   });
 

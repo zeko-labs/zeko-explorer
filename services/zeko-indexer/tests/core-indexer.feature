@@ -20,6 +20,12 @@ Feature: Unified Zeko indexer
     Then exactly 1 transaction row exists
     And exactly 2 account activity rows exist
 
+  Scenario: Replayed L2 transactions use stable row identities
+    When two fresh indexers consume the same payment transaction for ledger "ledger-replay"
+    Then replayed transaction ids are identical
+    And replayed account ids are identical
+    And replayed account activity ids are identical
+
   Scenario: Account activity preserves the sequencer changed account index
     When the indexer consumes an account update for "B62qIndexed" with changed account index 42
     Then account activity for "B62qIndexed" has activity_index 42

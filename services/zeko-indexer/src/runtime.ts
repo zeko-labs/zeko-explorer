@@ -147,8 +147,7 @@ export function isDirectEntrypoint(importMetaUrl: string, argv = process.argv): 
 async function runRuntimeSource(
   source: AsyncIterable<ConsumeEnvelope>,
   indexer: ZekoIndexer,
-  store: IndexerStore,
-  writeProjection: (store: IndexerStore) => Promise<void>,
+  writeProjection: () => Promise<void>,
   signal: AbortSignal,
 ): Promise<void> {
   const iterator = source[Symbol.asyncIterator]();
@@ -160,7 +159,7 @@ async function runRuntimeSource(
         return;
       }
       await indexer.consume(result.value);
-      await writeProjection(store);
+      await writeProjection();
     }
   } finally {
     await iterator.return?.();
@@ -174,8 +173,9 @@ async function runRuntimeSources(
   writeProjection: (store: IndexerStore) => Promise<void>,
   abortController: AbortController,
 ): Promise<void> {
+  const flushProjection = serializedProjectionWriter(store, writeProjection);
   const runners = envelopeSources.map((source) =>
-    runRuntimeSource(source, indexer, store, writeProjection, abortController.signal),
+    runRuntimeSource(source, indexer, flushProjection, abortController.signal),
   );
   try {
     await Promise.all(runners);
@@ -184,6 +184,18 @@ async function runRuntimeSources(
     await Promise.allSettled(runners);
     throw error;
   }
+}
+
+function serializedProjectionWriter(
+  store: IndexerStore,
+  writeProjection: (store: IndexerStore) => Promise<void>,
+): () => Promise<void> {
+  let queue = Promise.resolve();
+  return () => {
+    const flush = queue.then(() => writeProjection(store));
+    queue = flush.catch(() => undefined);
+    return flush;
+  };
 }
 
 const ABORTED = Symbol("aborted");

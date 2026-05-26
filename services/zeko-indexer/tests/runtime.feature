@@ -39,3 +39,8 @@ Feature: Indexer runtime process
     Given a runtime source that fails during projection and an idle sibling source
     When the runtime projection fails
     Then the idle sibling source is cancelled
+
+  Scenario: Runtime serializes projection flushes across sources
+    Given two finite runtime envelope sources with bridge deposits
+    When the runtime processes them through a delayed projection writer
+    Then projection flushes do not overlap
