@@ -980,6 +980,66 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario(
+    "L1 rollback of a withdrawal witness preserves elapsed delay",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given(
+        "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      And(
+        "the indexer consumed an L1 commit covering inner action state {string}",
+        (_context, innerActionState: string) => consumeCommit(innerActionState),
+      );
+      And(
+        "the indexer observes L1 slot {int} for aux {string}",
+        async (_context, slot: number, aux: string) => {
+          await consumeCommit(`unrelated-${slot}-${aux}`, 5100 + slot, slot);
+          expect(operation(aux, 0).status).toBe("delay_passed");
+        },
+      );
+      And("the indexer consumes an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      When(
+        "the indexer consumes an L1 rollback affecting outer action {string}",
+        async (_context, outerActionId: string) => {
+          await indexer.consume({
+            subject: "zeko.l1.rollbacks",
+            payload: {
+              schemaVersion: 1,
+              provider: "mina",
+              network: "zeko-m-devnet",
+              source: "l1-watcher",
+              subject: "zeko.l1.rollbacks",
+              rollbackId: `rollback-${outerActionId}`,
+              detectedAt: timestamp,
+              commonAncestor: { height: 5009, hash: "l1-block-5009" },
+              orphanedBlocks: [
+                { height: 5010, hash: "l1-block-5010", parentHash: "l1-block-5009" },
+              ],
+              replacementBlocks: [
+                { height: 5010, hash: "l1-block-5010b", parentHash: "l1-block-5009" },
+              ],
+              affected: {
+                settlementIds: [],
+                outerActionIds: [outerActionId],
+                bridgeEventIds: [],
+              },
+            },
+          });
+        },
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
+
   Scenario("Withdrawal inner action is exposed as L2 witnessed before commit", ({ When, Then }) => {
     reset();
     When(

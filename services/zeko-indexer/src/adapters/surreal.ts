@@ -278,7 +278,7 @@ function literal(value: unknown): string {
   }
   if (value !== null && typeof value === "object") {
     return `{ ${Object.entries(value)
-      .map(([key, child]) => `${key}: ${literal(child)}`)
+      .map(([key, child]) => `${JSON.stringify(key)}: ${literal(child)}`)
       .join(", ")} }`;
   }
   return JSON.stringify(value);

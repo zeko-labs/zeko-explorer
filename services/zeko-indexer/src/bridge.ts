@@ -252,12 +252,15 @@ export function consumeBridgeRollback(
     for (const operation of store.bridgeOperations.values()) {
       let affected = false;
       if (operation.l1_witness_action_state === outerAction.after_state) {
+        const committedSlotRangeUpper = operation.commit_action_state
+          ? commitSlotRangeUpper(store, operation.commit_action_state)
+          : undefined;
         operation.l1_witness_action_state = undefined;
         operation.l1_witness_tx_hash = undefined;
         operation.l1_witness_block_height = undefined;
         operation.l1_witness_timestamp = undefined;
         operation.l1_slot_range_lower = undefined;
-        operation.l1_slot_range_upper = undefined;
+        operation.l1_slot_range_upper = committedSlotRangeUpper;
         affected = true;
       }
       if (operation.commit_action_state === outerAction.after_state) {
@@ -265,10 +268,16 @@ export function consumeBridgeRollback(
         affected = true;
       }
       if (affected) {
-        setBridgeStatus(
-          operation,
-          operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation),
-        );
+        const nextStatus =
+          operation.type === "withdrawal" &&
+          operation.commit_action_state !== undefined &&
+          operation.l1_witness_action_state === undefined &&
+          operation.l1_witness_tx_hash === undefined
+            ? "delay_passed"
+            : operation.type === "deposit"
+              ? depositStatus(operation)
+              : withdrawalStatus(operation);
+        setBridgeStatus(operation, nextStatus);
       }
     }
   }
@@ -546,6 +555,13 @@ function replayKnownCommits(store: IndexerStore): void {
       );
     }
   }
+}
+
+function commitSlotRangeUpper(store: IndexerStore, actionState: string): number | undefined {
+  const commit = [...store.outerActions.values()].find(
+    (outerAction) => outerAction.after_state === actionState && isCommitOuterAction(outerAction),
+  );
+  return commit?.slot_range_upper;
 }
 
 function coveredInnerActions(

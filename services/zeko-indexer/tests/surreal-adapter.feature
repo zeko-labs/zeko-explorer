@@ -22,6 +22,11 @@ Feature: Surreal bridge adapter
     When the bridge projection is flushed once
     Then the SurrealDB SQL stores the inner action transaction link
 
+  Scenario: Raw transaction object keys are quoted in SurrealDB literals
+    Given the in-memory projection has a bridge-linked transaction with producer-owned raw keys
+    When the bridge projection is flushed once
+    Then the SurrealDB SQL quotes raw object keys
+
   Scenario: Incremental flush does not delete existing bridge rows
     Given the in-memory projection has L1 and L2 action links
     When the bridge projection is flushed once

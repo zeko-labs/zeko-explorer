@@ -153,9 +153,58 @@ describeFeature(feature, ({ Scenario }) => {
     });
 
     Then("the SurrealDB SQL stores the inner action transaction link", () => {
-      expect(statements.join("\n")).toContain("transaction: transaction:");
+      expect(statements.join("\n")).toContain('"transaction": transaction:');
     });
   });
+
+  Scenario(
+    "Raw transaction object keys are quoted in SurrealDB literals",
+    ({ Given, When, Then }) => {
+      Given(
+        "the in-memory projection has a bridge-linked transaction with producer-owned raw keys",
+        () => {
+          reset();
+          store.transactions.set("tx-raw:ledger-raw", {
+            id: "tx-raw",
+            hash: "tx-raw",
+            sequence_number: 1,
+            type: "zkapp_command",
+            status: "applied",
+            sender_public_key: "B62qSender",
+            block_height: 10,
+            tx_index: 0,
+            sort_block_height: -10,
+            sort_tx_index: 0,
+            timestamp: "2026-05-13T00:00:00.000Z",
+            source_ledger_hash: "ledger-0",
+            target_ledger_hash: "ledger-raw",
+            raw_command: {
+              "account-updates": [{ "weird.key": "value", 'quote"key': "escaped" }],
+            },
+          });
+          store.bridgeTransactionLinks.set("bridge-raw:tx-raw:l2_finalize", {
+            id: "bridge-raw:tx-raw:l2_finalize",
+            in: "bridge-raw",
+            out: "tx-raw",
+            role: "l2_finalize",
+          });
+        },
+      );
+
+      When("the bridge projection is flushed once", async () => {
+        await writeBridgeProjectionToSurreal(client, store);
+      });
+
+      Then("the SurrealDB SQL quotes raw object keys", () => {
+        const sql = statements.join("\n");
+        expect(sql).toContain('"account-updates":');
+        expect(sql).toContain('"weird.key":');
+        expect(sql).toContain('"quote\\"key":');
+        expect(sql).not.toContain("account-updates:");
+        expect(sql).not.toContain("weird.key:");
+      });
+    },
+  );
 
   Scenario("Incremental flush does not delete existing bridge rows", ({ Given, When, Then }) => {
     Given("the in-memory projection has L1 and L2 action links", () => {

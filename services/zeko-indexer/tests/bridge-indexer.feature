@@ -148,6 +148,14 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-withdrawal" sequence 0 has type "withdrawal"
     And bridge operation for aux "aux-withdrawal" sequence 0 has status "completed"
 
+  Scenario: L1 rollback of a withdrawal witness preserves elapsed delay
+    Given the indexer consumed an L2 inner action for aux "aux-withdrawal-delay-rollback" with action state "inner-withdrawal-delay-rollback"
+    And the indexer consumed an L1 commit covering inner action state "inner-withdrawal-delay-rollback"
+    And the indexer observes L1 slot 231 for aux "aux-withdrawal-delay-rollback"
+    And the indexer consumes an L1 witness for aux "aux-withdrawal-delay-rollback"
+    When the indexer consumes an L1 rollback affecting outer action "outer-witness-aux-withdrawal-delay-rollback"
+    Then bridge operation for aux "aux-withdrawal-delay-rollback" sequence 0 has status "delay_passed"
+
   Scenario: Withdrawal inner action is exposed as L2 witnessed before commit
     When the indexer consumes an L2 inner action for aux "aux-withdrawal-l2-witnessed" with action state "inner-withdrawal-l2-witnessed"
     Then bridge operation for aux "aux-withdrawal-l2-witnessed" sequence 0 has status "l2_witnessed"
