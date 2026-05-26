@@ -1,10 +1,11 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Field, PublicKey, Signature } from "o1js";
 import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats.ts";
 import { createSurrealHttpClient, writeIndexerProjectionToSurreal } from "./adapters/surreal.ts";
 import { ZekoIndexer, type ZekoIndexerOptions } from "./indexer.ts";
 import { type IndexerStore, InMemoryIndexerStore } from "./store.ts";
-import type { ConsumeEnvelope } from "./types.ts";
+import type { ConsumeEnvelope, DaSignatureInput } from "./types.ts";
 
 export type RuntimeStreamConfig = {
   stream: string;
@@ -45,6 +46,7 @@ export type IndexerRuntime = {
 const DEFAULT_STREAMS: RuntimeStreamConfig[] = [
   { stream: "zeko-l1", subject: "zeko.l1.*" },
   { stream: "zeko-l2", subject: "zeko.l2.*" },
+  { stream: "zeko-da", subject: "zeko.da.*" },
 ];
 
 export function resolveIndexerRuntimeConfig(
@@ -56,6 +58,7 @@ export function resolveIndexerRuntimeConfig(
       "Durable resume requires startup hydration from SurrealDB; set ZEKO_INDEXER_NATS_REPLAY_FROM_START=true",
     );
   }
+  const authorizedDaSigners = new Set(splitCsv(env.ZEKO_INDEXER_DA_AUTHORIZED_SIGNERS ?? ""));
 
   return {
     natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? env.NATS_URL ?? "nats://127.0.0.1:4222"),
@@ -71,12 +74,30 @@ export function resolveIndexerRuntimeConfig(
       password: env.ZEKO_INDEXER_SURREAL_PASSWORD ?? env.SURREAL_PASSWORD ?? "root",
     },
     indexer: {
+      da: {
+        authorizedSigners: authorizedDaSigners,
+        quorum: positiveInteger(env.ZEKO_INDEXER_DA_QUORUM, 1),
+        verifySignature: verifyZekoMultisigDaSignature,
+      },
       bridge: {
         innerActionPublicKeys: new Set(splitCsv(env.ZEKO_INDEXER_BRIDGE_INNER_PUBLIC_KEYS ?? "")),
         withdrawalDelaySlots: positiveInteger(env.ZEKO_INDEXER_BRIDGE_WITHDRAWAL_DELAY_SLOTS, 100),
       },
     },
   };
+}
+
+export function verifyZekoMultisigDaSignature(event: DaSignatureInput): boolean {
+  if (event.implementation !== "zeko-multisig-v1") {
+    return false;
+  }
+  try {
+    return Signature.fromBase58(event.signature)
+      .verify(PublicKey.fromBase58(event.publicKey), [Field(event.ledgerHash), Field(event.accSet)])
+      .toBoolean();
+  } catch {
+    return false;
+  }
 }
 
 export function createIndexerRuntime(

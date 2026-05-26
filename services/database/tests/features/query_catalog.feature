@@ -20,6 +20,14 @@ Feature: Query catalog
     Then the result should contain one row
     And field "hash" of the first row should equal "tx-005"
 
+  Scenario: Natural transaction lookup returns the newest re-included hash
+    Given I insert another transaction with hash "tx-005" on target ledger "ledger-reincluded"
+    When I run query "transaction-by-hash" with:
+      | key | value    |
+      | hash | "tx-005" |
+    Then the result should contain one row
+    And field "target_ledger_hash" of the first row should equal "ledger-reincluded"
+
   Scenario: Transaction investigation by hash includes bounded related data
     When I run query "transaction-detail-by-hash" with:
       | key | value |
@@ -31,6 +39,17 @@ Feature: Query catalog
     And field "hash" of the first row should equal "tx-006"
     And the graph field "bridge_operations" of the first row should contain 1 rows
     And the graph field "inner_actions" of the first row should contain 1 rows
+
+  Scenario: Transaction investigation by hash returns the newest re-included hash
+    Given I insert another transaction with hash "tx-005" on target ledger "ledger-reincluded"
+    When I run query "transaction-detail-by-hash" with:
+      | key                | value    |
+      | hash               | "tx-005" |
+      | event_limit        | 10       |
+      | action_limit       | 10       |
+      | inner_action_limit | 10       |
+    Then the result should contain one row
+    And field "target_ledger_hash" of the first row should equal "ledger-reincluded"
 
   Scenario: Account profile query loads current state and first-page feeds
     When I run query "account-profile-overview" with:

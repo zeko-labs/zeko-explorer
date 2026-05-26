@@ -1,8 +1,10 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
+import { Field, PrivateKey, Signature } from "o1js";
 import { afterEach, expect } from "vitest";
 import {
   type ConsumeEnvelope,
   createIndexerRuntime,
+  type DaSignatureInput,
   InMemoryIndexerStore,
   type NatsEnvelopeSourceConfig,
   resolveIndexerRuntimeConfig,
@@ -23,6 +25,8 @@ describeFeature(feature, ({ Scenario }) => {
   let runtimeError: unknown;
   let projectionEvents: string[];
   let configError: unknown;
+  let directDaEvent: DaSignatureInput;
+  let malformedDaEvent: DaSignatureInput;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -80,6 +84,45 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario("Runtime config wires direct DA signature verification", ({ When, Then, And }) => {
+    When("the runtime config is resolved with a signed direct DA event", () => {
+      const privateKey = PrivateKey.random();
+      const publicKey = privateKey.toPublicKey().toBase58();
+      const ledgerHash = "101";
+      const accSet = "202";
+      directDaEvent = {
+        implementation: "zeko-multisig-v1",
+        ledgerHash,
+        accSet,
+        publicKey,
+        signature: Signature.create(privateKey, [Field(ledgerHash), Field(accSet)]).toBase58(),
+        instanceId: "da-runtime-a",
+        signedAt: timestamp,
+      };
+      malformedDaEvent = { ...directDaEvent, signature: "not-a-signature" };
+      config = resolveIndexerRuntimeConfig({
+        ZEKO_INDEXER_DA_AUTHORIZED_SIGNERS: publicKey,
+        ZEKO_INDEXER_DA_QUORUM: "2",
+      });
+    });
+
+    Then("the runtime direct DA quorum is {int}", (_context, quorum: number) => {
+      expect(config.indexer?.da?.quorum).toBe(quorum);
+    });
+
+    And("the runtime direct DA authorized signer is configured", () => {
+      expect(config.indexer?.da?.authorizedSigners?.has(directDaEvent.publicKey)).toBe(true);
+    });
+
+    And("the runtime direct DA verification accepts the signed event", () => {
+      expect(config.indexer?.da?.verifySignature?.(directDaEvent)).toBe(true);
+    });
+
+    And("the runtime direct DA verification rejects malformed signatures", () => {
+      expect(config.indexer?.da?.verifySignature?.(malformedDaEvent)).toBe(false);
+    });
+  });
+
   Scenario(
     "Runtime rebuilds in-memory state from the start of durable streams",
     ({ When, Then }) => {
@@ -96,7 +139,7 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then("every runtime source reader replays its stream from the beginning", () => {
-        expect(sourceConfigs).toHaveLength(2);
+        expect(sourceConfigs).toHaveLength(3);
         expect(sourceConfigs.every((sourceConfig) => sourceConfig.replayFromStart === true)).toBe(
           true,
         );

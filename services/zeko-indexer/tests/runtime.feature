@@ -10,8 +10,15 @@ Feature: Indexer runtime process
 
   Scenario: Runtime config creates one durable reader per source stream
     When the runtime config is resolved from the environment
-    Then the runtime consumes streams "zeko-l1,zeko-l2"
+    Then the runtime consumes streams "zeko-l1,zeko-l2,zeko-da"
     And the runtime uses durable name "zeko-indexer"
+
+  Scenario: Runtime config wires direct DA signature verification
+    When the runtime config is resolved with a signed direct DA event
+    Then the runtime direct DA quorum is 2
+    And the runtime direct DA authorized signer is configured
+    And the runtime direct DA verification accepts the signed event
+    And the runtime direct DA verification rejects malformed signatures
 
   Scenario: Runtime rebuilds in-memory state from the start of durable streams
     When the runtime source readers are created
