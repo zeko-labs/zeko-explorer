@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/public.ts"
   },
   "dependencies": {
     "@nats-io/jetstream": "catalog:",
@@ -12,6 +12,7 @@
     "@zeko/database": "workspace:*",
     "@zeko/nats": "workspace:*",
     "o1js": "catalog:",
+    "surrealdb": "catalog:",
     "ulid": "catalog:",
     "valibot": "catalog:"
   },

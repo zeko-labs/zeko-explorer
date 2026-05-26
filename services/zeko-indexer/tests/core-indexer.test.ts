@@ -7,15 +7,16 @@ import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { AccountUpdate, Field } from "o1js";
 import { expect } from "vitest";
 import {
+  createZekoIndexer,
   InMemoryIndexerStore,
   type L2AccountChangeInput,
   type L2AccountUpdateInput,
-  type SurrealHttpClient,
+  type SurrealClient,
   writeIndexerProjectionToSurreal,
-  ZekoIndexer,
-} from "../src/index";
+  type ZekoIndexer,
+} from "../src/public";
 
-const feature = await loadFeature("tests/core-indexer.feature");
+const feature = await loadFeature("tests/features/core-indexer.feature");
 const execFileAsync = promisify(execFile);
 const serviceRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -143,11 +144,11 @@ describeFeature(feature, ({ Scenario }) => {
   let indexer: ZekoIndexer;
   let lastError: unknown;
   let projectionStatements: string[];
-  let projectionClient: SurrealHttpClient;
+  let projectionClient: SurrealClient;
 
   const reset = () => {
     store = new InMemoryIndexerStore();
-    indexer = new ZekoIndexer(store, {
+    indexer = createZekoIndexer(store, {
       da: {
         authorizedSigners: new Set(["PK_A", "PK_B", "PK_C"]),
         quorum: 2,
@@ -157,8 +158,8 @@ describeFeature(feature, ({ Scenario }) => {
     lastError = undefined;
     projectionStatements = [];
     projectionClient = {
-      async query(sql: string): Promise<void> {
-        projectionStatements.push(sql);
+      async query(surql: string): Promise<void> {
+        projectionStatements.push(surql);
       },
     };
   };
@@ -1559,7 +1560,7 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then(
-        "the SurrealDB SQL deletes the old batch link for transaction {string}",
+        "the SurrealDB SurrealQL deletes the old batch link for transaction {string}",
         (_context, hash: string) => {
           const relationId = oldBatchLinkByHash.get(hash);
           expect(relationId).toBeDefined();
@@ -1612,7 +1613,7 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then(
-        "the SurrealDB SQL deletes the old account transaction link for transaction {string}",
+        "the SurrealDB SurrealQL deletes the old account transaction link for transaction {string}",
         (_context, hash: string) => {
           const relationId = oldAccountLinkByHash.get(hash);
           expect(relationId).toBeDefined();
@@ -1623,7 +1624,7 @@ describeFeature(feature, ({ Scenario }) => {
       );
 
       And(
-        "the SurrealDB SQL does not reinsert the old account transaction link for transaction {string}",
+        "the SurrealDB SurrealQL does not reinsert the old account transaction link for transaction {string}",
         (_context, hash: string) => {
           const relationId = oldAccountLinkByHash.get(hash);
           expect(relationId).toBeDefined();
@@ -2017,7 +2018,7 @@ describeFeature(feature, ({ Scenario }) => {
         await writeIndexerProjectionToSurreal(projectionClient, store);
       });
 
-      Then("the SurrealDB SQL deletes account {string}", (_context, publicKey: string) => {
+      Then("the SurrealDB SurrealQL deletes account {string}", (_context, publicKey: string) => {
         const accountId = accountIdsByPublicKey.get(publicKey);
         expect(accountId).toBeDefined();
         expect(projectionStatements.join("\n")).toContain(
@@ -2500,7 +2501,7 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then(
-        "the SurrealDB SQL deletes pending DA attestation for {string}",
+        "the SurrealDB SurrealQL deletes pending DA attestation for {string}",
         (_context, ledger: string) => {
           expect(projectionStatements.join("\n")).toContain(
             `DELETE pending_da_attestation:${encodedRecordId(ledger)}`,
@@ -3200,7 +3201,7 @@ describeFeature(feature, ({ Scenario }) => {
     );
 
     When("a new indexer instance uses the same store", () => {
-      indexer = new ZekoIndexer(store);
+      indexer = createZekoIndexer(store);
     });
 
     And(
@@ -3224,6 +3225,27 @@ describeFeature(feature, ({ Scenario }) => {
       const files = await tsFilesUnder(srcDir);
       const contents = await Promise.all(files.map((file) => readFile(file, "utf8")));
       expect(contents.join("\n")).not.toContain("@zeko/contract-schema");
+    });
+  });
+
+  Scenario("Source uses TypeScript bundler import resolution", ({ Then }) => {
+    Then("zeko-indexer source and tests use extensionless relative imports", async () => {
+      const roots = [
+        fileURLToPath(new URL("../src", import.meta.url)),
+        fileURLToPath(new URL(".", import.meta.url)),
+      ];
+      const files = (await Promise.all(roots.map((root) => tsFilesUnder(root)))).flat();
+      const offenders = (
+        await Promise.all(
+          files.map(async (file) => ({
+            file,
+            content: await readFile(file, "utf8"),
+          })),
+        )
+      )
+        .filter(({ content }) => /from\s+["']\.\.?\/[^"']+\.ts["']/.test(content))
+        .map(({ file }) => file);
+      expect(offenders).toEqual([]);
     });
   });
 

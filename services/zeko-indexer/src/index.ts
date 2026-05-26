@@ -1,19 +1,21 @@
-import { isDirectEntrypoint, runIndexerFromEnv } from "./runtime.ts";
-
-export * from "./action-state.ts";
-export * from "./adapters/nats.ts";
-export * from "./adapters/surreal.ts";
-export * from "./bridge.ts";
-export * from "./indexer.ts";
-export * from "./runtime.ts";
-export * from "./store.ts";
-export * from "./types.ts";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 if (isDirectEntrypoint(import.meta.url)) {
   try {
-    await runIndexerFromEnv();
+    if (process.env.ZEKO_INDEXER_CHECK_CONFIG === "1") {
+      process.exitCode = 0;
+    } else {
+      const runtimeModule = await import(new URL("../dist/runtime.mjs", import.meta.url).href);
+      await runtimeModule.runIndexerFromEnv();
+    }
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
   }
+}
+
+function isDirectEntrypoint(importMetaUrl: string, argv = process.argv): boolean {
+  const entrypoint = argv[1];
+  return entrypoint !== undefined && resolve(fileURLToPath(importMetaUrl)) === resolve(entrypoint);
 }

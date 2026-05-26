@@ -23,6 +23,7 @@ catalog:
   lefthook: "2.1.6"
   nuxt: "4.4.5"
   o1js: "2.15.0"
+  surrealdb: "2.0.3"
   tsdown: "0.22.0"
   ulid: "3.0.1"
   valibot: "1.4.0"

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import type { IndexerStore } from "./store.ts";
-import { normalizeTimestamp } from "./store.ts";
+import type { IndexerStore } from "./store";
+import { normalizeTimestamp } from "./store";
 import type {
   BridgeOperationRow,
   InnerActionRow,
@@ -9,7 +9,7 @@ import type {
   OuterActionRow,
   TransactionRow,
   ZkappActionRow,
-} from "./types.ts";
+} from "./types";
 
 export type BridgeProjectorOptions = {
   withdrawalDelaySlots?: number;

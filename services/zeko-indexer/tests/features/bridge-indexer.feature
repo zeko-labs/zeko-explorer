@@ -1,5 +1,5 @@
 Feature: Bridge operation projection
-  The indexer consumes the PRD bridge subjects and materializes WEB-426
+  The indexer consumes the PRD bridge subjects and materializes
   bridge_operation, outer_action, inner_action, and graph-link rows.
 
   Scenario: Deposit submission is recorded from L1 bridge events

@@ -176,14 +176,14 @@ Feature: Unified Zeko indexer
     Given the indexer flushed a settled batch for ledger "ledger-rollback-link-delete-2"
     When the indexer consumes a replacement transaction from source ledger "ledger-rollback-link-delete-1" to target ledger "ledger-rollback-link-delete-3"
     And the full indexer projection is flushed again
-    Then the SurrealDB SQL deletes the old batch link for transaction "tx-ledger-rollback-link-delete-2"
+    Then the SurrealDB SurrealQL deletes the old batch link for transaction "tx-ledger-rollback-link-delete-2"
 
   Scenario: L2 rollback projects deletion for reverted account transaction links
     Given the indexer flushed account transaction links for ledger "ledger-rollback-account-link-2"
     When the indexer consumes a replacement transaction from source ledger "ledger-rollback-account-link-1" to target ledger "ledger-rollback-account-link-3"
     And the full indexer projection is flushed again
-    Then the SurrealDB SQL deletes the old account transaction link for transaction "tx-ledger-rollback-account-link-2"
-    And the SurrealDB SQL does not reinsert the old account transaction link for transaction "tx-ledger-rollback-account-link-2"
+    Then the SurrealDB SurrealQL deletes the old account transaction link for transaction "tx-ledger-rollback-account-link-2"
+    And the SurrealDB SurrealQL does not reinsert the old account transaction link for transaction "tx-ledger-rollback-account-link-2"
 
   Scenario: Stale settlements do not resurrect L2 rolled-back batches
     Given the indexer consumed a payment transaction for ledger "ledger-stale-settlement-1"
@@ -249,7 +249,7 @@ Feature: Unified Zeko indexer
     Given the indexer flushed an account created on reverted ledger "ledger-account-delete-reverted"
     When the indexer consumes a replacement transaction from source ledger "ledger-account-delete-keep" to target ledger "ledger-account-delete-replacement"
     And the full indexer projection is flushed again
-    Then the SurrealDB SQL deletes account "B62qDeletedAccount"
+    Then the SurrealDB SurrealQL deletes account "B62qDeletedAccount"
 
   Scenario: L2 rollback restores delegated account state
     Given the indexer consumed an account update for "B62qDelegator" with delegate "B62qDelegateA" on ledger "ledger-delegate-keep"
@@ -323,7 +323,7 @@ Feature: Unified Zeko indexer
     Given the indexer flushed proved finality before L2 transaction for ledger "ledger-pending-da-delete"
     When the indexer consumes a payment transaction for ledger "ledger-pending-da-delete"
     And the full indexer projection is flushed again
-    Then the SurrealDB SQL deletes pending DA attestation for "ledger-pending-da-delete"
+    Then the SurrealDB SurrealQL deletes pending DA attestation for "ledger-pending-da-delete"
 
   Scenario: Direct DA signatures respect source precedence
     Given batch for ledger "ledger-da-2" is attested from source "proved"
@@ -422,6 +422,9 @@ Feature: Unified Zeko indexer
 
   Scenario: Indexer remains schema-blind at the package boundary
     Then the zeko-indexer source does not import "@zeko/contract-schema"
+
+  Scenario: Source uses TypeScript bundler import resolution
+    Then zeko-indexer source and tests use extensionless relative imports
 
   Scenario: Dev entrypoint configuration resolves under raw Node
     Then node can execute the zeko-indexer dev entrypoint config check

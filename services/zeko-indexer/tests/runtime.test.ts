@@ -1,6 +1,6 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { Field, PrivateKey, Signature } from "o1js";
-import { afterEach, expect } from "vitest";
+import { expect } from "vitest";
 import {
   type ConsumeEnvelope,
   createIndexerRuntime,
@@ -8,11 +8,10 @@ import {
   InMemoryIndexerStore,
   type NatsEnvelopeSourceConfig,
   resolveIndexerRuntimeConfig,
-} from "../src/index";
+} from "../src/public";
 
-const feature = await loadFeature("tests/runtime.feature");
+const feature = await loadFeature("tests/features/runtime.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";
-const originalFetch = globalThis.fetch;
 
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
@@ -27,10 +26,6 @@ describeFeature(feature, ({ Scenario }) => {
   let configError: unknown;
   let directDaEvent: DaSignatureInput;
   let malformedDaEvent: DaSignatureInput;
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
 
   Scenario(
     "Runtime consumes envelopes and flushes projection after each message",
@@ -221,27 +216,28 @@ describeFeature(feature, ({ Scenario }) => {
     );
 
     When("the runtime processes the source with the default SurrealDB projection", async () => {
-      surrealSql = [];
-      globalThis.fetch = (async (_input, init) => {
-        surrealSql.push(String(init?.body));
-        return new Response(JSON.stringify([{ status: "OK", result: null }]), { status: 200 });
-      }) as typeof fetch;
-
+      const surqlStatements: string[] = [];
       const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
         envelopeSources: [source],
+        surrealClient: {
+          async query(surql: string) {
+            surqlStatements.push(surql);
+          },
+        },
       });
       await runtime.done;
+      surrealSql = surqlStatements;
     });
 
-    Then("the SurrealDB SQL writes the core account row", () => {
+    Then("the SurrealDB SurrealQL writes the core account row", () => {
       expect(surrealSql.join("\n")).toContain("UPSERT account:");
     });
 
-    And("the SurrealDB SQL writes the core transaction row", () => {
+    And("the SurrealDB SurrealQL writes the core transaction row", () => {
       expect(surrealSql.join("\n")).toContain("UPSERT transaction:");
     });
 
-    And("the SurrealDB SQL writes the core account activity row", () => {
+    And("the SurrealDB SurrealQL writes the core account activity row", () => {
       expect(surrealSql.join("\n")).toContain("UPSERT account_activity:");
     });
   });

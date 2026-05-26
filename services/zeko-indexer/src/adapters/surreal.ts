@@ -1,11 +1,7 @@
-import type { BridgeProjectionRemovals, CoreProjectionRemovals, IndexerStore } from "../store.ts";
-import type {
-  BridgeOperationRow,
-  InnerActionRow,
-  OuterActionRow,
-  TransactionRow,
-} from "../types.ts";
-import { coreProjectionStatements } from "./surreal-core.ts";
+import { Surreal } from "surrealdb";
+import type { BridgeProjectionRemovals, CoreProjectionRemovals, IndexerStore } from "../store";
+import type { BridgeOperationRow, InnerActionRow, OuterActionRow, TransactionRow } from "../types";
+import { coreProjectionStatements } from "./surreal-core";
 import {
   date,
   deleteRecord,
@@ -13,9 +9,9 @@ import {
   stripUndefined,
   upsertRecord,
   upsertRelation,
-} from "./surreal-sql.ts";
+} from "./surrealql";
 
-export type SurrealHttpConfig = {
+export type SurrealConfig = {
   endpoint: string;
   namespace: string;
   database: string;
@@ -23,40 +19,33 @@ export type SurrealHttpConfig = {
   password: string;
 };
 
-export type SurrealHttpClient = {
-  query(sql: string): Promise<void>;
+export type SurrealClient = {
+  query(surql: string): Promise<void>;
+  close?(): Promise<void>;
 };
 
-export function createSurrealHttpClient(config: SurrealHttpConfig): SurrealHttpClient {
-  const endpoint = config.endpoint.replace(/\/$/, "");
-  const authorization = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
+export function createSurrealClient(config: SurrealConfig): SurrealClient {
+  const db = new Surreal();
+  let connection: Promise<void> | undefined;
+  const connect = async (): Promise<void> => {
+    await db.connect(config.endpoint);
+    await db.signin({ username: config.username, password: config.password });
+    await db.use({ namespace: config.namespace, database: config.database });
+  };
   return {
-    async query(sql: string): Promise<void> {
-      const response = await fetch(`${endpoint}/sql`, {
-        method: "POST",
-        headers: {
-          Authorization: authorization,
-          "Surreal-NS": config.namespace,
-          "Surreal-DB": config.database,
-          Accept: "application/json",
-        },
-        body: sql,
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(`SurrealDB HTTP ${response.status}: ${text}`);
-      }
-      const result = JSON.parse(text) as Array<{ status: "OK" | "ERR"; result: unknown }>;
-      const errors = result.filter((entry) => entry.status !== "OK");
-      if (errors.length > 0) {
-        throw new Error(errors.map((entry) => String(entry.result)).join("\n"));
-      }
+    async query(surql: string): Promise<void> {
+      connection ??= connect();
+      await connection;
+      await db.query(surql).collect();
+    },
+    async close(): Promise<void> {
+      await db.close();
     },
   };
 }
 
 export async function writeBridgeProjectionToSurreal(
-  client: SurrealHttpClient,
+  client: SurrealClient,
   store: IndexerStore,
 ): Promise<void> {
   const removals = snapshotBridgeProjectionRemovals(store.bridgeProjectionRemovals);
@@ -69,7 +58,7 @@ export async function writeBridgeProjectionToSurreal(
 }
 
 export async function writeIndexerProjectionToSurreal(
-  client: SurrealHttpClient,
+  client: SurrealClient,
   store: IndexerStore,
 ): Promise<void> {
   const coreRemovals = snapshotCoreProjectionRemovals(store.coreProjectionRemovals);

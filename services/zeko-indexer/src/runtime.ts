@@ -1,11 +1,15 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Field, PublicKey, Signature } from "o1js";
-import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats.ts";
-import { createSurrealHttpClient, writeIndexerProjectionToSurreal } from "./adapters/surreal.ts";
-import { ZekoIndexer, type ZekoIndexerOptions } from "./indexer.ts";
-import { type IndexerStore, InMemoryIndexerStore } from "./store.ts";
-import type { ConsumeEnvelope, DaSignatureInput } from "./types.ts";
+import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats";
+import {
+  createSurrealClient,
+  type SurrealClient,
+  writeIndexerProjectionToSurreal,
+} from "./adapters/surreal";
+import { createZekoIndexer, type ZekoIndexer, type ZekoIndexerOptions } from "./indexer";
+import { type IndexerStore, InMemoryIndexerStore } from "./store";
+import type { ConsumeEnvelope, DaSignatureInput } from "./types";
 
 export type RuntimeStreamConfig = {
   stream: string;
@@ -33,6 +37,7 @@ export type IndexerRuntimeDependencies = {
   indexer?: ZekoIndexer;
   envelopeSources?: AsyncIterable<ConsumeEnvelope>[];
   createEnvelopeSource?: (config: NatsEnvelopeSourceConfig) => AsyncIterable<ConsumeEnvelope>;
+  surrealClient?: SurrealClient;
   writeProjection?: (store: IndexerStore) => Promise<void>;
   signal?: AbortSignal;
 };
@@ -108,8 +113,8 @@ export function createIndexerRuntime(
   dependencies.signal?.addEventListener("abort", () => abortController.abort(), { once: true });
 
   const store = dependencies.store ?? new InMemoryIndexerStore();
-  const indexer = dependencies.indexer ?? new ZekoIndexer(store, config.indexer);
-  const surrealClient = createSurrealHttpClient(config.surreal);
+  const indexer = dependencies.indexer ?? createZekoIndexer(store, config.indexer);
+  const surrealClient = dependencies.surrealClient ?? createSurrealClient(config.surreal);
   const writeProjection =
     dependencies.writeProjection ??
     ((state: IndexerStore) => writeIndexerProjectionToSurreal(surrealClient, state));

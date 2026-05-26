@@ -1,4 +1,4 @@
-import type { CoreProjectionRemovals, IndexerStore } from "../store.ts";
+import type { CoreProjectionRemovals, IndexerStore } from "../store";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -8,7 +8,7 @@ import type {
   TransactionRow,
   ZkappActionRow,
   ZkappEventRow,
-} from "../types.ts";
+} from "../types";
 import {
   date,
   deleteRecord,
@@ -16,7 +16,7 @@ import {
   stripUndefined,
   upsertRecord,
   upsertRelation,
-} from "./surreal-sql.ts";
+} from "./surrealql";
 
 export function coreProjectionStatements(
   store: IndexerStore,

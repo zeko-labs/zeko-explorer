@@ -5,7 +5,7 @@ import { jetstreamManager } from "@nats-io/jetstream";
 import { connect } from "@nats-io/transport-node";
 import { expect } from "vitest";
 import {
-  runSql,
+  runSurql,
   startSurreal,
   stopSurreal,
   syncSchema,
@@ -13,14 +13,15 @@ import {
 import {
   type ConsumeEnvelope,
   consumeNatsEnvelopes,
-  createSurrealHttpClient,
+  createSurrealClient,
+  createZekoIndexer,
   InMemoryIndexerStore,
   writeBridgeProjectionToSurreal,
   writeIndexerProjectionToSurreal,
-  ZekoIndexer,
-} from "../src/index";
+  type ZekoIndexer,
+} from "../src/public";
 
-const feature = await loadFeature("tests/runtime-integration.feature");
+const feature = await loadFeature("tests/features/runtime-integration.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";
 const textEncoder = new TextEncoder();
 
@@ -293,7 +294,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         db = `zeko_indexer_runtime_${process.pid}`;
         await syncSchema(db);
         store = new InMemoryIndexerStore();
-        indexer = new ZekoIndexer(store);
+        indexer = createZekoIndexer(store);
       });
       When(
         "a deposit submission is published on NATS for aux {string}",
@@ -309,7 +310,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         await consumeNextNatsMessage();
       });
       And("the bridge projection is flushed to SurrealDB twice", async () => {
-        const client = createSurrealHttpClient({
+        const client = createSurrealClient({
           endpoint: surrealEndpoint,
           namespace: "database_test",
           database: db,
@@ -322,7 +323,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
       Then(
         "SurrealDB stores a bridge operation for aux {string} with status {string}",
         async (_context, aux: string, status: string) => {
-          const result = await runSql<Array<{ aux: string; status: string }>>(
+          const result = await runSurql<Array<{ aux: string; status: string }>>(
             db,
             `SELECT aux, status FROM bridge_operation WHERE aux = "${aux}";`,
           );
@@ -331,7 +332,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         },
       );
       And("SurrealDB stores one L1 witness link", async () => {
-        const result = await runSql<Array<{ count: number }>>(
+        const result = await runSurql<Array<{ count: number }>>(
           db,
           'SELECT count() AS count FROM l1_action_link WHERE role = "witness" GROUP ALL;',
         );
@@ -351,7 +352,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         db = `zeko_indexer_runtime_core_${process.pid}`;
         await syncSchema(db);
         store = new InMemoryIndexerStore();
-        indexer = new ZekoIndexer(store);
+        indexer = createZekoIndexer(store);
       });
       When(
         "an ordinary L2 transaction {string} is published on NATS",
@@ -363,7 +364,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         await consumeOneL2NatsMessage();
       });
       And("the full indexer projection is flushed to SurrealDB", async () => {
-        const client = createSurrealHttpClient({
+        const client = createSurrealClient({
           endpoint: surrealEndpoint,
           namespace: "database_test",
           database: db,
@@ -373,7 +374,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
         await writeIndexerProjectionToSurreal(client, store);
       });
       Then("SurrealDB stores transaction {string}", async (_context, txHash: string) => {
-        const result = await runSql<Array<{ hash: string }>>(
+        const result = await runSurql<Array<{ hash: string }>>(
           db,
           `SELECT hash FROM transaction WHERE hash = "${txHash}";`,
         );
@@ -383,7 +384,7 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
       And(
         "SurrealDB stores an account activity for {string}",
         async (_context, publicKey: string) => {
-          const result = await runSql<Array<{ count: number }>>(
+          const result = await runSurql<Array<{ count: number }>>(
             db,
             `SELECT count() AS count FROM account_activity WHERE account IN (SELECT VALUE id FROM account WHERE public_key = "${publicKey}") GROUP ALL;`,
           );

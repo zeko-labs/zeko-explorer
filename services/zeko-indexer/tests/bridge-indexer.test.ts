@@ -1,8 +1,8 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
-import { InMemoryIndexerStore, ZekoIndexer } from "../src/index";
+import { createZekoIndexer, InMemoryIndexerStore, type ZekoIndexer } from "../src/public";
 
-const feature = await loadFeature("tests/bridge-indexer.feature");
+const feature = await loadFeature("tests/features/bridge-indexer.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";
 
 const l1Envelope = (blockHeight = 5000, slot = 120) =>
@@ -29,7 +29,7 @@ describeFeature(feature, ({ Scenario }) => {
 
   const reset = () => {
     store = new InMemoryIndexerStore();
-    indexer = new ZekoIndexer(store, {
+    indexer = createZekoIndexer(store, {
       bridge: {
         innerActionPublicKeys: new Set(["B62qInnerBridge"]),
         withdrawalDelaySlots: 100,

@@ -1,8 +1,8 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
-import { consumeNatsMessage, resolveNatsEnvelopeSourceConfig } from "../src/index";
+import { consumeNatsMessage, resolveNatsEnvelopeSourceConfig } from "../src/public";
 
-const feature = await loadFeature("tests/nats-adapter.feature");
+const feature = await loadFeature("tests/features/nats-adapter.feature");
 const textEncoder = new TextEncoder();
 
 describeFeature(feature, ({ Scenario }) => {

@@ -42,9 +42,9 @@ Feature: Indexer runtime process
   Scenario: Runtime default projection writes ordinary L2 rows
     Given a finite runtime envelope source with ordinary L2 transaction "tx-runtime-core"
     When the runtime processes the source with the default SurrealDB projection
-    Then the SurrealDB SQL writes the core account row
-    And the SurrealDB SQL writes the core transaction row
-    And the SurrealDB SQL writes the core account activity row
+    Then the SurrealDB SurrealQL writes the core account row
+    And the SurrealDB SurrealQL writes the core transaction row
+    And the SurrealDB SurrealQL writes the core account activity row
 
   Scenario: Runtime aborts sibling sources after a projection failure
     Given a runtime source that fails during projection and an idle sibling source

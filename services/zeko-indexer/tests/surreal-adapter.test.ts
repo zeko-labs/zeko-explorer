@@ -2,24 +2,24 @@ import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
   InMemoryIndexerStore,
-  type SurrealHttpClient,
+  type SurrealClient,
   writeBridgeProjectionToSurreal,
   writeIndexerProjectionToSurreal,
-} from "../src/index";
+} from "../src/public";
 
-const feature = await loadFeature("tests/surreal-adapter.feature");
+const feature = await loadFeature("tests/features/surreal-adapter.feature");
 
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let statements: string[];
-  let client: SurrealHttpClient;
+  let client: SurrealClient;
 
   const reset = () => {
     store = new InMemoryIndexerStore();
     statements = [];
     client = {
-      async query(sql: string): Promise<void> {
-        statements.push(sql);
+      async query(surql: string): Promise<void> {
+        statements.push(surql);
       },
     };
   };
@@ -73,7 +73,7 @@ describeFeature(feature, ({ Scenario }) => {
       await writeBridgeProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL contains a bridge transaction relation", () => {
+    Then("the SurrealDB SurrealQL contains a bridge transaction relation", () => {
       expect(statements.join("\n")).toContain("INSERT RELATION INTO bridge_transaction_link");
       expect(statements.join("\n")).toContain('role: "l2_finalize"');
     });
@@ -114,12 +114,12 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then(
-        "the SurrealDB SQL writes the transaction before the bridge transaction relation",
+        "the SurrealDB SurrealQL writes the transaction before the bridge transaction relation",
         () => {
-          const sql = statements.join("\n");
-          const transactionIndex = sql.indexOf("UPSERT transaction:");
+          const surql = statements.join("\n");
+          const transactionIndex = surql.indexOf("UPSERT transaction:");
           expect(transactionIndex).toBeGreaterThanOrEqual(0);
-          expect(sql.indexOf("INSERT RELATION INTO bridge_transaction_link")).toBeGreaterThan(
+          expect(surql.indexOf("INSERT RELATION INTO bridge_transaction_link")).toBeGreaterThan(
             transactionIndex,
           );
         },
@@ -173,14 +173,17 @@ describeFeature(feature, ({ Scenario }) => {
       await writeIndexerProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL writes the bridge-linked transaction once with account details", () => {
-      const sql = statements.join("\n");
-      const transactionId = `transaction:${encodedRecordId("tx-bridge")}`;
-      expect(sql.match(new RegExp(`UPSERT ${transactionId}`, "g")) ?? []).toHaveLength(1);
-      expect(sql).toContain(`"sender": account:${encodedRecordId("account-sender")}`);
-      expect(sql).toContain(`"receiver": account:${encodedRecordId("account-receiver")}`);
-      expect(sql).toContain('"search_text": "tx-bridge zkapp_command B62qSender B62qReceiver"');
-    });
+    Then(
+      "the SurrealDB SurrealQL writes the bridge-linked transaction once with account details",
+      () => {
+        const surql = statements.join("\n");
+        const transactionId = `transaction:${encodedRecordId("tx-bridge")}`;
+        expect(surql.match(new RegExp(`UPSERT ${transactionId}`, "g")) ?? []).toHaveLength(1);
+        expect(surql).toContain(`"sender": account:${encodedRecordId("account-sender")}`);
+        expect(surql).toContain(`"receiver": account:${encodedRecordId("account-receiver")}`);
+        expect(surql).toContain('"search_text": "tx-bridge zkapp_command B62qSender B62qReceiver"');
+      },
+    );
   });
 
   Scenario("Inner actions retain their source transaction record", ({ Given, When, Then }) => {
@@ -209,7 +212,7 @@ describeFeature(feature, ({ Scenario }) => {
       await writeBridgeProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL stores the inner action transaction link", () => {
+    Then("the SurrealDB SurrealQL stores the inner action transaction link", () => {
       expect(statements.join("\n")).toContain('"transaction": transaction:');
     });
   });
@@ -252,13 +255,13 @@ describeFeature(feature, ({ Scenario }) => {
         await writeBridgeProjectionToSurreal(client, store);
       });
 
-      Then("the SurrealDB SQL quotes raw object keys", () => {
-        const sql = statements.join("\n");
-        expect(sql).toContain('"account-updates":');
-        expect(sql).toContain('"weird.key":');
-        expect(sql).toContain('"quote\\"key":');
-        expect(sql).not.toContain("account-updates:");
-        expect(sql).not.toContain("weird.key:");
+      Then("the SurrealDB SurrealQL quotes raw object keys", () => {
+        const surql = statements.join("\n");
+        expect(surql).toContain('"account-updates":');
+        expect(surql).toContain('"weird.key":');
+        expect(surql).toContain('"quote\\"key":');
+        expect(surql).not.toContain("account-updates:");
+        expect(surql).not.toContain("weird.key:");
       });
     },
   );
@@ -284,7 +287,7 @@ describeFeature(feature, ({ Scenario }) => {
       await writeBridgeProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL does not delete bridge projection tables", () => {
+    Then("the SurrealDB SurrealQL does not delete bridge projection tables", () => {
       expect(statements.join("\n")).not.toContain("DELETE bridge_transaction_link;");
       expect(statements.join("\n")).not.toContain("DELETE l2_action_link;");
       expect(statements.join("\n")).not.toContain("DELETE l1_action_link;");
@@ -304,7 +307,7 @@ describeFeature(feature, ({ Scenario }) => {
       await writeBridgeProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL deletes only the removed L2 relation", () => {
+    Then("the SurrealDB SurrealQL deletes only the removed L2 relation", () => {
       expect(statements.join("\n")).toContain("DELETE l2_action_link:");
       expect(statements.join("\n")).not.toContain("DELETE bridge_operation;");
       expect(statements.join("\n")).not.toContain("DELETE outer_action;");
@@ -323,10 +326,10 @@ describeFeature(feature, ({ Scenario }) => {
       await writeIndexerProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL deletes the stale zkApp rows", () => {
-      const sql = statements.join("\n");
-      expect(sql).toContain(`DELETE zkapp_event:${encodedRecordId("zk-event-1")}`);
-      expect(sql).toContain(`DELETE zkapp_action:${encodedRecordId("zk-action-1")}`);
+    Then("the SurrealDB SurrealQL deletes the stale zkApp rows", () => {
+      const surql = statements.join("\n");
+      expect(surql).toContain(`DELETE zkapp_event:${encodedRecordId("zk-event-1")}`);
+      expect(surql).toContain(`DELETE zkapp_action:${encodedRecordId("zk-action-1")}`);
     });
   });
 
@@ -372,14 +375,14 @@ describeFeature(feature, ({ Scenario }) => {
       });
 
       Then(
-        "the SurrealDB SQL deletes the stale batch transaction relation before inserting the replacement",
+        "the SurrealDB SurrealQL deletes the stale batch transaction relation before inserting the replacement",
         () => {
-          const sql = statements.join("\n");
-          const deleteIndex = sql.indexOf(
+          const surql = statements.join("\n");
+          const deleteIndex = surql.indexOf(
             `DELETE batch_transaction:${encodedRecordId("batch-old:tx-moved")}`,
           );
           expect(deleteIndex).toBeGreaterThanOrEqual(0);
-          expect(sql.indexOf("INSERT RELATION INTO batch_transaction")).toBeGreaterThan(
+          expect(surql.indexOf("INSERT RELATION INTO batch_transaction")).toBeGreaterThan(
             deleteIndex,
           );
         },
@@ -396,8 +399,8 @@ describeFeature(feature, ({ Scenario }) => {
         reset();
         store.bridgeProjectionRemovals.l2ActionLinkIds.add("bridge-1:inner-1:mint");
         client = {
-          async query(sql: string): Promise<void> {
-            statements.push(sql);
+          async query(surql: string): Promise<void> {
+            statements.push(surql);
             if (releaseFirstFlush) {
               return;
             }
@@ -439,10 +442,10 @@ describeFeature(feature, ({ Scenario }) => {
       await writeBridgeProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL uses distinct record IDs for each outer action", () => {
-      const sql = statements.join("\n");
-      expect(sql).toContain("outer_action:hex_6f757465722d61");
-      expect(sql).toContain("outer_action:hex_6f757465725f61");
+    Then("the SurrealDB SurrealQL uses distinct record IDs for each outer action", () => {
+      const surql = statements.join("\n");
+      expect(surql).toContain("outer_action:hex_6f757465722d61");
+      expect(surql).toContain("outer_action:hex_6f757465725f61");
     });
   });
 
@@ -495,18 +498,18 @@ describeFeature(feature, ({ Scenario }) => {
       await writeIndexerProjectionToSurreal(client, store);
     });
 
-    Then("the SurrealDB SQL writes the account before its activity", () => {
-      const sql = statements.join("\n");
-      const accountIndex = sql.indexOf("UPSERT account:");
+    Then("the SurrealDB SurrealQL writes the account before its activity", () => {
+      const surql = statements.join("\n");
+      const accountIndex = surql.indexOf("UPSERT account:");
       expect(accountIndex).toBeGreaterThanOrEqual(0);
-      expect(sql.indexOf("UPSERT account_activity:")).toBeGreaterThan(accountIndex);
+      expect(surql.indexOf("UPSERT account_activity:")).toBeGreaterThan(accountIndex);
     });
 
-    And("the SurrealDB SQL writes the transaction before its activity", () => {
-      const sql = statements.join("\n");
-      const transactionIndex = sql.indexOf("UPSERT transaction:");
+    And("the SurrealDB SurrealQL writes the transaction before its activity", () => {
+      const surql = statements.join("\n");
+      const transactionIndex = surql.indexOf("UPSERT transaction:");
       expect(transactionIndex).toBeGreaterThanOrEqual(0);
-      expect(sql.indexOf("UPSERT account_activity:")).toBeGreaterThan(transactionIndex);
+      expect(surql.indexOf("UPSERT account_activity:")).toBeGreaterThan(transactionIndex);
     });
   });
 });

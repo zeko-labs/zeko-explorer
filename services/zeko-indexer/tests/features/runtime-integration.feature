@@ -1,6 +1,6 @@
 Feature: NATS and SurrealDB runtime integration
   The indexer adapter reads typed NATS messages and persists projected rows
-  into the WEB-426 SurrealDB schema.
+  into the SurrealDB schema.
 
   Scenario: Bridge event replays from JetStream into SurrealDB
     Given local NATS and SurrealDB are running
