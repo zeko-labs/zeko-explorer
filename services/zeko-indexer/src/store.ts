@@ -22,6 +22,15 @@ export type IdFactory = {
   newId(timestamp: string | number): string;
 };
 
+export type BridgeProjectionRemovals = {
+  readonly outerActionIds: Set<string>;
+  readonly innerActionIds: Set<string>;
+  readonly bridgeOperationIds: Set<string>;
+  readonly l1ActionLinkIds: Set<string>;
+  readonly l2ActionLinkIds: Set<string>;
+  readonly bridgeTransactionLinkIds: Set<string>;
+};
+
 export type IndexerStore = {
   readonly accounts: Map<string, AccountRow>;
   readonly transactions: Map<string, TransactionRow>;
@@ -43,6 +52,7 @@ export type IndexerStore = {
   readonly ledgerOrder: string[];
   readonly l1RollbackAffectedSettlementIds: Set<string>;
   readonly l1RollbackAffectedBridgeEventIds: Set<string>;
+  readonly bridgeProjectionRemovals: BridgeProjectionRemovals;
   readonly idFactory: IdFactory;
 
   accountByPublicKey(publicKey: string, tokenId?: string): AccountRow | undefined;
@@ -114,6 +124,14 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly ledgerOrder: string[] = [];
   readonly l1RollbackAffectedSettlementIds = new Set<string>();
   readonly l1RollbackAffectedBridgeEventIds = new Set<string>();
+  readonly bridgeProjectionRemovals: BridgeProjectionRemovals = {
+    outerActionIds: new Set(),
+    innerActionIds: new Set(),
+    bridgeOperationIds: new Set(),
+    l1ActionLinkIds: new Set(),
+    l2ActionLinkIds: new Set(),
+    bridgeTransactionLinkIds: new Set(),
+  };
   readonly idFactory: IdFactory;
 
   constructor(idFactory: IdFactory = new UlidFactory()) {

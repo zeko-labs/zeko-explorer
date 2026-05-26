@@ -1,4 +1,4 @@
-import type { IndexerStore } from "../store.ts";
+import type { BridgeProjectionRemovals, IndexerStore } from "../store.ts";
 import type {
   BridgeOperationRow,
   BridgeTransactionLinkRow,
@@ -53,14 +53,7 @@ export async function writeBridgeProjectionToSurreal(
   client: SurrealHttpClient,
   store: IndexerStore,
 ): Promise<void> {
-  const statements: string[] = [
-    "DELETE bridge_transaction_link;",
-    "DELETE l2_action_link;",
-    "DELETE l1_action_link;",
-    "DELETE outer_action;",
-    "DELETE inner_action;",
-    "DELETE bridge_operation;",
-  ];
+  const statements: string[] = bridgeRemovalStatements(store.bridgeProjectionRemovals);
   for (const row of store.outerActions.values()) {
     statements.push(upsertRecord("outer_action", row.id, serializeOuterAction(row)));
   }
@@ -100,7 +93,33 @@ export async function writeBridgeProjectionToSurreal(
       ),
     );
   }
+  if (statements.length === 0) {
+    return;
+  }
   await client.query(statements.join("\n"));
+  clearBridgeProjectionRemovals(store.bridgeProjectionRemovals);
+}
+
+function bridgeRemovalStatements(removals: BridgeProjectionRemovals): string[] {
+  return [
+    ...[...removals.bridgeTransactionLinkIds].map((id) =>
+      deleteRecord("bridge_transaction_link", id),
+    ),
+    ...[...removals.l2ActionLinkIds].map((id) => deleteRecord("l2_action_link", id)),
+    ...[...removals.l1ActionLinkIds].map((id) => deleteRecord("l1_action_link", id)),
+    ...[...removals.outerActionIds].map((id) => deleteRecord("outer_action", id)),
+    ...[...removals.innerActionIds].map((id) => deleteRecord("inner_action", id)),
+    ...[...removals.bridgeOperationIds].map((id) => deleteRecord("bridge_operation", id)),
+  ];
+}
+
+function clearBridgeProjectionRemovals(removals: BridgeProjectionRemovals): void {
+  removals.bridgeTransactionLinkIds.clear();
+  removals.l2ActionLinkIds.clear();
+  removals.l1ActionLinkIds.clear();
+  removals.outerActionIds.clear();
+  removals.innerActionIds.clear();
+  removals.bridgeOperationIds.clear();
 }
 
 function serializeOuterAction(row: OuterActionRow): Record<string, unknown> {
@@ -227,8 +246,12 @@ function upsertRecord(table: string, id: string, row: Record<string, unknown>): 
   return `UPSERT ${recordId(table, id)} CONTENT ${literal(row)};`;
 }
 
+function deleteRecord(table: string, id: string): string {
+  return `DELETE ${recordId(table, id)};`;
+}
+
 function recordId(table: string, id: string): string {
-  return `${table}:${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
+  return `${table}:hex_${Buffer.from(id, "utf8").toString("hex")}`;
 }
 
 function record(table: string, id: string): { readonly kind: "record"; readonly value: string } {

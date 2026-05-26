@@ -235,6 +235,7 @@ export function consumeBridgeRollback(
   for (const outerActionId of event.affected.outerActionIds) {
     const outerAction = store.outerActions.get(outerActionId);
     store.outerActions.delete(outerActionId);
+    store.bridgeProjectionRemovals.outerActionIds.add(outerActionId);
     deleteL1LinksForOuterAction(store, outerActionId);
     if (!outerAction) {
       continue;
@@ -274,6 +275,7 @@ export function consumeBridgeL2Rollback(
     if (innerAction.target_ledger_hash === event.ledgerHash) {
       removedInnerActions.set(innerAction.id, innerAction);
       store.innerActions.delete(state);
+      store.bridgeProjectionRemovals.innerActionIds.add(innerAction.id);
     }
   }
 
@@ -286,6 +288,7 @@ export function consumeBridgeL2Rollback(
     if (removedInnerActions.has(link.out)) {
       affectedOperationIds.add(link.in);
       store.l2ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l2ActionLinkIds.add(link.id);
     }
   }
 
@@ -296,6 +299,7 @@ export function consumeBridgeL2Rollback(
     if (removedTransactionIds.has(link.out)) {
       affectedOperationIds.add(link.in);
       store.bridgeTransactionLinks.delete(key);
+      store.bridgeProjectionRemovals.bridgeTransactionLinkIds.add(link.id);
     }
   }
 
@@ -796,6 +800,7 @@ function deleteL1LinksForOuterAction(store: IndexerStore, outerActionId: string)
   for (const [key, link] of store.l1ActionLinks) {
     if (link.in === outerActionId) {
       store.l1ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
     }
   }
 }
@@ -804,6 +809,7 @@ function deleteCommitLinksForOperation(store: IndexerStore, operationId: string)
   for (const [key, link] of store.l1ActionLinks) {
     if (link.out === operationId && link.role === "commit") {
       store.l1ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
     }
   }
 }

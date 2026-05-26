@@ -22,8 +22,17 @@ Feature: Surreal bridge adapter
     When the bridge projection is flushed once
     Then the SurrealDB SQL stores the inner action transaction link
 
-  Scenario: Snapshot flush deletes stale bridge rows and relations
+  Scenario: Incremental flush does not delete existing bridge rows
     Given the in-memory projection has L1 and L2 action links
-    When the bridge projection is flushed, L2 evidence is removed, and the projection is flushed again
-    Then the second SurrealDB SQL deletes stale bridge projection rows
-    And the second SurrealDB SQL does not reinsert the removed L2 relation
+    When the bridge projection is flushed once
+    Then the SurrealDB SQL does not delete bridge projection tables
+
+  Scenario: Tracked removals delete only stale bridge records
+    Given the in-memory projection has a removed L2 action link
+    When the bridge projection is flushed once
+    Then the SurrealDB SQL deletes only the removed L2 relation
+
+  Scenario: Record IDs preserve source identifier uniqueness
+    Given the in-memory projection has outer actions with punctuation-variant IDs
+    When the bridge projection is flushed once
+    Then the SurrealDB SQL uses distinct record IDs for each outer action
