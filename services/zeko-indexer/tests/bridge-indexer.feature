@@ -55,6 +55,13 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-shared" sequence 0 has status "l1_witnessed"
     And bridge operation for aux "aux-shared" sequence 1 has status "submitted"
 
+  Scenario: Repeated deposits derive FIFO identity when producer action index resets
+    When the indexer consumes a deposit submission for aux "aux-reset-index"
+    And the indexer consumes another deposit submission for aux "aux-reset-index" with producer action index 0
+    And the indexer consumes an L1 witness for aux "aux-reset-index"
+    Then bridge operation for aux "aux-reset-index" sequence 0 has status "l1_witnessed"
+    And bridge operation for aux "aux-reset-index" sequence 1 has status "submitted"
+
   Scenario: Out-of-order deposit submission enriches existing witness evidence
     Given the indexer consumed an L1 witness for aux "aux-out-of-order"
     When the indexer consumes a deposit submission for aux "aux-out-of-order"

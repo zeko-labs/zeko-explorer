@@ -24,20 +24,25 @@ export type NatsEnvelopeSourceConfig = {
   nextExpiresMs?: number;
 };
 
+export type ResolvedNatsEnvelopeSourceConfig = NatsEnvelopeSourceConfig & {
+  subject: string;
+  stream: string;
+  durableName: string;
+  nextExpiresMs: number;
+};
+
 export async function* consumeNatsEnvelopes(
   config: NatsEnvelopeSourceConfig,
 ): AsyncGenerator<ConsumeEnvelope> {
-  const filterSubject = config.subject ?? "zeko.>";
-  const stream = config.stream ?? streamForSubject(filterSubject);
-  const durableName = config.durableName ?? "zeko-indexer";
+  const resolved = resolveNatsEnvelopeSourceConfig(config);
   const connection = await connect({ servers: config.servers });
   const manager = await jetstreamManager(connection);
-  await ensureDurableConsumer(manager, stream, durableName, filterSubject);
+  await ensureDurableConsumer(manager, resolved.stream, resolved.durableName, resolved.subject);
   const client = jetstream(connection);
-  const consumer = await client.consumers.get(stream, durableName);
+  const consumer = await client.consumers.get(resolved.stream, resolved.durableName);
   try {
     while (true) {
-      const message = await consumer.next({ expires: config.nextExpiresMs ?? 1_000 });
+      const message = await consumer.next({ expires: resolved.nextExpiresMs });
       if (!message) {
         continue;
       }
@@ -50,6 +55,23 @@ export async function* consumeNatsEnvelopes(
   } finally {
     await connection.close();
   }
+}
+
+export function resolveNatsEnvelopeSourceConfig(
+  config: NatsEnvelopeSourceConfig,
+): ResolvedNatsEnvelopeSourceConfig {
+  const stream = config.stream ?? streamForSubject(config.subject ?? "zeko.l1.*");
+  const subject = config.subject ?? subjectForStream(stream);
+  if (streamForSubject(subject) !== stream) {
+    throw new Error(`NATS subject ${subject} does not belong to stream ${stream}`);
+  }
+  return {
+    ...config,
+    subject,
+    stream,
+    durableName: config.durableName ?? "zeko-indexer",
+    nextExpiresMs: config.nextExpiresMs ?? 1_000,
+  };
 }
 
 export function parseNatsEnvelope(subject: string, data: string): ConsumeEnvelope | undefined {
@@ -105,4 +127,17 @@ function streamForSubject(subject: string): string {
     return "zeko-da";
   }
   throw new Error("NATS JetStream stream is required for broad wildcard subjects");
+}
+
+function subjectForStream(stream: string): string {
+  switch (stream) {
+    case "zeko-l1":
+      return "zeko.l1.*";
+    case "zeko-l2":
+      return "zeko.l2.*";
+    case "zeko-da":
+      return "zeko.da.*";
+    default:
+      throw new Error(`NATS subject is required for stream ${stream}`);
+  }
 }

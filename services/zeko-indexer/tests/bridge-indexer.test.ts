@@ -42,17 +42,22 @@ describeFeature(feature, ({ Scenario }) => {
     return row;
   };
 
-  const consumeDeposit = async (aux: string, operationIndex = 0) => {
+  const consumeDeposit = async (
+    aux: string,
+    operationIndex = 0,
+    eventKey = `${operationIndex}`,
+    blockOffset = operationIndex,
+  ) => {
     await indexer.consume({
       subject: "zeko.l1.bridge-events",
       payload: {
-        ...l1Envelope(5000 + operationIndex),
+        ...l1Envelope(5000 + blockOffset),
         subject: "zeko.l1.bridge-events",
-        bridgeEventId: `l1-deposit-${aux}-${operationIndex}`,
+        bridgeEventId: `l1-deposit-${aux}-${eventKey}`,
         type: "deposit_submitted",
         userPk: "B62qUser",
         userPkSource: "account_update",
-        txHash: `l1-submit-${aux}-${operationIndex}`,
+        txHash: `l1-submit-${aux}-${eventKey}`,
         aux,
         amount: "1000000000",
         recipient: "B62qRecipient",
@@ -551,6 +556,36 @@ describeFeature(feature, ({ Scenario }) => {
       },
     );
   });
+
+  Scenario(
+    "Repeated deposits derive FIFO identity when producer action index resets",
+    ({ When, And, Then }) => {
+      reset();
+      When("the indexer consumes a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And(
+        "the indexer consumes another deposit submission for aux {string} with producer action index {int}",
+        (_context, aux: string, operationIndex: number) =>
+          consumeDeposit(aux, operationIndex, "same-producer-index", 1),
+      );
+      And("the indexer consumes an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
 
   Scenario(
     "Out-of-order deposit submission enriches existing witness evidence",

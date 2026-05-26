@@ -315,15 +315,21 @@ function upsertDepositSubmission(store: IndexerStore, event: L1BridgeEventInput)
   if (!event.aux) {
     return;
   }
-  const auxSequence = event.operationIndex ?? store.nextBridgeSequence(event.aux);
-  const previous = cloneOptionalBridgeOperation(
-    store.bridgeOperations.get(bridgeKey(event.aux, auxSequence)),
+  const existingWitnessedDeposit = firstOperationNeeding(
+    store,
+    event.aux,
+    (operation) =>
+      operation.type === "deposit" &&
+      operation.status !== "rolled_back" &&
+      operation.status !== "cancelled" &&
+      operation.submit_tx_hash === undefined,
   );
+  const previous = cloneOptionalBridgeOperation(existingWitnessedDeposit);
   const operation = createBridgeOperation(store, {
     type: "deposit",
     status: "submitted",
     aux: event.aux,
-    auxSequence,
+    auxSequence: existingWitnessedDeposit?.aux_sequence,
     sender: event.userPk,
     recipient: event.recipient ?? UNKNOWN,
     amount: event.amount ?? UNKNOWN,
