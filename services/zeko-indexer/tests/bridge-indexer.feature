@@ -9,6 +9,10 @@ Feature: Bridge operation projection
     And bridge operation for aux "aux-deposit-1" sequence 0 has sender "B62qUser"
     And bridge operation for aux "aux-deposit-1" sequence 0 has amount "1000000000"
 
+  Scenario: Replayed deposit submissions derive stable bridge operation IDs
+    When two fresh indexers consume the same deposit submission for aux "aux-replayed-id"
+    Then the replayed bridge operation IDs match
+
   Scenario: Deposit lifecycle correlates L1 and L2 actions
     Given the indexer consumed a deposit submission for aux "aux-deposit-2"
     When the indexer consumes an L1 witness for aux "aux-deposit-2"
@@ -96,6 +100,21 @@ Feature: Bridge operation projection
     When the indexer consumes a deposit cancellation for aux "aux-cancel-index" sequence 1
     Then bridge operation for aux "aux-cancel-index" sequence 0 has status "submitted"
     And bridge operation for aux "aux-cancel-index" sequence 1 has status "cancelled"
+
+  Scenario: Cancelled deposits do not accept later L1 witness evidence
+    Given the indexer consumed a deposit submission for aux "aux-cancel-witness"
+    And the indexer consumed a deposit cancellation for aux "aux-cancel-witness"
+    When the indexer consumes an L1 witness for aux "aux-cancel-witness"
+    Then bridge operation for aux "aux-cancel-witness" sequence 0 has status "cancelled"
+    And bridge operation for aux "aux-cancel-witness" sequence 1 has status "l1_witnessed"
+
+  Scenario: Cancelled deposits do not accept later L2 inner evidence
+    Given the indexer consumed a deposit submission for aux "aux-cancel-inner"
+    And the indexer consumed a deposit cancellation for aux "aux-cancel-inner"
+    When the indexer consumes an L2 inner action for aux "aux-cancel-inner" with action state "inner-cancel-inner"
+    Then bridge operation for aux "aux-cancel-inner" sequence 0 has status "cancelled"
+    And bridge operation for aux "aux-cancel-inner" sequence 1 has type "withdrawal"
+    And bridge operation for aux "aux-cancel-inner" sequence 1 has status "l2_witnessed"
 
   Scenario: L1 rollback of a deposit cancellation restores the deposit
     Given the indexer consumed a deposit submission for aux "aux-cancel-rollback"

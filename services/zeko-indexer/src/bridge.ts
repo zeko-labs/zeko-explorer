@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { IndexerStore } from "./store.ts";
 import { normalizeTimestamp } from "./store.ts";
 import type {
@@ -134,7 +135,7 @@ export function consumeBridgeInnerAction(
   const existingDeposit = firstOperationNeeding(
     store,
     aux,
-    (operation) => operation.type === "deposit" && operation.l2_action_state === undefined,
+    (operation) => isActiveDeposit(operation) && operation.l2_action_state === undefined,
   );
   if (existingDeposit) {
     existingDeposit.l2_action_state = row.after_state;
@@ -153,7 +154,7 @@ export function consumeBridgeInnerAction(
     aux,
     (operation) =>
       operation.type === "withdrawal" &&
-      operation.status !== "rolled_back" &&
+      isActiveBridgeOperation(operation) &&
       operation.l2_action_state === undefined,
   );
   const operation =
@@ -341,11 +342,7 @@ function upsertDepositSubmission(store: IndexerStore, event: L1BridgeEventInput)
   const existingWitnessedDeposit = firstOperationNeeding(
     store,
     event.aux,
-    (operation) =>
-      operation.type === "deposit" &&
-      operation.status !== "rolled_back" &&
-      operation.status !== "cancelled" &&
-      operation.submit_tx_hash === undefined,
+    (operation) => isActiveDeposit(operation) && operation.submit_tx_hash === undefined,
   );
   const previous = cloneOptionalBridgeOperation(existingWitnessedDeposit);
   const operation = createBridgeOperation(store, {
@@ -379,18 +376,12 @@ function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
   const cancelledSequence = event.cancel?.cancelledDepositIndex;
   const operation =
     cancelledSequence === undefined
-      ? firstOperationNeeding(
-          store,
-          event.aux,
-          (candidate) => candidate.type === "deposit" && candidate.status !== "cancelled",
-        )
+      ? firstOperationNeeding(store, event.aux, (candidate) => isActiveDeposit(candidate))
       : store
           .bridgeOperationsByAux(event.aux)
           .find(
             (candidate) =>
-              candidate.type === "deposit" &&
-              candidate.aux_sequence === cancelledSequence &&
-              candidate.status !== "cancelled",
+              isActiveDeposit(candidate) && candidate.aux_sequence === cancelledSequence,
           );
   if (!operation) {
     return;
@@ -445,7 +436,7 @@ function withdrawalForFinalization(
   }
   const candidates = store
     .bridgeOperationsByAux(event.aux)
-    .filter((operation) => operation.type === "withdrawal" && operation.status !== "rolled_back");
+    .filter((operation) => operation.type === "withdrawal" && isActiveBridgeOperation(operation));
   if (event.operationIndex !== undefined) {
     return candidates.find((operation) => operation.aux_sequence === event.operationIndex);
   }
@@ -472,7 +463,7 @@ function applyOuterWitness(
     aux,
     (operation) =>
       operation.type === "withdrawal" &&
-      operation.status !== "rolled_back" &&
+      isActiveBridgeOperation(operation) &&
       operation.l1_witness_action_state === undefined,
   );
   if (existingWithdrawal) {
@@ -491,8 +482,7 @@ function applyOuterWitness(
     firstOperationNeeding(
       store,
       aux,
-      (candidate) =>
-        candidate.type === "deposit" && candidate.l1_witness_action_state === undefined,
+      (candidate) => isActiveDeposit(candidate) && candidate.l1_witness_action_state === undefined,
     ) ??
     createBridgeOperation(store, {
       type: "deposit",
@@ -528,6 +518,7 @@ function applyOuterCommit(
       store,
       innerAction.aux,
       (candidate) =>
+        isActiveBridgeOperation(candidate) &&
         candidate.l2_action_state === innerAction.after_state &&
         candidate.commit_action_state === undefined,
     );
@@ -643,7 +634,7 @@ function createBridgeOperation(
   const existing = store.bridgeOperations.get(bridgeKey(input.aux, auxSequence));
   const operation: BridgeOperationRow = {
     ...existing,
-    id: existing?.id ?? store.idFactory.newId(input.submit_timestamp),
+    id: existing?.id ?? bridgeOperationId(input.aux, auxSequence),
     type: input.type,
     status: input.status,
     aux: input.aux,
@@ -693,6 +684,14 @@ function firstOperationNeeding(
   predicate: (operation: BridgeOperationRow) => boolean,
 ): BridgeOperationRow | undefined {
   return store.bridgeOperationsByAux(aux).find(predicate);
+}
+
+function isActiveBridgeOperation(operation: BridgeOperationRow): boolean {
+  return operation.status !== "rolled_back" && operation.status !== "cancelled";
+}
+
+function isActiveDeposit(operation: BridgeOperationRow): boolean {
+  return operation.type === "deposit" && isActiveBridgeOperation(operation);
 }
 
 function depositStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {
@@ -772,6 +771,11 @@ function linkBridgeTransaction(
 
 function bridgeKey(aux: string, sequence: number): string {
   return `${aux}:${sequence}`;
+}
+
+function bridgeOperationId(aux: string, sequence: number): string {
+  const digest = createHash("sha256").update(aux).update("\0").update(`${sequence}`).digest("hex");
+  return `bridge_${digest.slice(0, 32)}`;
 }
 
 function recordBridgeEventEffect(

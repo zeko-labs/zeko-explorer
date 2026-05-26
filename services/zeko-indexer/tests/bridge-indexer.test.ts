@@ -25,6 +25,7 @@ const l1Envelope = (blockHeight = 5000, slot = 120) =>
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let indexer: ZekoIndexer;
+  let replayedBridgeOperationIds: string[];
 
   const reset = () => {
     store = new InMemoryIndexerStore();
@@ -34,6 +35,7 @@ describeFeature(feature, ({ Scenario }) => {
         withdrawalDelaySlots: 100,
       },
     });
+    replayedBridgeOperationIds = [];
   };
 
   const operation = (aux: string, sequence: number) => {
@@ -383,6 +385,25 @@ describeFeature(feature, ({ Scenario }) => {
         expect(operation(aux, sequence).amount).toBe(amount);
       },
     );
+  });
+
+  Scenario("Replayed deposit submissions derive stable bridge operation IDs", ({ When, Then }) => {
+    When(
+      "two fresh indexers consume the same deposit submission for aux {string}",
+      async (_context, aux: string) => {
+        reset();
+        await consumeDeposit(aux);
+        const firstOperationId = operation(aux, 0).id;
+        reset();
+        await consumeDeposit(aux);
+        replayedBridgeOperationIds = [firstOperationId, operation(aux, 0).id];
+      },
+    );
+
+    Then("the replayed bridge operation IDs match", () => {
+      expect(replayedBridgeOperationIds[0]).toBeDefined();
+      expect(replayedBridgeOperationIds[1]).toBe(replayedBridgeOperationIds[0]);
+    });
   });
 
   Scenario("Deposit lifecycle correlates L1 and L2 actions", ({ Given, When, And, Then }) => {
@@ -742,6 +763,69 @@ describeFeature(feature, ({ Scenario }) => {
         "bridge operation for aux {string} sequence {int} has status {string}",
         (_, aux: string, sequence: number, status: string) => {
           expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "Cancelled deposits do not accept later L1 witness evidence",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed a deposit cancellation for aux {string}", (_context, aux: string) =>
+        consumeCancellation(aux),
+      );
+      When("the indexer consumes an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "Cancelled deposits do not accept later L2 inner evidence",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed a deposit cancellation for aux {string}", (_context, aux: string) =>
+        consumeCancellation(aux),
+      );
+      When(
+        "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has type {string}",
+        (_, aux: string, sequence: number, type: string) => {
+          expect(operation(aux, sequence).type).toBe(type);
         },
       );
       And(
