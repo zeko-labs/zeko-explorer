@@ -308,6 +308,29 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeSettlementAtSlot = async (slot: number) => {
+    await indexer.consume({
+      subject: "zeko.l1.settlements",
+      payload: {
+        ...l1Envelope(5200 + slot, slot),
+        subject: "zeko.l1.settlements",
+        eventType: "detected",
+        settlementId: `settlement-slot-${slot}`,
+        finalityLevel: "settling",
+        txHash: `l1-settlement-slot-${slot}`,
+        commit: {
+          ledgerHash: `ledger-settlement-slot-${slot}`,
+          innerActionState: `inner-settlement-slot-${slot}`,
+          innerActionStateLength: 1,
+          synchronizedOuterActionState: `outer-settlement-slot-${slot}`,
+          synchronizedOuterActionStateLength: 1,
+          slotRange: { lower: slot - 20, upper: slot },
+          rawFields: [`ledger-settlement-slot-${slot}`, `inner-settlement-slot-${slot}`, "1"],
+        },
+      },
+    });
+  };
+
   const consumeBridgeEventRollback = async (bridgeEventId: string) => {
     await indexer.consume({
       subject: "zeko.l1.rollbacks",
@@ -535,6 +558,37 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("L1 witness skips rolled-back withdrawal operations", ({ Given, And, When, Then }) => {
+    reset();
+    Given(
+      "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    And(
+      "the indexer consumes an L2 replacement from source ledger {string} to target ledger {string}",
+      (_context, source: string, target: string) => consumeReplacement(source, target),
+    );
+    And(
+      "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    When("the indexer consumes an L1 witness for aux {string}", (_context, aux: string) =>
+      consumeWitness(aux),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+    And(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+  });
+
   Scenario("Repeated deposits with the same aux keep FIFO identity", ({ When, And, Then }) => {
     reset();
     When("the indexer consumes a deposit submission for aux {string}", (_context, aux: string) =>
@@ -700,6 +754,43 @@ describeFeature(feature, ({ Scenario }) => {
       );
     },
   );
+
+  Scenario("Settlement slots advance deposit timeouts", ({ Given, When, Then }) => {
+    reset();
+    Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+      consumeDeposit(aux),
+    );
+    When("the indexer consumes an L1 settlement at slot {int}", (_context, slot: number) =>
+      consumeSettlementAtSlot(slot),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+  });
+
+  Scenario("Settlement slots advance withdrawal delay", ({ Given, And, When, Then }) => {
+    reset();
+    Given(
+      "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    And(
+      "the indexer consumed an L1 commit covering inner action state {string}",
+      (_context, innerActionState: string) => consumeCommit(innerActionState),
+    );
+    When("the indexer consumes an L1 settlement at slot {int}", (_context, slot: number) =>
+      consumeSettlementAtSlot(slot),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+  });
 
   Scenario(
     "Withdrawal lifecycle uses L2 inner actions, commits, delay, and L1 witnesses",

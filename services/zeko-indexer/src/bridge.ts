@@ -87,8 +87,16 @@ export function consumeL1OuterAction(
     applyOuterCommit(store, row, parsed.innerActionState, parsed.innerActionStateLength);
   }
 
-  markTimedOutDeposits(store, event.block.slot);
-  markWithdrawalDelayPassed(store, event.block.slot, options.withdrawalDelaySlots);
+  advanceBridgeClock(store, event.block.slot, options);
+}
+
+export function advanceBridgeClock(
+  store: IndexerStore,
+  slot: number | undefined,
+  options: BridgeProjectorOptions = {},
+): void {
+  markTimedOutDeposits(store, slot);
+  markWithdrawalDelayPassed(store, slot, options.withdrawalDelaySlots);
 }
 
 export function consumeBridgeInnerAction(
@@ -452,7 +460,9 @@ function applyOuterWitness(
     store,
     aux,
     (operation) =>
-      operation.type === "withdrawal" && operation.l1_witness_action_state === undefined,
+      operation.type === "withdrawal" &&
+      operation.status !== "rolled_back" &&
+      operation.l1_witness_action_state === undefined,
   );
   if (existingWithdrawal) {
     existingWithdrawal.l1_witness_action_state = outerAction.after_state;

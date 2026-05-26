@@ -49,6 +49,14 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-withdrawal-reinclude" sequence 0 has status "rolled_back"
     And bridge operation for aux "aux-withdrawal-reinclude" sequence 1 has status "l2_witnessed"
 
+  Scenario: L1 witness skips rolled-back withdrawal operations
+    Given the indexer consumed an L2 inner action for aux "aux-withdrawal-witness-reinclude" with action state "inner-withdrawal-witness-rolled-back"
+    And the indexer consumes an L2 replacement from source ledger "ledger-0" to target ledger "ledger-withdrawal-witness-replacement"
+    And the indexer consumes an L2 inner action for aux "aux-withdrawal-witness-reinclude" with action state "inner-withdrawal-witness-reincluded"
+    When the indexer consumes an L1 witness for aux "aux-withdrawal-witness-reinclude"
+    Then bridge operation for aux "aux-withdrawal-witness-reinclude" sequence 0 has status "rolled_back"
+    And bridge operation for aux "aux-withdrawal-witness-reinclude" sequence 1 has status "completed"
+
   Scenario: Repeated deposits with the same aux keep FIFO identity
     When the indexer consumes a deposit submission for aux "aux-shared"
     And the indexer consumes another deposit submission for aux "aux-shared"
@@ -88,6 +96,17 @@ Feature: Bridge operation projection
     When the indexer consumes an L1 rollback affecting bridge event "l1-cancel-aux-cancel-rollback-0"
     Then bridge operation for aux "aux-cancel-rollback" sequence 0 has status "submitted"
     And bridge operation for aux "aux-cancel-rollback" sequence 0 has no cancel tx hash
+
+  Scenario: Settlement slots advance deposit timeouts
+    Given the indexer consumed a deposit submission for aux "aux-settlement-timeout"
+    When the indexer consumes an L1 settlement at slot 600
+    Then bridge operation for aux "aux-settlement-timeout" sequence 0 has status "timed_out"
+
+  Scenario: Settlement slots advance withdrawal delay
+    Given the indexer consumed an L2 inner action for aux "aux-settlement-delay" with action state "inner-settlement-delay"
+    And the indexer consumed an L1 commit covering inner action state "inner-settlement-delay"
+    When the indexer consumes an L1 settlement at slot 231
+    Then bridge operation for aux "aux-settlement-delay" sequence 0 has status "delay_passed"
 
   Scenario: Withdrawal lifecycle uses L2 inner actions, commits, delay, and L1 witnesses
     Given the indexer consumed an L2 inner action for aux "aux-withdrawal" with action state "inner-withdrawal"

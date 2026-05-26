@@ -96,6 +96,7 @@ export type L1SettlementInput = {
   block: {
     height: number;
     hash: string;
+    slot?: number;
     timestamp: string;
     confirmationDepth: number;
   };

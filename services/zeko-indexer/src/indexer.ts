@@ -1,6 +1,7 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
 import {
+  advanceBridgeClock,
   consumeBridgeInnerAction,
   consumeBridgeL2Rollback,
   consumeBridgeRollback,
@@ -346,6 +347,7 @@ export class ZekoIndexer {
     this.applyDaAttestation(ledgerHash, "settlement", observedAt);
     this.#store.pendingDa.delete(ledgerHash);
     this.#store.pendingFinality.delete(ledgerHash);
+    advanceBridgeClock(this.#store, event.block.slot, this.#options.bridge);
   }
 
   consumeL1Rollback(event: L1RollbackInput): void {
