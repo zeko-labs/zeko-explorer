@@ -3,7 +3,7 @@ import type {
   L2CommandInput,
   L2TransactionInput,
   TransactionRow,
-} from "#src/types";
+} from "./types.ts";
 
 export function transactionKey(hash: string, targetLedgerHash: string): string {
   return `${hash}:${targetLedgerHash}`;

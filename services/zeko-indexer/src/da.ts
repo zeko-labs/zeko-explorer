@@ -1,6 +1,6 @@
-import { ledgerHasRevertedTransactions, type ZekoIndexerState } from "#src/indexer-state";
-import { normalizeTimestamp } from "#src/store";
-import type { DaSignatureInput, DaSignerRow, DaSource, PendingDaAttestationRow } from "#src/types";
+import { ledgerHasRevertedTransactions, type ZekoIndexerState } from "./indexer-state.ts";
+import { normalizeTimestamp } from "./store.ts";
+import type { DaSignatureInput, DaSignerRow, DaSource, PendingDaAttestationRow } from "./types.ts";
 
 const PRECEDENCE: Record<DaSource, number> = {
   proved: 1,

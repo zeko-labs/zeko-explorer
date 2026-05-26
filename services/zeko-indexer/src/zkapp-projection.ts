@@ -2,23 +2,23 @@ import {
   EMPTY_ZKAPP_ACTION_STATE,
   isZkappFieldElement,
   tryDeriveZkappActionState,
-} from "#src/action-state";
-import { consumeBridgeInnerAction } from "#src/bridge";
-import type { ZekoIndexerState } from "#src/indexer-state";
+} from "./action-state.ts";
+import { consumeBridgeInnerAction } from "./bridge.ts";
+import type { ZekoIndexerState } from "./indexer-state.ts";
 import {
   arrayValue,
   isRecord,
   nestedArrayValue,
   nestedStringValue,
   stringValue,
-} from "#src/indexer-utils";
-import { accountKey } from "#src/store";
+} from "./indexer-utils.ts";
+import { accountKey } from "./store.ts";
 import type {
   L2AccountChangeInput,
   L2TransactionInput,
   ObservedZkappActionInput,
   TransactionRow,
-} from "#src/types";
+} from "./types.ts";
 
 export function assertNewZkappActionStates(
   state: ZekoIndexerState,

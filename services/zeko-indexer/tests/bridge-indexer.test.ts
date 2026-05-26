@@ -1,6 +1,6 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
-import { createZekoIndexer, InMemoryIndexerStore, type ZekoIndexer } from "../src/public";
+import { createZekoIndexer, InMemoryIndexerStore, type ZekoIndexer } from "../src/public.ts";
 
 const feature = await loadFeature("tests/features/bridge-indexer.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";

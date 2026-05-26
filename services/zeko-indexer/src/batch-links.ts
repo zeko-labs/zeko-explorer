@@ -1,5 +1,5 @@
-import { ledgerHasAppliedTransactions } from "#src/indexer-queries";
-import type { ZekoIndexerState } from "#src/indexer-state";
+import { ledgerHasAppliedTransactions } from "./indexer-queries.ts";
+import type { ZekoIndexerState } from "./indexer-state.ts";
 
 export function linkTransactionsToBatch(
   state: ZekoIndexerState,

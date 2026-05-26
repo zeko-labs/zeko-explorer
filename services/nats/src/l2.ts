@@ -16,7 +16,7 @@ import {
   NonEmptyStringSchema,
   NonNegativeIntegerSchema,
   OptionalStringRecordSchema,
-} from "./shared";
+} from "./shared.ts";
 
 // Transaction diffs are producer-owned Da_layer.Diff JSON plus target_ledger_hash/genesis.
 // looseObject preserves future raw diff fields instead of silently stripping them.

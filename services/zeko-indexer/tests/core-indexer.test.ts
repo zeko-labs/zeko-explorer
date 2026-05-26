@@ -15,7 +15,7 @@ import {
   type SurrealClient,
   writeIndexerProjectionToSurreal,
   type ZekoIndexer,
-} from "../src/public";
+} from "../src/public.ts";
 
 const feature = await loadFeature("tests/features/core-indexer.feature");
 const execFileAsync = promisify(execFile);
@@ -3229,8 +3229,8 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
-  Scenario("Source uses TypeScript bundler import resolution", ({ Then }) => {
-    Then("zeko-indexer source and tests use extensionless relative imports", async () => {
+  Scenario("Source uses explicit TypeScript import extensions", ({ Then }) => {
+    Then("zeko-indexer source and tests use explicit TypeScript relative imports", async () => {
       const roots = [
         fileURLToPath(new URL("../src", import.meta.url)),
         fileURLToPath(new URL(".", import.meta.url)),
@@ -3243,22 +3243,33 @@ describeFeature(feature, ({ Scenario }) => {
             content: await readFile(file, "utf8"),
           })),
         )
-      )
-        .filter(({ content }) => /from\s+["']\.\.?\/[^"']+\.ts["']/.test(content))
-        .map(({ file }) => file);
+      ).flatMap(({ file, content }) =>
+        relativeImportSpecifiers(content)
+          .filter((specifier) => !specifier.endsWith(".ts"))
+          .map((specifier) => `${file}:${specifier}`),
+      );
       expect(offenders).toEqual([]);
     });
   });
 
-  Scenario("Dev entrypoint configuration resolves under raw Node", ({ Then }) => {
-    Then("node can execute the zeko-indexer dev entrypoint config check", async () => {
-      await execFileAsync(process.execPath, ["src/index.ts"], {
-        cwd: serviceRoot,
-        env: { ...process.env, ZEKO_INDEXER_CHECK_CONFIG: "1" },
-      });
+  Scenario("Runtime source imports under raw Node", ({ Then }) => {
+    Then("node can import the zeko-indexer runtime source", async () => {
+      await execFileAsync(
+        process.execPath,
+        ["--input-type=module", "--eval", "await import('./src/runtime.ts')"],
+        {
+          cwd: serviceRoot,
+        },
+      );
     });
   });
 });
+
+function relativeImportSpecifiers(content: string): string[] {
+  return [...content.matchAll(/(?:from\s*|import\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g)].map(
+    (match) => match[1] ?? "",
+  );
+}
 
 const tsFilesUnder = async (dir: string): Promise<string[]> => {
   const entries = await readdir(dir, { withFileTypes: true });

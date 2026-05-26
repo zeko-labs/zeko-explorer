@@ -1,4 +1,4 @@
-import { seedSurqlWithSurrealKit } from "../lib/surreal-client";
+import { seedSurqlWithSurrealKit } from "../lib/surreal-client.ts";
 
 type RawSurql = {
   readonly kind: "raw";

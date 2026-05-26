@@ -1,10 +1,8 @@
-import { isDirectEntrypoint, runIndexerFromEnv } from "#src/runtime";
+import { runIndexerFromEnv } from "./runtime.ts";
 
-if (isDirectEntrypoint(import.meta.url)) {
-  try {
-    await runIndexerFromEnv();
-  } catch (error) {
-    console.error(error);
-    process.exitCode = 1;
-  }
+try {
+  await runIndexerFromEnv();
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
 }

@@ -9,7 +9,7 @@ import {
   startSurreal,
   stopSurreal,
   syncSchema,
-} from "../../database/tests/lib/surreal-client";
+} from "../../database/tests/lib/surreal-client.ts";
 import {
   type ConsumeEnvelope,
   consumeNatsEnvelopes,
@@ -19,7 +19,7 @@ import {
   writeBridgeProjectionToSurreal,
   writeIndexerProjectionToSurreal,
   type ZekoIndexer,
-} from "../src/public";
+} from "../src/public.ts";
 
 const feature = await loadFeature("tests/features/runtime-integration.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";

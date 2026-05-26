@@ -11,7 +11,7 @@
 - Use Biome for linting and formatting. Do not add ESLint, Prettier, oxlint, or oxfmt.
 - For product/domain behavior and acceptance coverage, write Gherkin feature files and run them through the repo's Vitest/Cucumber pattern, such as `@amiceli/vitest-cucumber`.
 - Use `surql` and SurrealQL terminology for SurrealDB query/schema artifacts. Do not name SurrealDB files, helpers, variables, or features `sql`; reserve SQL terminology only for an actual SQL database.
-- Use extensionless relative TypeScript imports in repo code and tests. The repo uses TypeScript Bundler module resolution, so write `./foo` rather than `./foo.ts`.
+- Use explicit `.ts` extensions for relative TypeScript imports in repo code and tests. The repo allows TypeScript source imports directly, so write `./foo.ts` rather than `./foo`.
 - Treat TypeScript project references as Moon-managed output. The root `tsconfig.json` is the Moon-generated TypeScript solution file; fix `.moon/toolchains.yml` or project `moon.yml` dependency metadata, then run `moon sync projects` instead of hand-editing generated references.
 - Use `wrangler.jsonc` and generated Wrangler Env types for Cloudflare Workers.
 - Use `.kyaml` for Kubernetes values. Use `.tpl` for Helm template sources so YAML tooling only parses rendered manifests.

@@ -6,9 +6,6 @@
   "exports": {
     ".": "./src/public.ts"
   },
-  "imports": {
-    "#src/*": "./src/*.ts"
-  },
   "dependencies": {
     "@nats-io/jetstream": "catalog:",
     "@nats-io/transport-node": "catalog:",

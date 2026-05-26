@@ -32,8 +32,21 @@
           "options": {
             "patterns": [
               {
-                "group": ["*.ts", "**/*.ts"],
-                "message": "Use TypeScript bundler resolution; do not include .ts in import specifiers."
+                "group": [
+                  "./**",
+                  "../**",
+                  "!./**/*.ts",
+                  "!../**/*.ts",
+                  "!./**/*.tsx",
+                  "!../**/*.tsx",
+                  "!./**/*.json",
+                  "!../**/*.json"
+                ],
+                "message": "Use explicit .ts extensions for relative TypeScript imports."
+              },
+              {
+                "group": ["./**/*.js", "../**/*.js", "./**/*.jsx", "../**/*.jsx"],
+                "message": "Use .ts/.tsx source extensions in TypeScript imports."
               }
             ]
           }

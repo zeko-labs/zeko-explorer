@@ -1,37 +1,37 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
-import { linkTransactionsToBatch } from "#src/batch-links";
+import { linkTransactionsToBatch } from "./batch-links.ts";
 import {
   advanceBridgeClock,
   consumeBridgeRollback,
   consumeL1BridgeEvent,
   consumeL1OuterAction,
-} from "#src/bridge";
+} from "./bridge.ts";
 import {
   applyDaAttestation,
   consumeDaSignature,
   prunePendingDa,
   removePendingDa,
   upsertPendingDa,
-} from "#src/da";
+} from "./da.ts";
 import {
   batchBySettlementId,
   ledgerHasAppliedTransactions,
   transactionByHashAndLedger,
-} from "#src/indexer-queries";
+} from "./indexer-queries.ts";
 import {
   ledgerHasRevertedTransactions,
   type ZekoIndexerOptions,
   type ZekoIndexerState,
-} from "#src/indexer-state";
+} from "./indexer-state.ts";
 import {
   accountRole,
   chooseSettlementStatus,
   transactionKey,
   transactionType,
-} from "#src/indexer-utils";
-import { reconcileLedgerChain } from "#src/l2-rollback";
-import { accountKey, type IndexerStore, normalizeTimestamp } from "#src/store";
+} from "./indexer-utils.ts";
+import { reconcileLedgerChain } from "./l2-rollback.ts";
+import { accountKey, type IndexerStore, normalizeTimestamp } from "./store.ts";
 import type {
   AccountRow,
   ConsumeEnvelope,
@@ -42,10 +42,10 @@ import type {
   L2FinalityInput,
   L2TransactionInput,
   TransactionRow,
-} from "#src/types";
-import { assertNewZkappActionStates, writeZkappChildren } from "#src/zkapp-projection";
+} from "./types.ts";
+import { assertNewZkappActionStates, writeZkappChildren } from "./zkapp-projection.ts";
 
-export type { ZekoIndexerOptions } from "#src/indexer-state";
+export type { ZekoIndexerOptions } from "./indexer-state.ts";
 
 const L2_SOURCE = "l2-transactions";
 

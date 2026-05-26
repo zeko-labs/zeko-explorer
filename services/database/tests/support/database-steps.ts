@@ -6,8 +6,8 @@ import {
   runSurql,
   type SurrealParam,
   syncSchema,
-} from "../lib/surreal-client";
-import { fixtureIds, seedExplorerFixture } from "./fixtures";
+} from "../lib/surreal-client.ts";
+import { fixtureIds, seedExplorerFixture } from "./fixtures.ts";
 
 type DataTable = Array<Record<string, string>>;
 type Row = Record<string, unknown>;

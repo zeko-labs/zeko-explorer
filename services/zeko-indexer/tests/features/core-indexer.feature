@@ -423,8 +423,8 @@ Feature: Unified Zeko indexer
   Scenario: Indexer remains schema-blind at the package boundary
     Then the zeko-indexer source does not import "@zeko/contract-schema"
 
-  Scenario: Source uses TypeScript bundler import resolution
-    Then zeko-indexer source and tests use extensionless relative imports
+  Scenario: Source uses explicit TypeScript import extensions
+    Then zeko-indexer source and tests use explicit TypeScript relative imports
 
-  Scenario: Dev entrypoint configuration resolves under raw Node
-    Then node can execute the zeko-indexer dev entrypoint config check
+  Scenario: Runtime source imports under raw Node
+    Then node can import the zeko-indexer runtime source

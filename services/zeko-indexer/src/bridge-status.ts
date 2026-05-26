@@ -1,4 +1,4 @@
-import type { BridgeOperationRow } from "#src/types";
+import type { BridgeOperationRow } from "./types.ts";
 
 const inactiveStatuses: ReadonlySet<BridgeOperationRow["status"]> = new Set([
   "rolled_back",

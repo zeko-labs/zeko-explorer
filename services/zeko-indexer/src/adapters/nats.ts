@@ -2,7 +2,7 @@ import { AckPolicy, DeliverPolicy, jetstream, jetstreamManager } from "@nats-io/
 import transportNode from "@nats-io/transport-node";
 import { EventSchemas, NATS_SUBJECTS } from "@zeko/nats";
 import { parse } from "valibot";
-import type { ConsumeEnvelope } from "#src/types";
+import type { ConsumeEnvelope } from "../types.ts";
 
 const textDecoder = new TextDecoder();
 const { connect } = transportNode;

@@ -6,7 +6,7 @@ import {
   type SurrealClient,
   writeBridgeProjectionToSurreal,
   writeIndexerProjectionToSurreal,
-} from "../src/public";
+} from "../src/public.ts";
 
 const feature = await loadFeature("tests/features/surreal-adapter.feature");
 

@@ -8,8 +8,8 @@ import {
   NATS_MESSAGE_ID,
   NATS_SUBJECTS,
   NetworkIdSchema,
-} from "../src/index";
-import { invalidFixtures, validFixtures } from "./fixtures/protocol-events";
+} from "../src/index.ts";
+import { invalidFixtures, validFixtures } from "./fixtures/protocol-events.ts";
 
 const feature = await loadFeature("tests/protocol-contracts.feature");
 

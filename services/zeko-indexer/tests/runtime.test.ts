@@ -8,7 +8,7 @@ import {
   InMemoryIndexerStore,
   type NatsEnvelopeSourceConfig,
   resolveIndexerRuntimeConfig,
-} from "../src/public";
+} from "../src/public.ts";
 
 const feature = await loadFeature("tests/features/runtime.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";

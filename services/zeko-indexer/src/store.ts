@@ -17,7 +17,7 @@ import type {
   TransactionRow,
   ZkappActionRow,
   ZkappEventRow,
-} from "#src/types";
+} from "./types.ts";
 
 export type IdFactory = {
   newId(timestamp: string | number, stableKey?: string): string;

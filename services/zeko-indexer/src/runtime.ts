@@ -1,15 +1,13 @@
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Field, PublicKey, Signature } from "o1js";
-import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "#src/adapters/nats";
+import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats.ts";
 import {
   createSurrealClient,
   type SurrealClient,
   writeIndexerProjectionToSurreal,
-} from "#src/adapters/surreal";
-import { createZekoIndexer, type ZekoIndexer, type ZekoIndexerOptions } from "#src/indexer";
-import { type IndexerStore, InMemoryIndexerStore } from "#src/store";
-import type { ConsumeEnvelope, DaSignatureInput } from "#src/types";
+} from "./adapters/surreal.ts";
+import { createZekoIndexer, type ZekoIndexer, type ZekoIndexerOptions } from "./indexer.ts";
+import { type IndexerStore, InMemoryIndexerStore } from "./store.ts";
+import type { ConsumeEnvelope, DaSignatureInput } from "./types.ts";
 
 export type RuntimeStreamConfig = {
   stream: string;
@@ -164,10 +162,6 @@ function createRuntimeEnvelopeSources(
 
 export async function runIndexerFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const config = resolveIndexerRuntimeConfig(env);
-  if (env.ZEKO_INDEXER_CHECK_CONFIG === "1") {
-    return;
-  }
-
   const runtime = createIndexerRuntime(config);
   const stop = () => runtime.stop();
   process.once("SIGINT", stop);
@@ -178,11 +172,6 @@ export async function runIndexerFromEnv(env: NodeJS.ProcessEnv = process.env): P
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
   }
-}
-
-export function isDirectEntrypoint(importMetaUrl: string, argv = process.argv): boolean {
-  const entrypoint = argv[1];
-  return entrypoint !== undefined && resolve(fileURLToPath(importMetaUrl)) === resolve(entrypoint);
 }
 
 async function runRuntimeSource(

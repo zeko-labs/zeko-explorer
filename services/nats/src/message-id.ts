@@ -1,7 +1,7 @@
-import type { DaSignatureEvent } from "./da";
-import type { L1SettlementEventType } from "./l1";
-import type { L2FinalityLevel } from "./l2";
-import type { NetworkId } from "./shared";
+import type { DaSignatureEvent } from "./da.ts";
+import type { L1SettlementEventType } from "./l1.ts";
+import type { L2FinalityLevel } from "./l2.ts";
+import type { NetworkId } from "./shared.ts";
 
 export const NATS_MESSAGE_ID = {
   l2Transaction: (targetLedgerHash: string) => targetLedgerHash,

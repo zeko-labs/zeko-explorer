@@ -1,14 +1,14 @@
 import type { InferOutput } from "valibot";
 import { array, boolean, literal, optional, picklist, strictObject, union } from "valibot";
 
-import { DaNodeHealthEventSchema } from "./da";
+import { DaNodeHealthEventSchema } from "./da.ts";
 import {
   L1ProviderSchema,
   NetworkIdSchema,
   NonEmptyStringSchema,
   NonNegativeIntegerSchema,
   SchemaVersion1Schema,
-} from "./shared";
+} from "./shared.ts";
 
 // The spike lists common limitation values, but the contract leaves room for provider-specific reasons.
 export const HealthLimitationSchema = NonEmptyStringSchema;

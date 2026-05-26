@@ -1,13 +1,13 @@
-import { consumeBridgeL2Rollback } from "#src/bridge";
-import { removePendingDa } from "#src/da";
+import { consumeBridgeL2Rollback } from "./bridge.ts";
+import { removePendingDa } from "./da.ts";
 import {
   latestAccountActivityInLedger,
   latestAccountActivityOutsideRollback,
-} from "#src/indexer-queries";
-import type { ZekoIndexerState } from "#src/indexer-state";
-import { accountTransactionRelationId, isAccountTransactionRole } from "#src/indexer-utils";
-import { accountKey, normalizeTimestamp } from "#src/store";
-import type { AccountActivityRow, AccountRow, L2TransactionInput } from "#src/types";
+} from "./indexer-queries.ts";
+import type { ZekoIndexerState } from "./indexer-state.ts";
+import { accountTransactionRelationId, isAccountTransactionRole } from "./indexer-utils.ts";
+import { accountKey, normalizeTimestamp } from "./store.ts";
+import type { AccountActivityRow, AccountRow, L2TransactionInput } from "./types.ts";
 
 const L2_SOURCE = "l2-transactions";
 
