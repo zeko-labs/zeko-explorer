@@ -5,7 +5,7 @@
 -- EXPLAIN(v3 fixture): SelectProject -> Compute -> RecordIdScan -> IndexScan -> ProjectValue; indexes idx_activity_account_order, idx_bo_sender_order, idx_account_tx_public_key_role_order.
 -- Full plan: harness/reports/explain-current.md#account-profile-overview.
 -- EXPLAIN END
-LET $account_id = (SELECT VALUE id FROM account WHERE public_key = $public_key LIMIT 1)[0];
+LET $account_id = (SELECT VALUE id FROM account WHERE public_key = $public_key AND token_id = "1" LIMIT 1)[0];
 
 SELECT *,
   (SELECT * FROM account_activity WHERE account = $account_id ORDER BY sort_block_height ASC, sort_tx_index ASC, sort_activity_index ASC, id ASC LIMIT $activity_limit) AS recent_activity,

@@ -76,7 +76,7 @@ export async function writeIndexerProjectionToSurreal(
   const removals = snapshotBridgeProjectionRemovals(store.bridgeProjectionRemovals);
   const statements: string[] = [
     ...coreProjectionStatements(store, coreRemovals),
-    ...bridgeProjectionStatements(store, removals),
+    ...bridgeProjectionStatements(store, removals, { includeLinkedTransactions: false }),
   ];
   if (statements.length === 0) {
     return;
@@ -86,9 +86,14 @@ export async function writeIndexerProjectionToSurreal(
   clearSubmittedBridgeProjectionRemovals(store.bridgeProjectionRemovals, removals);
 }
 
+type BridgeProjectionStatementOptions = {
+  readonly includeLinkedTransactions?: boolean;
+};
+
 function bridgeProjectionStatements(
   store: IndexerStore,
   removals: BridgeProjectionRemovals,
+  options: BridgeProjectionStatementOptions = {},
 ): string[] {
   const statements: string[] = bridgeRemovalStatements(removals);
   for (const row of store.outerActions.values()) {
@@ -100,12 +105,14 @@ function bridgeProjectionStatements(
   for (const row of store.bridgeOperations.values()) {
     statements.push(upsertRecord("bridge_operation", row.id, serializeBridgeOperation(row)));
   }
-  const linkedTransactionIds = new Set(
-    [...store.bridgeTransactionLinks.values()].map((row) => row.out),
-  );
-  for (const row of store.transactions.values()) {
-    if (linkedTransactionIds.has(row.id)) {
-      statements.push(upsertRecord("transaction", row.id, serializeTransaction(row)));
+  if (options.includeLinkedTransactions ?? true) {
+    const linkedTransactionIds = new Set(
+      [...store.bridgeTransactionLinks.values()].map((row) => row.out),
+    );
+    for (const row of store.transactions.values()) {
+      if (linkedTransactionIds.has(row.id)) {
+        statements.push(upsertRecord("transaction", row.id, serializeTransaction(row)));
+      }
     }
   }
   for (const row of store.l1ActionLinks.values()) {

@@ -45,6 +45,34 @@ Feature: Query catalog
     And the graph field "recent_activity" of the first row should contain 3 rows
     And the graph field "recent_bridge_operations" of the first row should contain 2 rows
 
+  Scenario: Public key account lookup returns the native token account
+    Given an earlier token account exists for public key "B62qAlice"
+    When I run query "account-by-public-key" with:
+      | key        | value       |
+      | public_key | "B62qAlice" |
+    Then the result should contain one row
+    And field "token_id" of the first row should equal "1"
+
+  Scenario: Account profile lookup returns the native token account
+    Given an earlier token account exists for public key "B62qAlice"
+    When I run query "account-profile-overview" with:
+      | key | value |
+      | public_key     | "B62qAlice" |
+      | activity_limit | 3           |
+      | sent_limit     | 3           |
+      | received_limit | 3           |
+      | bridge_limit   | 3           |
+    Then the result should contain one row
+    And field "token_id" of the first row should equal "1"
+
+  Scenario: Exact identifier search returns the native token account
+    Given an earlier token account exists for public key "B62qAlice"
+    When I run query "search-exact-identifiers" with:
+      | key   | value       |
+      | term  | "B62qAlice" |
+      | limit | 3           |
+    Then the exact search account result should have token id "1"
+
   Scenario: Smart contract transaction feed is receiver-indexed
     When I run query "transactions-by-receiver-first-page" with:
       | key | value |

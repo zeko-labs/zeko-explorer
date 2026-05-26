@@ -127,6 +127,62 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("Full projection keeps bridge-linked transaction details", ({ Given, When, Then }) => {
+    Given("the in-memory projection has a complete bridge-linked transaction row", () => {
+      reset();
+      store.accounts.set("B62qSender:1", {
+        id: "account-sender",
+        public_key: "B62qSender",
+        token_id: "1",
+        balance: "100",
+        nonce: 1,
+      });
+      store.accounts.set("B62qReceiver:1", {
+        id: "account-receiver",
+        public_key: "B62qReceiver",
+        token_id: "1",
+        balance: "200",
+        nonce: 0,
+      });
+      store.transactions.set("tx-bridge:ledger-1", {
+        id: "tx-bridge",
+        hash: "tx-bridge",
+        sequence_number: 1,
+        type: "zkapp_command",
+        status: "applied",
+        sender_public_key: "B62qSender",
+        receiver_public_key: "B62qReceiver",
+        amount: "42",
+        block_height: 10,
+        tx_index: 0,
+        sort_block_height: -10,
+        sort_tx_index: 0,
+        timestamp: "2026-05-13T00:00:00.000Z",
+        source_ledger_hash: "ledger-0",
+        target_ledger_hash: "ledger-1",
+      });
+      store.bridgeTransactionLinks.set("bridge-1:tx-bridge:l2_finalize", {
+        id: "bridge-1:tx-bridge:l2_finalize",
+        in: "bridge-1",
+        out: "tx-bridge",
+        role: "l2_finalize",
+      });
+    });
+
+    When("the full indexer projection is flushed once", async () => {
+      await writeIndexerProjectionToSurreal(client, store);
+    });
+
+    Then("the SurrealDB SQL writes the bridge-linked transaction once with account details", () => {
+      const sql = statements.join("\n");
+      const transactionId = `transaction:${encodedRecordId("tx-bridge")}`;
+      expect(sql.match(new RegExp(`UPSERT ${transactionId}`, "g")) ?? []).toHaveLength(1);
+      expect(sql).toContain(`"sender": account:${encodedRecordId("account-sender")}`);
+      expect(sql).toContain(`"receiver": account:${encodedRecordId("account-receiver")}`);
+      expect(sql).toContain('"search_text": "tx-bridge zkapp_command B62qSender B62qReceiver"');
+    });
+  });
+
   Scenario("Inner actions retain their source transaction record", ({ Given, When, Then }) => {
     Given(
       "the in-memory projection has an inner action from transaction {string}",
