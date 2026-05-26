@@ -24,6 +24,12 @@ Feature: Bridge operation projection
     And one L1 commit link exists for aux "aux-deposit-2"
     And one L2 "mint" link exists for aux "aux-deposit-2"
 
+  Scenario: Deposit L2 finalization waits for commit evidence
+    Given the indexer consumed a deposit submission for aux "aux-deposit-waits-commit"
+    And the indexer consumed an L1 witness for aux "aux-deposit-waits-commit"
+    When the indexer consumes an L2 inner action for aux "aux-deposit-waits-commit" with action state "inner-waits-commit"
+    Then bridge operation for aux "aux-deposit-waits-commit" sequence 0 has status "l1_witnessed"
+
   Scenario: Non-bridge zkApp actions are not projected as bridge operations
     When the indexer consumes a non-bridge zkApp action for aux "aux-not-bridge"
     Then no bridge operation exists for aux "aux-not-bridge"
@@ -175,6 +181,15 @@ Feature: Bridge operation projection
     When the indexer consumes an L1 rollback affecting outer action "outer-witness-aux-rollback"
     Then bridge operation for aux "aux-rollback" sequence 0 has status "submitted"
     And no L1 witness link exists for aux "aux-rollback"
+
+  Scenario: L1 rollback invalidating a deposit commit keeps L2 evidence uncompleted
+    Given the indexer consumed a deposit submission for aux "aux-commit-rollback"
+    And the indexer consumed an L1 witness for aux "aux-commit-rollback"
+    And the indexer consumes an L2 inner action for aux "aux-commit-rollback" with action state "inner-commit-rollback"
+    And the indexer consumed an L1 commit covering inner action state "inner-commit-rollback"
+    When the indexer consumes an L1 rollback affecting outer action "outer-commit-inner-commit-rollback"
+    Then bridge operation for aux "aux-commit-rollback" sequence 0 has status "l1_witnessed"
+    And no L1 commit link exists for aux "aux-commit-rollback"
 
   Scenario: L1 rollback does not downgrade unrelated clock-derived bridge status
     Given the indexer consumed a deposit submission for aux "aux-timed-out"

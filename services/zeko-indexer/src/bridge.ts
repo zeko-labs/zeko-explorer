@@ -698,7 +698,7 @@ function depositStatus(operation: BridgeOperationRow): BridgeOperationRow["statu
   if (operation.status === "rolled_back" || operation.status === "cancelled") {
     return operation.status;
   }
-  if (operation.l2_action_state) {
+  if (operation.l2_action_state && operation.commit_action_state) {
     return "completed";
   }
   if (operation.commit_action_state) {

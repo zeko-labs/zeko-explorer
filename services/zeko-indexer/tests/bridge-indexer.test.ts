@@ -356,6 +356,29 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeOuterActionRollback = async (outerActionId: string) => {
+    await indexer.consume({
+      subject: "zeko.l1.rollbacks",
+      payload: {
+        schemaVersion: 1,
+        provider: "mina",
+        network: "zeko-m-devnet",
+        source: "l1-watcher",
+        subject: "zeko.l1.rollbacks",
+        rollbackId: `rollback-${outerActionId}`,
+        detectedAt: timestamp,
+        commonAncestor: { height: 4999, hash: "l1-block-4999" },
+        orphanedBlocks: [{ height: 5010, hash: "l1-block-5010", parentHash: "l1-block-5009" }],
+        replacementBlocks: [{ height: 5010, hash: "l1-block-5010b", parentHash: "l1-block-5009" }],
+        affected: {
+          settlementIds: [],
+          outerActionIds: [outerActionId],
+          bridgeEventIds: [],
+        },
+      },
+    });
+  };
+
   Scenario("Deposit submission is recorded from L1 bridge events", ({ When, Then, And }) => {
     reset();
     When("the indexer consumes a deposit submission for aux {string}", (_context, aux: string) =>
@@ -458,6 +481,26 @@ describeFeature(feature, ({ Scenario }) => {
         ),
       ).toHaveLength(1);
     });
+  });
+
+  Scenario("Deposit L2 finalization waits for commit evidence", ({ Given, And, When, Then }) => {
+    reset();
+    Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+      consumeDeposit(aux),
+    );
+    And("the indexer consumed an L1 witness for aux {string}", (_context, aux: string) =>
+      consumeWitness(aux),
+    );
+    When(
+      "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
   });
 
   Scenario("Non-bridge zkApp actions are not projected as bridge operations", ({ When, Then }) => {
@@ -1170,6 +1213,45 @@ describeFeature(feature, ({ Scenario }) => {
           expect(operation(aux, sequence).status).toBe(status);
         },
       );
+    },
+  );
+
+  Scenario(
+    "L1 rollback invalidating a deposit commit keeps L2 evidence uncompleted",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      And(
+        "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      And(
+        "the indexer consumed an L1 commit covering inner action state {string}",
+        (_context, innerActionState: string) => consumeCommit(innerActionState),
+      );
+      When(
+        "the indexer consumes an L1 rollback affecting outer action {string}",
+        (_context, outerActionId: string) => consumeOuterActionRollback(outerActionId),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And("no L1 commit link exists for aux {string}", (_, aux: string) => {
+        const row = operation(aux, 0);
+        expect(
+          [...store.l1ActionLinks.values()].filter(
+            (link) => link.out === row.id && link.role === "commit",
+          ),
+        ).toHaveLength(0);
+      });
     },
   );
 });
