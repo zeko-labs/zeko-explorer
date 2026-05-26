@@ -74,6 +74,13 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-cancel-index" sequence 0 has status "submitted"
     And bridge operation for aux "aux-cancel-index" sequence 1 has status "cancelled"
 
+  Scenario: L1 rollback of a deposit cancellation restores the deposit
+    Given the indexer consumed a deposit submission for aux "aux-cancel-rollback"
+    And the indexer consumed a deposit cancellation for aux "aux-cancel-rollback"
+    When the indexer consumes an L1 rollback affecting bridge event "l1-cancel-aux-cancel-rollback-0"
+    Then bridge operation for aux "aux-cancel-rollback" sequence 0 has status "submitted"
+    And bridge operation for aux "aux-cancel-rollback" sequence 0 has no cancel tx hash
+
   Scenario: Withdrawal lifecycle uses L2 inner actions, commits, delay, and L1 witnesses
     Given the indexer consumed an L2 inner action for aux "aux-withdrawal" with action state "inner-withdrawal"
     When the indexer consumes an L1 commit covering inner action state "inner-withdrawal"
@@ -93,6 +100,21 @@ Feature: Bridge operation projection
     And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has submit tx hash "tx-inner-withdrawal-out-of-order"
     And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has sender "B62qUser"
     And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has amount "1000000000"
+
+  Scenario: Withdrawal finalization enriches an already witnessed withdrawal
+    Given the indexer consumed an L2 inner action for aux "aux-withdrawal-witness-first" with action state "inner-withdrawal-witness-first"
+    And the indexer consumes an L1 witness for aux "aux-withdrawal-witness-first"
+    When the indexer consumed an L1 withdrawal finalization for aux "aux-withdrawal-witness-first"
+    Then exactly 1 bridge operation exists for aux "aux-withdrawal-witness-first"
+    And bridge operation for aux "aux-withdrawal-witness-first" sequence 0 has status "completed"
+    And bridge operation for aux "aux-withdrawal-witness-first" sequence 0 has submit tx hash "tx-inner-withdrawal-witness-first"
+
+  Scenario: L1 rollback of a withdrawal finalization keeps L2 withdrawal evidence
+    Given the indexer consumed an L2 inner action for aux "aux-withdrawal-finalization-rollback" with action state "inner-withdrawal-finalization-rollback"
+    And the indexer consumed an L1 withdrawal finalization for aux "aux-withdrawal-finalization-rollback"
+    When the indexer consumes an L1 rollback affecting bridge event "l1-withdrawal-finalized-aux-withdrawal-finalization-rollback"
+    Then bridge operation for aux "aux-withdrawal-finalization-rollback" sequence 0 has status "l2_witnessed"
+    And bridge operation for aux "aux-withdrawal-finalization-rollback" sequence 0 has no L1 witness tx hash
 
   Scenario: L1 rollback invalidating a witness recalculates bridge status
     Given the indexer consumed a deposit submission for aux "aux-rollback"

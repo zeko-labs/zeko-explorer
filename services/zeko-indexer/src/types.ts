@@ -355,6 +355,13 @@ export type BridgeTransactionLinkRow = {
   role: "submit" | "l1_witness" | "l2_finalize" | "cancel" | "rollback";
 };
 
+export type BridgeEventEffectRow = {
+  bridge_event_id: string;
+  operation: string;
+  type: L1BridgeEvent["type"];
+  previous?: BridgeOperationRow;
+};
+
 export type DaSignerRow = {
   publicKey: string;
   signedAt: string;

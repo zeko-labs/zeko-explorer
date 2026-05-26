@@ -16,3 +16,9 @@ Feature: Surreal bridge adapter
     Given the in-memory projection has an inner action from transaction "tx-1"
     When the bridge projection is flushed once
     Then the SurrealDB SQL stores the inner action transaction link
+
+  Scenario: Snapshot flush deletes stale bridge rows and relations
+    Given the in-memory projection has L1 and L2 action links
+    When the bridge projection is flushed, L2 evidence is removed, and the projection is flushed again
+    Then the second SurrealDB SQL deletes stale bridge projection rows
+    And the second SurrealDB SQL does not reinsert the removed L2 relation

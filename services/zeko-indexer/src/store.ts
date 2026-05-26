@@ -3,6 +3,7 @@ import type {
   AccountActivityRow,
   AccountRow,
   BatchRow,
+  BridgeEventEffectRow,
   BridgeOperationRow,
   BridgeTransactionLinkRow,
   InnerActionRow,
@@ -34,6 +35,7 @@ export type IndexerStore = {
   readonly l2ActionLinks: Map<string, L2ActionLinkRow>;
   readonly bridgeTransactionLinks: Map<string, BridgeTransactionLinkRow>;
   readonly bridgeEventOperationIds: Map<string, string>;
+  readonly bridgeEventEffects: Map<string, BridgeEventEffectRow>;
   readonly batches: Map<string, BatchRow>;
   readonly pendingDa: Map<string, PendingDaAttestationRow>;
   readonly pendingFinality: Map<string, PendingFinalityRow>;
@@ -104,6 +106,7 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly l2ActionLinks = new Map<string, L2ActionLinkRow>();
   readonly bridgeTransactionLinks = new Map<string, BridgeTransactionLinkRow>();
   readonly bridgeEventOperationIds = new Map<string, string>();
+  readonly bridgeEventEffects = new Map<string, BridgeEventEffectRow>();
   readonly batches = new Map<string, BatchRow>();
   readonly pendingDa = new Map<string, PendingDaAttestationRow>();
   readonly pendingFinality = new Map<string, PendingFinalityRow>();

@@ -52,7 +52,14 @@ export async function writeBridgeProjectionToSurreal(
   client: SurrealHttpClient,
   store: IndexerStore,
 ): Promise<void> {
-  const statements: string[] = [];
+  const statements: string[] = [
+    "DELETE bridge_transaction_link;",
+    "DELETE l2_action_link;",
+    "DELETE l1_action_link;",
+    "DELETE outer_action;",
+    "DELETE inner_action;",
+    "DELETE bridge_operation;",
+  ];
   for (const row of store.outerActions.values()) {
     statements.push(upsertRecord("outer_action", row.id, serializeOuterAction(row)));
   }
@@ -84,9 +91,7 @@ export async function writeBridgeProjectionToSurreal(
       ),
     );
   }
-  if (statements.length > 0) {
-    await client.query(statements.join("\n"));
-  }
+  await client.query(statements.join("\n"));
 }
 
 function serializeOuterAction(row: OuterActionRow): Record<string, unknown> {

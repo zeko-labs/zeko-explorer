@@ -209,9 +209,16 @@ export function consumeBridgeRollback(
 ): void {
   for (const bridgeEventId of event.affected.bridgeEventIds) {
     store.l1RollbackAffectedBridgeEventIds.add(bridgeEventId);
-    const operationId = store.bridgeEventOperationIds.get(bridgeEventId);
+    const effect = store.bridgeEventEffects.get(bridgeEventId);
+    const operationId = effect?.operation ?? store.bridgeEventOperationIds.get(bridgeEventId);
     const operation = operationId ? store.bridgeOperationById(operationId) : undefined;
-    if (operation) {
+    if (!operation) {
+      continue;
+    }
+    if (effect?.previous) {
+      const previous = cloneBridgeOperation(effect.previous);
+      store.bridgeOperations.set(bridgeKey(previous.aux, previous.aux_sequence), previous);
+    } else {
       operation.status = "rolled_back";
       operation.rollback_reason = event.rollbackId;
     }
@@ -308,11 +315,15 @@ function upsertDepositSubmission(store: IndexerStore, event: L1BridgeEventInput)
   if (!event.aux) {
     return;
   }
+  const auxSequence = event.operationIndex ?? store.nextBridgeSequence(event.aux);
+  const previous = cloneOptionalBridgeOperation(
+    store.bridgeOperations.get(bridgeKey(event.aux, auxSequence)),
+  );
   const operation = createBridgeOperation(store, {
     type: "deposit",
     status: "submitted",
     aux: event.aux,
-    auxSequence: event.operationIndex,
+    auxSequence,
     sender: event.userPk,
     recipient: event.recipient ?? UNKNOWN,
     amount: event.amount ?? UNKNOWN,
@@ -329,6 +340,7 @@ function upsertDepositSubmission(store: IndexerStore, event: L1BridgeEventInput)
   });
   operation.status = depositStatus(operation);
   store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
+  recordBridgeEventEffect(store, event, operation, previous);
 }
 
 function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
@@ -354,21 +366,21 @@ function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
   if (!operation) {
     return;
   }
+  const previous = cloneBridgeOperation(operation);
   operation.cancel_tx_hash = event.txHash;
   operation.status = "cancelled";
   store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
+  recordBridgeEventEffect(store, event, operation, previous);
 }
 
 function upsertWithdrawalFinalization(store: IndexerStore, event: L1BridgeEventInput): void {
   if (!event.aux) {
     return;
   }
+  const existing = withdrawalForFinalization(store, event);
+  const previous = cloneOptionalBridgeOperation(existing);
   const operation =
-    firstOperationNeeding(
-      store,
-      event.aux,
-      (candidate) => candidate.type === "withdrawal" && candidate.l1_witness_tx_hash === undefined,
-    ) ??
+    existing ??
     createBridgeOperation(store, {
       type: "withdrawal",
       status: "completed",
@@ -390,8 +402,27 @@ function upsertWithdrawalFinalization(store: IndexerStore, event: L1BridgeEventI
   operation.l1_witness_tx_hash = event.txHash;
   operation.l1_witness_block_height = event.block.height;
   operation.l1_witness_timestamp = normalizeTimestamp(event.observedAt);
-  operation.status = "completed";
+  operation.status = withdrawalStatus(operation);
   store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
+  recordBridgeEventEffect(store, event, operation, previous);
+}
+
+function withdrawalForFinalization(
+  store: IndexerStore,
+  event: L1BridgeEventInput,
+): BridgeOperationRow | undefined {
+  if (!event.aux) {
+    return undefined;
+  }
+  const candidates = store
+    .bridgeOperationsByAux(event.aux)
+    .filter((operation) => operation.type === "withdrawal" && operation.status !== "rolled_back");
+  if (event.operationIndex !== undefined) {
+    return candidates.find((operation) => operation.aux_sequence === event.operationIndex);
+  }
+  return (
+    candidates.find((operation) => operation.l1_witness_tx_hash === undefined) ?? candidates[0]
+  );
 }
 
 function applyOuterWitness(
@@ -690,6 +721,35 @@ function linkBridgeTransaction(
 
 function bridgeKey(aux: string, sequence: number): string {
   return `${aux}:${sequence}`;
+}
+
+function recordBridgeEventEffect(
+  store: IndexerStore,
+  event: L1BridgeEventInput,
+  operation: BridgeOperationRow,
+  previous: BridgeOperationRow | undefined,
+): void {
+  store.bridgeEventEffects.set(event.bridgeEventId, {
+    bridge_event_id: event.bridgeEventId,
+    operation: operation.id,
+    type: event.type,
+    previous,
+  });
+}
+
+function cloneBridgeOperation(operation: BridgeOperationRow): BridgeOperationRow {
+  return {
+    ...operation,
+    data_quality_reasons: operation.data_quality_reasons
+      ? [...operation.data_quality_reasons]
+      : undefined,
+  };
+}
+
+function cloneOptionalBridgeOperation(
+  operation: BridgeOperationRow | undefined,
+): BridgeOperationRow | undefined {
+  return operation ? cloneBridgeOperation(operation) : undefined;
 }
 
 function deleteL1LinksForOuterAction(store: IndexerStore, outerActionId: string): void {

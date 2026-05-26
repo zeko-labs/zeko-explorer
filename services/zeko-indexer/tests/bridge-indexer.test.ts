@@ -303,6 +303,29 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeBridgeEventRollback = async (bridgeEventId: string) => {
+    await indexer.consume({
+      subject: "zeko.l1.rollbacks",
+      payload: {
+        schemaVersion: 1,
+        provider: "mina",
+        network: "zeko-m-devnet",
+        source: "l1-watcher",
+        subject: "zeko.l1.rollbacks",
+        rollbackId: `rollback-${bridgeEventId}`,
+        detectedAt: timestamp,
+        commonAncestor: { height: 4999, hash: "l1-block-4999" },
+        orphanedBlocks: [{ height: 5030, hash: "l1-block-5030", parentHash: "l1-block-5029" }],
+        replacementBlocks: [{ height: 5030, hash: "l1-block-5030b", parentHash: "l1-block-5029" }],
+        affected: {
+          settlementIds: [],
+          outerActionIds: [],
+          bridgeEventIds: [bridgeEventId],
+        },
+      },
+    });
+  };
+
   Scenario("Deposit submission is recorded from L1 bridge events", ({ When, Then, And }) => {
     reset();
     When("the indexer consumes a deposit submission for aux {string}", (_context, aux: string) =>
@@ -609,6 +632,35 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "L1 rollback of a deposit cancellation restores the deposit",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+        consumeDeposit(aux),
+      );
+      And("the indexer consumed a deposit cancellation for aux {string}", (_context, aux: string) =>
+        consumeCancellation(aux),
+      );
+      When(
+        "the indexer consumes an L1 rollback affecting bridge event {string}",
+        (_context, bridgeEventId: string) => consumeBridgeEventRollback(bridgeEventId),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has no cancel tx hash",
+        (_, aux: string, sequence: number) => {
+          expect(operation(aux, sequence).cancel_tx_hash).toBeUndefined();
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Withdrawal lifecycle uses L2 inner actions, commits, delay, and L1 witnesses",
     ({ Given, When, And, Then }) => {
       reset();
@@ -690,6 +742,73 @@ describeFeature(feature, ({ Scenario }) => {
         "bridge operation for aux {string} sequence {int} has amount {string}",
         (_, aux: string, sequence: number, amount: string) => {
           expect(operation(aux, sequence).amount).toBe(amount);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "Withdrawal finalization enriches an already witnessed withdrawal",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given(
+        "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      And("the indexer consumes an L1 witness for aux {string}", (_context, aux: string) =>
+        consumeWitness(aux),
+      );
+      When(
+        "the indexer consumed an L1 withdrawal finalization for aux {string}",
+        (_context, aux: string) => consumeWithdrawalFinalization(aux),
+      );
+      Then(
+        "exactly {int} bridge operation exists for aux {string}",
+        (_, count: number, aux: string) => {
+          expect(store.bridgeOperationsByAux(aux)).toHaveLength(count);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has submit tx hash {string}",
+        (_, aux: string, sequence: number, txHash: string) => {
+          expect(operation(aux, sequence).submit_tx_hash).toBe(txHash);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "L1 rollback of a withdrawal finalization keeps L2 withdrawal evidence",
+    ({ Given, And, When, Then }) => {
+      reset();
+      Given(
+        "the indexer consumed an L2 inner action for aux {string} with action state {string}",
+        (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+      );
+      And(
+        "the indexer consumed an L1 withdrawal finalization for aux {string}",
+        (_context, aux: string) => consumeWithdrawalFinalization(aux),
+      );
+      When(
+        "the indexer consumes an L1 rollback affecting bridge event {string}",
+        (_context, bridgeEventId: string) => consumeBridgeEventRollback(bridgeEventId),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has no L1 witness tx hash",
+        (_, aux: string, sequence: number) => {
+          expect(operation(aux, sequence).l1_witness_tx_hash).toBeUndefined();
         },
       );
     },

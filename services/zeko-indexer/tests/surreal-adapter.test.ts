@@ -111,4 +111,45 @@ describeFeature(feature, ({ Scenario }) => {
       expect(statements.join("\n")).toContain("transaction: transaction:tx_1");
     });
   });
+
+  Scenario(
+    "Snapshot flush deletes stale bridge rows and relations",
+    ({ Given, When, Then, And }) => {
+      Given("the in-memory projection has L1 and L2 action links", () => {
+        reset();
+        store.l1ActionLinks.set("outer-1:bridge-1:witness", {
+          id: "outer-1:bridge-1:witness",
+          in: "outer-1",
+          out: "bridge-1",
+          role: "witness",
+        });
+        store.l2ActionLinks.set("bridge-1:inner-1:mint", {
+          id: "bridge-1:inner-1:mint",
+          in: "bridge-1",
+          out: "inner-1",
+          role: "mint",
+        });
+      });
+
+      When(
+        "the bridge projection is flushed, L2 evidence is removed, and the projection is flushed again",
+        async () => {
+          await writeBridgeProjectionToSurreal(client, store);
+          store.l2ActionLinks.clear();
+          await writeBridgeProjectionToSurreal(client, store);
+        },
+      );
+
+      Then("the second SurrealDB SQL deletes stale bridge projection rows", () => {
+        expect(statements).toHaveLength(2);
+        expect(statements[1]).toContain("DELETE l2_action_link");
+        expect(statements[1]).toContain("DELETE l1_action_link");
+        expect(statements[1]).toContain("DELETE bridge_operation");
+      });
+
+      And("the second SurrealDB SQL does not reinsert the removed L2 relation", () => {
+        expect(statements[1]).not.toContain("INSERT RELATION INTO l2_action_link");
+      });
+    },
+  );
 });
