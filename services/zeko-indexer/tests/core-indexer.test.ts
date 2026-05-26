@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
+import { Field, Poseidon } from "o1js";
 import { expect } from "vitest";
 import {
   InMemoryIndexerStore,
@@ -17,6 +18,7 @@ const execFileAsync = promisify(execFile);
 const serviceRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const timestamp = "2026-05-13T00:00:00.000Z";
+const minaZkappActionsPrefix = "MinaZkappActions*******";
 const oneState = ["1", "1", "1", "1", "1", "1", "1", "1"] as const;
 const twoState = ["2", "2", "2", "2", "2", "2", "2", "2"] as const;
 
@@ -68,13 +70,33 @@ const zkappUpdate = (
   actions,
 });
 
-const bodyShapedZkappUpdate = (publicKey: string): L2AccountUpdateInput => ({
+const bodyShapedZkappUpdate = (
+  publicKey: string,
+  actions: string[][] = [["77"]],
+): L2AccountUpdateInput => ({
   body: {
     public_key: publicKey,
     events: [["300", "400"]],
-    actions: [["77"]],
+    actions,
   },
 });
+
+const deriveActionChain = (actions: string[][], beforeHead: string) => {
+  let cursor = Field(beforeHead);
+  return actions.map((fields) => {
+    const before = cursor.toString();
+    const commitment = Poseidon.hashWithPrefix(
+      minaZkappActionsPrefix,
+      fields.map((field) => Field(field)),
+    );
+    cursor = Poseidon.hash([cursor, commitment]);
+    return {
+      fields,
+      before_action_state: before,
+      action_state: cursor.toString(),
+    };
+  });
+};
 
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
@@ -195,6 +217,45 @@ describeFeature(feature, ({ Scenario }) => {
             "0",
             "0",
           ]),
+        ],
+      },
+    });
+  };
+
+  const consumeBodyShapedZkappWithRawActions = async (
+    targetLedgerHash: string,
+    publicKey: string,
+    actionFields: string[][],
+    priorActionState: string,
+  ) => {
+    const chain = deriveActionChain(actionFields, priorActionState);
+    await indexer.consume({
+      subject: "zeko.l2.transactions",
+      payload: {
+        source_ledger_hash: store.syncStatus.get("l2-transactions")?.last_hash ?? "ledger-0",
+        target_ledger_hash: targetLedgerHash,
+        timestamp,
+        acc_set: "acc-set",
+        command: {
+          type: "zkapp_command",
+          hash: `tx-${targetLedgerHash}`,
+          sender: "B62qsender",
+          fee: "1",
+          nonce: 1,
+          account_updates: [bodyShapedZkappUpdate(publicKey, actionFields)],
+        },
+        changed_accounts: [
+          changedAccount("B62qsender", "999", 2),
+          changedAccount(
+            publicKey,
+            "500",
+            0,
+            oneState,
+            chain
+              .slice(-5)
+              .toReversed()
+              .map((action) => action.action_state),
+          ),
         ],
       },
     });
@@ -553,6 +614,67 @@ describeFeature(feature, ({ Scenario }) => {
       },
     );
   });
+
+  Scenario(
+    "Raw zkApp action batches beyond the retained vector are indexed",
+    ({ Given, When, Then, And }) => {
+      const actionFields = [["101"], ["102"], ["103"], ["104"], ["105"], ["106"]];
+      let expectedChain: ReturnType<typeof deriveActionChain>;
+
+      Given(
+        "account {string} has prior numeric action_state head {string}",
+        async (_context, publicKey: string, priorActionState: string) => {
+          reset();
+          expectedChain = deriveActionChain(actionFields, priorActionState);
+          await consumePayment("ledger-long-actions-prior", undefined, [
+            changedAccount(publicKey, "500", 0, oneState, [priorActionState, "0", "0", "0", "0"]),
+          ]);
+        },
+      );
+
+      When(
+        "the indexer consumes a body-shaped zkApp transaction with {int} raw actions for {string} on ledger {string}",
+        async (_context, count: number, publicKey: string, ledger: string) => {
+          await consumeBodyShapedZkappWithRawActions(
+            ledger,
+            publicKey,
+            actionFields.slice(0, count),
+            "0",
+          );
+        },
+      );
+
+      Then(
+        "{int} zkapp_action rows exist for account {string}",
+        (_context, count: number, publicKey: string) => {
+          expect(store.zkappActionsByAccount(publicKey)).toHaveLength(count);
+        },
+      );
+
+      And(
+        "the raw zkapp_action chain for {string} is contiguous",
+        (_context, publicKey: string) => {
+          const actions = store.zkappActionsByAccount(publicKey);
+          expect(
+            actions.map(({ fields, before_action_state, action_state }) => ({
+              fields,
+              before_action_state,
+              action_state,
+            })),
+          ).toEqual(expectedChain);
+        },
+      );
+
+      And(
+        "the final zkapp_action state equals the account action_state head for {string}",
+        (_context, publicKey: string) => {
+          const actions = store.zkappActionsByAccount(publicKey);
+          const account = store.accountByPublicKey(publicKey);
+          expect(actions.at(-1)?.action_state).toBe(account?.action_state?.[0]);
+        },
+      );
+    },
+  );
 
   Scenario(
     "Repeated zkApp account updates for one account preserve all child rows",

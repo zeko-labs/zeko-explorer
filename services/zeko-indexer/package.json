@@ -7,10 +7,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@zeko/database": "workspace:*",
-    "@zeko/nats": "workspace:*",
     "@nats-io/jetstream": "catalog:",
     "@nats-io/transport-node": "catalog:",
+    "@zeko/database": "workspace:*",
+    "@zeko/nats": "workspace:*",
+    "o1js": "catalog:",
     "ulid": "catalog:",
     "valibot": "catalog:"
   },

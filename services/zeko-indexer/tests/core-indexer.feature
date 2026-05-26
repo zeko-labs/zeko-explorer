@@ -54,6 +54,13 @@ Feature: Unified Zeko indexer
     And the zkapp_action row stores raw fields ["77"]
     And the zkapp_action row has before_action_state "0" and action_state "action-after-first-body"
 
+  Scenario: Raw zkApp action batches beyond the retained vector are indexed
+    Given account "B62qLongActionContract" has prior numeric action_state head "0"
+    When the indexer consumes a body-shaped zkApp transaction with 6 raw actions for "B62qLongActionContract" on ledger "ledger-long-actions"
+    Then 6 zkapp_action rows exist for account "B62qLongActionContract"
+    And the raw zkapp_action chain for "B62qLongActionContract" is contiguous
+    And the final zkapp_action state equals the account action_state head for "B62qLongActionContract"
+
   Scenario: Repeated zkApp account updates for one account preserve all child rows
     When the indexer consumes a zkApp transaction with repeated updates for "B62qRepeatedContract" on ledger "ledger-zk-repeated"
     Then 2 zkapp_event rows exist for account "B62qRepeatedContract"

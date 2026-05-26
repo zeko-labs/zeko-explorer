@@ -52,6 +52,7 @@ export type IndexerStore = {
   readonly ledgerOrder: string[];
   readonly l1RollbackAffectedSettlementIds: Set<string>;
   readonly l1RollbackAffectedBridgeEventIds: Set<string>;
+  readonly l1RollbackAffectedOuterActionIds: Set<string>;
   readonly bridgeProjectionRemovals: BridgeProjectionRemovals;
   readonly idFactory: IdFactory;
 
@@ -124,6 +125,7 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly ledgerOrder: string[] = [];
   readonly l1RollbackAffectedSettlementIds = new Set<string>();
   readonly l1RollbackAffectedBridgeEventIds = new Set<string>();
+  readonly l1RollbackAffectedOuterActionIds = new Set<string>();
   readonly bridgeProjectionRemovals: BridgeProjectionRemovals = {
     outerActionIds: new Set(),
     innerActionIds: new Set(),

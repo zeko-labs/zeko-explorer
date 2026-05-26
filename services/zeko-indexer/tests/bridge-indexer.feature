@@ -77,6 +77,13 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-out-of-order" sequence 0 has status "l1_witnessed"
     And bridge operation for aux "aux-out-of-order" sequence 0 has sender "B62qUser"
 
+  Scenario: Replayed L1 witness actions are idempotent
+    Given the indexer consumed a deposit submission for aux "aux-replayed-witness"
+    When the indexer consumes an L1 witness for aux "aux-replayed-witness"
+    And the indexer replays the L1 witness for aux "aux-replayed-witness"
+    Then exactly 1 bridge operation exists for aux "aux-replayed-witness"
+    And one L1 witness link exists for aux "aux-replayed-witness"
+
   Scenario: Deposit cancellation updates the matching operation
     Given the indexer consumed a deposit submission for aux "aux-cancel"
     When the indexer consumes a deposit cancellation for aux "aux-cancel"

@@ -672,6 +672,33 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("Replayed L1 witness actions are idempotent", ({ Given, When, And, Then }) => {
+    reset();
+    Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+      consumeDeposit(aux),
+    );
+    When("the indexer consumes an L1 witness for aux {string}", (_context, aux: string) =>
+      consumeWitness(aux),
+    );
+    And("the indexer replays the L1 witness for aux {string}", (_context, aux: string) =>
+      consumeWitness(aux),
+    );
+    Then(
+      "exactly {int} bridge operation exists for aux {string}",
+      (_, count: number, aux: string) => {
+        expect(store.bridgeOperationsByAux(aux)).toHaveLength(count);
+      },
+    );
+    And("one L1 witness link exists for aux {string}", (_, aux: string) => {
+      const row = operation(aux, 0);
+      expect(
+        [...store.l1ActionLinks.values()].filter(
+          (link) => link.out === row.id && link.role === "witness",
+        ),
+      ).toHaveLength(1);
+    });
+  });
+
   Scenario("Deposit cancellation updates the matching operation", ({ Given, When, Then, And }) => {
     reset();
     Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>

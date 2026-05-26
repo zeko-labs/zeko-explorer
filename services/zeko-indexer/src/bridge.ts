@@ -46,6 +46,12 @@ export function consumeL1OuterAction(
   if (event.actionKind === "unknown" || event.parsed.kind === "unknown") {
     return;
   }
+  if (
+    store.l1RollbackAffectedOuterActionIds.has(event.outerActionId) ||
+    store.outerActions.has(event.outerActionId)
+  ) {
+    return;
+  }
 
   const timestamp = normalizeTimestamp(event.observedAt);
   const parsed = event.parsed;
@@ -233,6 +239,7 @@ export function consumeBridgeRollback(
   }
 
   for (const outerActionId of event.affected.outerActionIds) {
+    store.l1RollbackAffectedOuterActionIds.add(outerActionId);
     const outerAction = store.outerActions.get(outerActionId);
     store.outerActions.delete(outerActionId);
     store.bridgeProjectionRemovals.outerActionIds.add(outerActionId);

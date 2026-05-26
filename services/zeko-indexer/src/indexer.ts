@@ -1,5 +1,6 @@
 import { DaSignatureEventSchema, EventSchemas } from "@zeko/nats";
 import { parse } from "valibot";
+import { isZkappFieldElement, tryDeriveZkappActionState } from "./action-state.ts";
 import {
   advanceBridgeClock,
   consumeBridgeInnerAction,
@@ -989,37 +990,54 @@ type ActionStateContext = {
 const normalizeObservedActions = (
   items: unknown[],
   state: ActionStateContext = {},
-): ObservedZkappActionInput[] =>
-  items.flatMap((item, index) => {
+): ObservedZkappActionInput[] => {
+  const observed: ObservedZkappActionInput[] = [];
+  let cursor = state.beforeHead ?? GENESIS_ACTION_STATE;
+
+  items.forEach((item, index) => {
     const rawFields = rawActionFields(item);
     if (rawFields) {
-      const before = actionStateBefore(index, items.length, state);
-      const after = actionStateAfter(index, items.length, state);
-      if (!before || !after) {
+      const knownAfter = actionStateAfter(index, items.length, state);
+      const derivedAfter = tryDeriveZkappActionState(cursor, rawFields);
+      if (
+        knownAfter &&
+        isZkappFieldElement(knownAfter) &&
+        derivedAfter &&
+        knownAfter !== derivedAfter
+      ) {
+        throw new Error(
+          `Computed zkApp action_state does not match post-state vector at index ${index}`,
+        );
+      }
+      const after = knownAfter ?? derivedAfter;
+      if (!after) {
         throw new Error("Cannot index raw zkApp action without action_state snapshots");
       }
-      return [
-        {
-          fields: rawFields,
-          before_action_state: before,
-          action_state: after,
-        },
-      ];
+      observed.push({
+        fields: rawFields,
+        before_action_state: cursor,
+        action_state: after,
+      });
+      cursor = after;
+      return;
     }
     if (!isRecord(item) || !Array.isArray(item.fields)) {
-      return [];
+      return;
     }
     if (typeof item.before_action_state !== "string" || typeof item.action_state !== "string") {
-      return [];
+      return;
     }
-    return [
-      {
-        fields: item.fields.map(String),
-        before_action_state: item.before_action_state,
-        action_state: item.action_state,
-      },
-    ];
+    const action = {
+      fields: item.fields.map(String),
+      before_action_state: item.before_action_state,
+      action_state: item.action_state,
+    };
+    observed.push(action);
+    cursor = action.action_state;
   });
+
+  return observed;
+};
 
 const rawActionFields = (item: unknown): string[] | undefined => {
   if (Array.isArray(item)) {
@@ -1033,17 +1051,6 @@ const rawActionFields = (item: unknown): string[] | undefined => {
     return item.fields.map(String);
   }
   return undefined;
-};
-
-const actionStateBefore = (
-  actionIndex: number,
-  actionCount: number,
-  state: ActionStateContext,
-): string | undefined => {
-  if (actionIndex === 0) {
-    return state.beforeHead ?? GENESIS_ACTION_STATE;
-  }
-  return state.afterHeads?.[actionCount - actionIndex];
 };
 
 const actionStateAfter = (
