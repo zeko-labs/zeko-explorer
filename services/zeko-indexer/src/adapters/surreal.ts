@@ -1,13 +1,19 @@
 import type { BridgeProjectionRemovals, IndexerStore } from "../store.ts";
 import type {
   BridgeOperationRow,
-  BridgeTransactionLinkRow,
   InnerActionRow,
-  L1ActionLinkRow,
-  L2ActionLinkRow,
   OuterActionRow,
   TransactionRow,
 } from "../types.ts";
+import { coreProjectionStatements } from "./surreal-core.ts";
+import {
+  date,
+  deleteRecord,
+  record,
+  stripUndefined,
+  upsertRecord,
+  upsertRelation,
+} from "./surreal-sql.ts";
 
 export type SurrealHttpConfig = {
   endpoint: string;
@@ -54,6 +60,34 @@ export async function writeBridgeProjectionToSurreal(
   store: IndexerStore,
 ): Promise<void> {
   const removals = snapshotBridgeProjectionRemovals(store.bridgeProjectionRemovals);
+  const statements = bridgeProjectionStatements(store, removals);
+  if (statements.length === 0) {
+    return;
+  }
+  await client.query(statements.join("\n"));
+  clearSubmittedBridgeProjectionRemovals(store.bridgeProjectionRemovals, removals);
+}
+
+export async function writeIndexerProjectionToSurreal(
+  client: SurrealHttpClient,
+  store: IndexerStore,
+): Promise<void> {
+  const removals = snapshotBridgeProjectionRemovals(store.bridgeProjectionRemovals);
+  const statements: string[] = [
+    ...coreProjectionStatements(store),
+    ...bridgeProjectionStatements(store, removals),
+  ];
+  if (statements.length === 0) {
+    return;
+  }
+  await client.query(statements.join("\n"));
+  clearSubmittedBridgeProjectionRemovals(store.bridgeProjectionRemovals, removals);
+}
+
+function bridgeProjectionStatements(
+  store: IndexerStore,
+  removals: BridgeProjectionRemovals,
+): string[] {
   const statements: string[] = bridgeRemovalStatements(removals);
   for (const row of store.outerActions.values()) {
     statements.push(upsertRecord("outer_action", row.id, serializeOuterAction(row)));
@@ -94,11 +128,7 @@ export async function writeBridgeProjectionToSurreal(
       ),
     );
   }
-  if (statements.length === 0) {
-    return;
-  }
-  await client.query(statements.join("\n"));
-  clearSubmittedBridgeProjectionRemovals(store.bridgeProjectionRemovals, removals);
+  return statements;
 }
 
 function snapshotBridgeProjectionRemovals(
@@ -252,67 +282,4 @@ function serializeBridgeOperation(row: BridgeOperationRow): Record<string, unkno
     cancel_tx_hash: row.cancel_tx_hash,
     rollback_reason: row.rollback_reason,
   });
-}
-
-function upsertRelation(
-  inTable: string,
-  inId: string,
-  table: string,
-  outTable: string,
-  outId: string,
-  row: L1ActionLinkRow | L2ActionLinkRow | BridgeTransactionLinkRow,
-): string {
-  return `INSERT RELATION INTO ${table} { id: ${recordId(table, row.id)}, in: ${recordId(inTable, inId)}, out: ${recordId(outTable, outId)}, role: ${literal(row.role)} } ON DUPLICATE KEY UPDATE role = $input.role RETURN NONE;`;
-}
-
-function upsertRecord(table: string, id: string, row: Record<string, unknown>): string {
-  return `UPSERT ${recordId(table, id)} CONTENT ${literal(row)};`;
-}
-
-function deleteRecord(table: string, id: string): string {
-  return `DELETE ${recordId(table, id)};`;
-}
-
-function recordId(table: string, id: string): string {
-  return `${table}:hex_${Buffer.from(id, "utf8").toString("hex")}`;
-}
-
-function record(table: string, id: string): { readonly kind: "record"; readonly value: string } {
-  return { kind: "record", value: recordId(table, id) };
-}
-
-function stripUndefined(row: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
-}
-
-function date(value: string): { readonly kind: "datetime"; readonly value: string } {
-  return { kind: "datetime", value };
-}
-
-function literal(value: unknown): string {
-  if (isDate(value)) {
-    return `d"${value.value.replace(".000Z", "Z")}"`;
-  }
-  if (isRecordId(value)) {
-    return value.value;
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(literal).join(", ")}]`;
-  }
-  if (value !== null && typeof value === "object") {
-    return `{ ${Object.entries(value)
-      .map(([key, child]) => `${JSON.stringify(key)}: ${literal(child)}`)
-      .join(", ")} }`;
-  }
-  return JSON.stringify(value);
-}
-
-function isDate(value: unknown): value is { readonly kind: "datetime"; readonly value: string } {
-  return (
-    typeof value === "object" && value !== null && "kind" in value && value.kind === "datetime"
-  );
-}
-
-function isRecordId(value: unknown): value is { readonly kind: "record"; readonly value: string } {
-  return typeof value === "object" && value !== null && "kind" in value && value.kind === "record";
 }

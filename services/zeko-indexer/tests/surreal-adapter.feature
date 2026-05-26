@@ -46,3 +46,9 @@ Feature: Surreal bridge adapter
     Given the in-memory projection has outer actions with punctuation-variant IDs
     When the bridge projection is flushed once
     Then the SurrealDB SQL uses distinct record IDs for each outer action
+
+  Scenario: Full indexer projection persists ordinary L2 rows
+    Given the in-memory projection has ordinary L2 account transaction rows
+    When the full indexer projection is flushed once
+    Then the SurrealDB SQL writes the account before its activity
+    And the SurrealDB SQL writes the transaction before its activity

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { consumeNatsEnvelopes, type NatsEnvelopeSourceConfig } from "./adapters/nats.ts";
-import { createSurrealHttpClient, writeBridgeProjectionToSurreal } from "./adapters/surreal.ts";
+import { createSurrealHttpClient, writeIndexerProjectionToSurreal } from "./adapters/surreal.ts";
 import { ZekoIndexer, type ZekoIndexerOptions } from "./indexer.ts";
 import { type IndexerStore, InMemoryIndexerStore } from "./store.ts";
 import type { ConsumeEnvelope } from "./types.ts";
@@ -85,7 +85,7 @@ export function createIndexerRuntime(
   const surrealClient = createSurrealHttpClient(config.surreal);
   const writeProjection =
     dependencies.writeProjection ??
-    ((state: IndexerStore) => writeBridgeProjectionToSurreal(surrealClient, state));
+    ((state: IndexerStore) => writeIndexerProjectionToSurreal(surrealClient, state));
   const envelopeSources =
     dependencies.envelopeSources ??
     createRuntimeEnvelopeSources(
@@ -96,11 +96,7 @@ export function createIndexerRuntime(
 
   return {
     store,
-    done: Promise.all(
-      envelopeSources.map((source) =>
-        runRuntimeSource(source, indexer, store, writeProjection, abortController.signal),
-      ),
-    ).then(() => undefined),
+    done: runRuntimeSources(envelopeSources, indexer, store, writeProjection, abortController),
     stop() {
       abortController.abort();
     },
@@ -168,6 +164,25 @@ async function runRuntimeSource(
     }
   } finally {
     await iterator.return?.();
+  }
+}
+
+async function runRuntimeSources(
+  envelopeSources: AsyncIterable<ConsumeEnvelope>[],
+  indexer: ZekoIndexer,
+  store: IndexerStore,
+  writeProjection: (store: IndexerStore) => Promise<void>,
+  abortController: AbortController,
+): Promise<void> {
+  const runners = envelopeSources.map((source) =>
+    runRuntimeSource(source, indexer, store, writeProjection, abortController.signal),
+  );
+  try {
+    await Promise.all(runners);
+  } catch (error) {
+    abortController.abort();
+    await Promise.allSettled(runners);
+    throw error;
   }
 }
 

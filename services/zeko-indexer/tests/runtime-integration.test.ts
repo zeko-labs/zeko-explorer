@@ -16,6 +16,7 @@ import {
   createSurrealHttpClient,
   InMemoryIndexerStore,
   writeBridgeProjectionToSurreal,
+  writeIndexerProjectionToSurreal,
   ZekoIndexer,
 } from "../src/index";
 
@@ -78,7 +79,8 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
     const connection = await connect({ servers: natsUrl });
     try {
       const manager = await jetstreamManager(connection);
-      await manager.streams.add({ name: "zeko-l1", subjects: ["zeko.l1.*"] });
+      await addStreamIfMissing(manager, "zeko-l1", ["zeko.l1.*"]);
+      await addStreamIfMissing(manager, "zeko-l2", ["zeko.l2.*"]);
     } finally {
       await connection.close();
     }
@@ -181,6 +183,56 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
     }
   };
 
+  const publishL2Transaction = async (txHash: string) => {
+    const connection = await connect({ servers: natsUrl });
+    try {
+      connection.publish(
+        "zeko.l2.transactions",
+        textEncoder.encode(
+          JSON.stringify({
+            source_ledger_hash: "ledger-core-0",
+            target_ledger_hash: "ledger-core-1",
+            timestamp,
+            acc_set: "acc-set",
+            command: {
+              type: "signed_command",
+              hash: txHash,
+              sender: "B62qRuntimeSender",
+              receiver: "B62qRuntimeReceiver",
+              amount: "100",
+              fee: "1",
+              nonce: 4,
+              memo: "runtime-core",
+            },
+            changed_accounts: [
+              {
+                index: 0,
+                account: {
+                  public_key: "B62qRuntimeSender",
+                  balance: "900",
+                  nonce: 5,
+                  token_id: "1",
+                },
+              },
+              {
+                index: 1,
+                account: {
+                  public_key: "B62qRuntimeReceiver",
+                  balance: "1100",
+                  nonce: 0,
+                  token_id: "1",
+                },
+              },
+            ],
+          }),
+        ),
+      );
+      await connection.flush();
+    } finally {
+      await connection.close();
+    }
+  };
+
   const consumeNextNatsMessage = async () => {
     envelopeSource ??= consumeNatsEnvelopes({
       servers: natsUrl,
@@ -203,6 +255,29 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
       throw new Error("NATS envelope source ended before receiving a message");
     }
     await indexer.consume(result.value);
+  };
+
+  const consumeOneL2NatsMessage = async () => {
+    const source = consumeNatsEnvelopes({
+      servers: natsUrl,
+      stream: "zeko-l2",
+      subject: "zeko.l2.*",
+      durableName: `zeko-indexer-runtime-l2-${process.pid}`,
+    });
+    try {
+      const result = await Promise.race([
+        source.next(),
+        delay(5_000).then(() => {
+          throw new Error("Timed out waiting for NATS message");
+        }),
+      ]);
+      if (!result || result.done || !result.value) {
+        throw new Error("NATS envelope source ended before receiving a message");
+      }
+      await indexer.consume(result.value);
+    } finally {
+      await source.return(undefined);
+    }
   };
 
   const RuntimeScenario =
@@ -265,4 +340,71 @@ describeFeature(feature, ({ Scenario, AfterAllScenarios }) => {
       });
     },
   );
+
+  RuntimeScenario(
+    "L2 transaction replays from JetStream into SurrealDB",
+    ({ Given, When, And, Then }) => {
+      Given("local NATS and SurrealDB are running for core projection", async () => {
+        await startNats();
+        await syncNatsStreams();
+        surrealEndpoint = await startSurreal();
+        db = `zeko_indexer_runtime_core_${process.pid}`;
+        await syncSchema(db);
+        store = new InMemoryIndexerStore();
+        indexer = new ZekoIndexer(store);
+      });
+      When(
+        "an ordinary L2 transaction {string} is published on NATS",
+        async (_context, txHash: string) => {
+          await publishL2Transaction(txHash);
+        },
+      );
+      And("the indexer consumes one L2 message from durable replay", async () => {
+        await consumeOneL2NatsMessage();
+      });
+      And("the full indexer projection is flushed to SurrealDB", async () => {
+        const client = createSurrealHttpClient({
+          endpoint: surrealEndpoint,
+          namespace: "database_test",
+          database: db,
+          username: "root",
+          password: "root",
+        });
+        await writeIndexerProjectionToSurreal(client, store);
+      });
+      Then("SurrealDB stores transaction {string}", async (_context, txHash: string) => {
+        const result = await runSql<Array<{ hash: string }>>(
+          db,
+          `SELECT hash FROM transaction WHERE hash = "${txHash}";`,
+        );
+        const rows = result.at(-1)?.result ?? [];
+        expect(rows).toEqual([{ hash: txHash }]);
+      });
+      And(
+        "SurrealDB stores an account activity for {string}",
+        async (_context, publicKey: string) => {
+          const result = await runSql<Array<{ count: number }>>(
+            db,
+            `SELECT count() AS count FROM account_activity WHERE account IN (SELECT VALUE id FROM account WHERE public_key = "${publicKey}") GROUP ALL;`,
+          );
+          const rows = result.at(-1)?.result ?? [];
+          expect(rows).toEqual([{ count: 1 }]);
+        },
+      );
+    },
+  );
 });
+
+async function addStreamIfMissing(
+  manager: Awaited<ReturnType<typeof jetstreamManager>>,
+  name: string,
+  subjects: string[],
+): Promise<void> {
+  try {
+    await manager.streams.add({ name, subjects });
+  } catch (error) {
+    if (!String(error).includes("stream name already in use")) {
+      throw error;
+    }
+  }
+}

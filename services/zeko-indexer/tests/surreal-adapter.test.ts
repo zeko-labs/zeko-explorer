@@ -4,6 +4,7 @@ import {
   InMemoryIndexerStore,
   type SurrealHttpClient,
   writeBridgeProjectionToSurreal,
+  writeIndexerProjectionToSurreal,
 } from "../src/index";
 
 const feature = await loadFeature("tests/surreal-adapter.feature");
@@ -311,6 +312,70 @@ describeFeature(feature, ({ Scenario }) => {
       const sql = statements.join("\n");
       expect(sql).toContain("outer_action:hex_6f757465722d61");
       expect(sql).toContain("outer_action:hex_6f757465725f61");
+    });
+  });
+
+  Scenario("Full indexer projection persists ordinary L2 rows", ({ Given, When, Then, And }) => {
+    Given("the in-memory projection has ordinary L2 account transaction rows", () => {
+      reset();
+      store.accounts.set("B62qCore:1", {
+        id: "account-1",
+        public_key: "B62qCore",
+        token_id: "1",
+        balance: "100",
+        nonce: 1,
+        first_seen_height: 1,
+        last_activity_height: 1,
+        last_activity_at: "2026-05-13T00:00:00.000Z",
+      });
+      store.transactions.set("tx-core:ledger-core", {
+        id: "tx-core",
+        hash: "tx-core",
+        sequence_number: 1,
+        type: "payment",
+        status: "applied",
+        sender_public_key: "B62qCore",
+        block_height: 1,
+        tx_index: 0,
+        sort_block_height: -1,
+        sort_tx_index: 0,
+        timestamp: "2026-05-13T00:00:00.000Z",
+        source_ledger_hash: "ledger-0",
+        target_ledger_hash: "ledger-core",
+      });
+      store.accountActivities.set("activity-1", {
+        id: "activity-1",
+        account: "account-1",
+        account_public_key: "B62qCore",
+        transaction: "tx-core",
+        role: "sender",
+        block_height: 1,
+        tx_index: 0,
+        activity_index: 0,
+        sort_block_height: -1,
+        sort_tx_index: 0,
+        sort_activity_index: 0,
+        timestamp: "2026-05-13T00:00:00.000Z",
+        target_ledger_hash: "ledger-core",
+      });
+    });
+
+    When("the full indexer projection is flushed once", async () => {
+      await writeIndexerProjectionToSurreal(client, store);
+    });
+
+    Then("the SurrealDB SQL writes the account before its activity", () => {
+      const sql = statements.join("\n");
+      const accountIndex = sql.indexOf("UPSERT account:");
+      expect(accountIndex).toBeGreaterThanOrEqual(0);
+      expect(sql.indexOf("UPSERT account_activity:")).toBeGreaterThan(accountIndex);
+    });
+
+    And("the SurrealDB SQL writes the transaction before its activity", () => {
+      const sql = statements.join("\n");
+      const transactionIndex = sql.indexOf("UPSERT transaction:");
+      expect(transactionIndex).toBeGreaterThanOrEqual(0);
+      expect(sql.indexOf("UPSERT account_activity:")).toBeGreaterThan(transactionIndex);
     });
   });
 });

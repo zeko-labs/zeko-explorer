@@ -1,5 +1,5 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
-import { expect } from "vitest";
+import { afterEach, expect } from "vitest";
 import {
   type ConsumeEnvelope,
   createIndexerRuntime,
@@ -10,6 +10,7 @@ import {
 
 const feature = await loadFeature("tests/runtime.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";
+const originalFetch = globalThis.fetch;
 
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
@@ -17,6 +18,13 @@ describeFeature(feature, ({ Scenario }) => {
   let config: ReturnType<typeof resolveIndexerRuntimeConfig>;
   let source: AsyncIterable<ConsumeEnvelope>;
   let sourceConfigs: NatsEnvelopeSourceConfig[];
+  let surrealSql: string[];
+  let siblingCancelled: boolean;
+  let runtimeError: unknown;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
 
   Scenario(
     "Runtime consumes envelopes and flushes projection after each message",
@@ -140,6 +148,67 @@ describeFeature(feature, ({ Scenario }) => {
       await expect(runtimeDone).resolves.toBeUndefined();
     });
   });
+
+  Scenario("Runtime default projection writes ordinary L2 rows", ({ Given, When, Then, And }) => {
+    Given(
+      "a finite runtime envelope source with ordinary L2 transaction {string}",
+      (_context, txHash: string) => {
+        source = finiteSource([ordinaryL2Transaction(txHash)]);
+      },
+    );
+
+    When("the runtime processes the source with the default SurrealDB projection", async () => {
+      surrealSql = [];
+      globalThis.fetch = (async (_input, init) => {
+        surrealSql.push(String(init?.body));
+        return new Response(JSON.stringify([{ status: "OK", result: null }]), { status: 200 });
+      }) as typeof fetch;
+
+      const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
+        envelopeSources: [source],
+      });
+      await runtime.done;
+    });
+
+    Then("the SurrealDB SQL writes the core account row", () => {
+      expect(surrealSql.join("\n")).toContain("UPSERT account:");
+    });
+
+    And("the SurrealDB SQL writes the core transaction row", () => {
+      expect(surrealSql.join("\n")).toContain("UPSERT transaction:");
+    });
+
+    And("the SurrealDB SQL writes the core account activity row", () => {
+      expect(surrealSql.join("\n")).toContain("UPSERT account_activity:");
+    });
+  });
+
+  Scenario("Runtime aborts sibling sources after a projection failure", ({ Given, When, Then }) => {
+    Given("a runtime source that fails during projection and an idle sibling source", () => {
+      siblingCancelled = false;
+      runtimeError = undefined;
+      source = finiteSource([depositSubmission("aux-failure")]);
+    });
+
+    When("the runtime projection fails", async () => {
+      const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
+        envelopeSources: [source, cancellableIdleSource(() => (siblingCancelled = true))],
+        writeProjection: async () => {
+          throw new Error("projection failed");
+        },
+      });
+      try {
+        await runtime.done;
+      } catch (error) {
+        runtimeError = error;
+      }
+    });
+
+    Then("the idle sibling source is cancelled", () => {
+      expect(runtimeError).toBeInstanceOf(Error);
+      expect(siblingCancelled).toBe(true);
+    });
+  });
 });
 
 async function* finiteSource(envelopes: ConsumeEnvelope[]): AsyncGenerator<ConsumeEnvelope> {
@@ -155,6 +224,62 @@ function idleSource(): AsyncIterable<ConsumeEnvelope> {
         next: () => new Promise<IteratorResult<ConsumeEnvelope>>(() => {}),
         return: async () => ({ done: true, value: undefined }),
       };
+    },
+  };
+}
+
+function cancellableIdleSource(onReturn: () => void): AsyncIterable<ConsumeEnvelope> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => new Promise<IteratorResult<ConsumeEnvelope>>(() => {}),
+        return: async () => {
+          onReturn();
+          return { done: true, value: undefined };
+        },
+      };
+    },
+  };
+}
+
+function ordinaryL2Transaction(txHash: string): ConsumeEnvelope {
+  return {
+    subject: "zeko.l2.transactions",
+    payload: {
+      source_ledger_hash: "ledger-core-0",
+      target_ledger_hash: "ledger-core-1",
+      timestamp,
+      acc_set: "acc-set",
+      command: {
+        type: "signed_command",
+        hash: txHash,
+        sender: "B62qRuntimeSender",
+        receiver: "B62qRuntimeReceiver",
+        amount: "100",
+        fee: "1",
+        nonce: 4,
+        memo: "runtime-core",
+      },
+      changed_accounts: [
+        {
+          index: 0,
+          account: {
+            public_key: "B62qRuntimeSender",
+            balance: "900",
+            nonce: 5,
+            token_id: "1",
+          },
+        },
+        {
+          index: 1,
+          account: {
+            public_key: "B62qRuntimeReceiver",
+            balance: "1100",
+            nonce: 0,
+            token_id: "1",
+          },
+        },
+      ],
     },
   };
 }
