@@ -12,3 +12,14 @@ Feature: Indexer runtime process
     When the runtime config is resolved from the environment
     Then the runtime consumes streams "zeko-l1,zeko-l2,zeko-da"
     And the runtime uses durable name "zeko-indexer"
+
+  Scenario: Runtime config honors deployment environment variables
+    When the runtime config is resolved from the deployment environment
+    Then the runtime uses NATS server "nats://nats:4222"
+    And the runtime uses Surreal endpoint "http://surrealdb:8000"
+    And the runtime uses Surreal database "explorer"
+
+  Scenario: Runtime stop cancels an idle source
+    Given an idle runtime envelope source
+    When the runtime is started and stopped
+    Then the runtime exits

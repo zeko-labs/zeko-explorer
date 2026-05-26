@@ -14,12 +14,11 @@ describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let flushes: number;
   let config: ReturnType<typeof resolveIndexerRuntimeConfig>;
+  let source: AsyncIterable<ConsumeEnvelope>;
 
   Scenario(
     "Runtime consumes envelopes and flushes projection after each message",
     ({ Given, When, Then, And }) => {
-      let source: AsyncIterable<ConsumeEnvelope>;
-
       Given(
         "a finite runtime envelope source with deposit aux {string}",
         (_context, aux: string) => {
@@ -68,12 +67,70 @@ describeFeature(feature, ({ Scenario }) => {
       expect(config.natsDurableName).toBe(durableName);
     });
   });
+
+  Scenario("Runtime config honors deployment environment variables", ({ When, Then, And }) => {
+    When("the runtime config is resolved from the deployment environment", () => {
+      config = resolveIndexerRuntimeConfig({
+        NATS_URL: "nats://nats:4222",
+        SURREAL_URL: "http://surrealdb:8000",
+        SURREAL_NAMESPACE: "zeko",
+        SURREAL_DATABASE: "explorer",
+      });
+    });
+
+    Then("the runtime uses NATS server {string}", (_context, server: string) => {
+      expect(config.natsServers).toEqual([server]);
+    });
+
+    And("the runtime uses Surreal endpoint {string}", (_context, endpoint: string) => {
+      expect(config.surreal.endpoint).toBe(endpoint);
+    });
+
+    And("the runtime uses Surreal database {string}", (_context, database: string) => {
+      expect(config.surreal.database).toBe(database);
+    });
+  });
+
+  Scenario("Runtime stop cancels an idle source", ({ Given, When, Then }) => {
+    let runtimeDone: Promise<void>;
+
+    Given("an idle runtime envelope source", () => {
+      store = new InMemoryIndexerStore();
+      source = idleSource();
+    });
+
+    When("the runtime is started and stopped", async () => {
+      const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
+        store,
+        envelopeSources: [source],
+        writeProjection: async () => {},
+      });
+      runtimeDone = runtime.done;
+      runtime.stop();
+      await runtimeDone;
+    });
+
+    Then("the runtime exits", async () => {
+      await expect(runtimeDone).resolves.toBeUndefined();
+    });
+  });
 });
 
 async function* finiteSource(envelopes: ConsumeEnvelope[]): AsyncGenerator<ConsumeEnvelope> {
   for (const envelope of envelopes) {
     yield envelope;
   }
+}
+
+function idleSource(): AsyncIterable<ConsumeEnvelope> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => new Promise<IteratorResult<ConsumeEnvelope>>(() => {}),
+        return: async () => ({ done: true, value: undefined }),
+      };
+    },
+  };
 }
 
 function depositSubmission(aux: string): ConsumeEnvelope {

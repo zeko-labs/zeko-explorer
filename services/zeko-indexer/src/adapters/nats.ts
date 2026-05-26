@@ -22,6 +22,7 @@ export type NatsEnvelopeSourceConfig = {
   stream?: string;
   durableName?: string;
   nextExpiresMs?: number;
+  signal?: AbortSignal;
 };
 
 export type ResolvedNatsEnvelopeSourceConfig = NatsEnvelopeSourceConfig & {
@@ -41,8 +42,14 @@ export async function* consumeNatsEnvelopes(
   const client = jetstream(connection);
   const consumer = await client.consumers.get(resolved.stream, resolved.durableName);
   try {
-    while (true) {
-      const message = await consumer.next({ expires: resolved.nextExpiresMs });
+    while (!config.signal?.aborted) {
+      const message = await abortable(
+        consumer.next({ expires: resolved.nextExpiresMs }),
+        config.signal,
+      );
+      if (message === ABORTED) {
+        return;
+      }
       if (!message) {
         continue;
       }
@@ -55,6 +62,27 @@ export async function* consumeNatsEnvelopes(
   } finally {
     await connection.close();
   }
+}
+
+const ABORTED = Symbol("aborted");
+
+function abortable<Value>(
+  promise: Promise<Value>,
+  signal: AbortSignal | undefined,
+): Promise<Value | typeof ABORTED> {
+  if (!signal) {
+    return promise;
+  }
+  if (signal.aborted) {
+    return Promise.resolve(ABORTED);
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => resolve(ABORTED);
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", abort);
+    });
+  });
 }
 
 export function resolveNatsEnvelopeSourceConfig(

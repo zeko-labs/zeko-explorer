@@ -50,16 +50,16 @@ export function resolveIndexerRuntimeConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): IndexerRuntimeConfig {
   return {
-    natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? "nats://127.0.0.1:4222"),
+    natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? env.NATS_URL ?? "nats://127.0.0.1:4222"),
     natsDurableName: env.ZEKO_INDEXER_NATS_DURABLE ?? "zeko-indexer",
     natsNextExpiresMs: positiveInteger(env.ZEKO_INDEXER_NATS_NEXT_EXPIRES_MS, 1_000),
     streams: [...DEFAULT_STREAMS],
     surreal: {
-      endpoint: env.ZEKO_INDEXER_SURREAL_ENDPOINT ?? "http://127.0.0.1:8000",
-      namespace: env.ZEKO_INDEXER_SURREAL_NAMESPACE ?? "zeko",
-      database: env.ZEKO_INDEXER_SURREAL_DATABASE ?? "zeko",
-      username: env.ZEKO_INDEXER_SURREAL_USERNAME ?? "root",
-      password: env.ZEKO_INDEXER_SURREAL_PASSWORD ?? "root",
+      endpoint: env.ZEKO_INDEXER_SURREAL_ENDPOINT ?? env.SURREAL_URL ?? "http://127.0.0.1:8000",
+      namespace: env.ZEKO_INDEXER_SURREAL_NAMESPACE ?? env.SURREAL_NAMESPACE ?? "zeko",
+      database: env.ZEKO_INDEXER_SURREAL_DATABASE ?? env.SURREAL_DATABASE ?? "zeko",
+      username: env.ZEKO_INDEXER_SURREAL_USERNAME ?? env.SURREAL_USER ?? "root",
+      password: env.ZEKO_INDEXER_SURREAL_PASSWORD ?? env.SURREAL_PASSWORD ?? "root",
     },
     indexer: {
       bridge: {
@@ -92,6 +92,7 @@ export function createIndexerRuntime(
         subject: stream.subject,
         durableName: `${config.natsDurableName}-${stream.stream}`,
         nextExpiresMs: config.natsNextExpiresMs,
+        signal: abortController.signal,
       }),
     );
 
@@ -138,13 +139,31 @@ async function runRuntimeSource(
   writeProjection: (store: IndexerStore) => Promise<void>,
   signal: AbortSignal,
 ): Promise<void> {
-  for await (const envelope of source) {
-    if (signal.aborted) {
-      return;
+  const iterator = source[Symbol.asyncIterator]();
+  const aborted = abortPromise(signal);
+  try {
+    while (!signal.aborted) {
+      const result = await Promise.race([iterator.next(), aborted]);
+      if (result === ABORTED || result.done) {
+        return;
+      }
+      await indexer.consume(result.value);
+      await writeProjection(store);
     }
-    await indexer.consume(envelope);
-    await writeProjection(store);
+  } finally {
+    await iterator.return?.();
   }
+}
+
+const ABORTED = Symbol("aborted");
+
+function abortPromise(signal: AbortSignal): Promise<typeof ABORTED> {
+  if (signal.aborted) {
+    return Promise.resolve(ABORTED);
+  }
+  return new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve(ABORTED), { once: true });
+  });
 }
 
 function splitCsv(value: string): string[] {
