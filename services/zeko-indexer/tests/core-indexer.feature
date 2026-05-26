@@ -54,6 +54,15 @@ Feature: Unified Zeko indexer
     And the zkapp_action row stores raw fields ["77"]
     And the zkapp_action row has before_action_state "action-before-body" and action_state "action-after-body"
 
+  Scenario: zkApp child rows link to the token account that emitted them
+    Given account "B62qTokenContract" exists for token "1" with action_state head "native-before"
+    And account "B62qTokenContract" exists for token "2" with action_state head "token-before"
+    When the indexer consumes a token zkApp transaction for "B62qTokenContract" on ledger "ledger-token-zkapp"
+    Then one zkapp_event row exists for account "B62qTokenContract" with token "2"
+    And one zkapp_action row exists for account "B62qTokenContract" with token "2"
+    And no zkApp child rows exist for account "B62qTokenContract" with token "1"
+    And the token zkapp_action row has before_action_state "token-before" and action_state "token-after"
+
   Scenario: First raw zkApp action uses the Mina empty action state
     When the indexer consumes a first body-shaped zkApp transaction for "B62qFirstBodyContract" on ledger "ledger-zk-body-first"
     Then one zkapp_action row exists for account "B62qFirstBodyContract"

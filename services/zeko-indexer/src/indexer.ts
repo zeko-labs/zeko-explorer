@@ -25,6 +25,7 @@ import type {
   L1OuterActionInput,
   L1RollbackInput,
   L1SettlementInput,
+  L2AccountChangeInput,
   L2AccountUpdateInput,
   L2CommandInput,
   L2FinalityInput,
@@ -240,11 +241,10 @@ export class ZekoIndexer {
       if (!publicKey) {
         continue;
       }
-      const changedAccount = event.changed_accounts.find(
-        (change) => change.account.public_key === publicKey,
-      );
+      const changedAccount = accountUpdateChangedAccount(event, update, publicKey);
+      const tokenId = accountUpdateTokenId(update) ?? changedAccount?.account.token_id ?? "1";
       const actions = normalizeObservedActions(update.actions ?? update.body?.actions ?? [], {
-        beforeHead: this.#store.accountByPublicKey(publicKey)?.action_state?.[0],
+        beforeHead: this.#store.accountByPublicKey(publicKey, tokenId)?.action_state?.[0],
         afterHeads: changedAccount?.account.action_state,
       });
       for (const action of actions) {
@@ -781,26 +781,28 @@ export class ZekoIndexer {
 
   private writeZkappChildren(event: L2TransactionInput, transaction: TransactionRow): void {
     const updates = event.command?.account_updates ?? [];
-    const eventIndexesByPublicKey = new Map<string, number>();
-    const actionIndexesByPublicKey = new Map<string, number>();
+    const eventIndexesByAccount = new Map<string, number>();
+    const actionIndexesByAccount = new Map<string, number>();
     for (const update of updates) {
       const publicKey = accountUpdatePublicKey(update);
       if (!publicKey) {
         continue;
       }
-      const account = this.#store.accountByPublicKey(publicKey);
+      const changedAccount = accountUpdateChangedAccount(event, update, publicKey);
+      const tokenId = accountUpdateTokenId(update) ?? changedAccount?.account.token_id ?? "1";
+      const account = this.#store.accountByPublicKey(publicKey, tokenId);
       if (!account) {
         continue;
       }
+      const accountIndexKey = accountKey(publicKey, tokenId);
       const activity = [...this.#store.accountActivities.values()].find(
-        (candidate) =>
-          candidate.transaction === transaction.id && candidate.account_public_key === publicKey,
+        (candidate) => candidate.transaction === transaction.id && candidate.account === account.id,
       );
       const events = normalizeFieldArrays(update.events ?? update.body?.events ?? []);
       events.forEach((fields) => {
-        const eventIndex = eventIndexesByPublicKey.get(publicKey) ?? 0;
-        eventIndexesByPublicKey.set(publicKey, eventIndex + 1);
-        const key = `${transaction.id}:${publicKey}:event:${eventIndex}`;
+        const eventIndex = eventIndexesByAccount.get(accountIndexKey) ?? 0;
+        eventIndexesByAccount.set(accountIndexKey, eventIndex + 1);
+        const key = `${transaction.id}:${publicKey}:${tokenId}:event:${eventIndex}`;
         if (this.#store.zkappEvents.has(key)) {
           return;
         }
@@ -828,9 +830,9 @@ export class ZekoIndexer {
         afterHeads: activity?.action_state_after,
       });
       actions.forEach((action) => {
-        const actionIndex = actionIndexesByPublicKey.get(publicKey) ?? 0;
-        actionIndexesByPublicKey.set(publicKey, actionIndex + 1);
-        const key = `${transaction.id}:${publicKey}:action:${actionIndex}`;
+        const actionIndex = actionIndexesByAccount.get(accountIndexKey) ?? 0;
+        actionIndexesByAccount.set(accountIndexKey, actionIndex + 1);
+        const key = `${transaction.id}:${publicKey}:${tokenId}:action:${actionIndex}`;
         if (this.#store.zkappActions.has(key)) {
           return;
         }
@@ -1010,6 +1012,27 @@ const isAccountTransactionRole = (
 
 const accountUpdatePublicKey = (update: L2AccountUpdateInput): string | undefined =>
   update.public_key ?? update.account?.public_key ?? update.body?.public_key;
+
+const accountUpdateTokenId = (update: L2AccountUpdateInput): string | undefined =>
+  update.token_id ?? update.account?.token_id ?? update.body?.token_id;
+
+const accountUpdateChangedAccount = (
+  event: L2TransactionInput,
+  update: L2AccountUpdateInput,
+  publicKey: string,
+): L2AccountChangeInput | undefined => {
+  const matches = event.changed_accounts.filter(
+    (change) => change.account.public_key === publicKey,
+  );
+  const tokenId = accountUpdateTokenId(update);
+  if (tokenId) {
+    return matches.find((change) => (change.account.token_id ?? "1") === tokenId);
+  }
+  if (matches.length === 1) {
+    return matches[0];
+  }
+  return matches.find((change) => (change.account.token_id ?? "1") === "1");
+};
 
 const normalizeFieldArrays = (items: unknown[]): string[][] =>
   items.flatMap((item) => {

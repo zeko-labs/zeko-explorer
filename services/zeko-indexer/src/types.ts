@@ -47,9 +47,11 @@ export type ObservedZkappActionInput = {
 
 export type L2AccountUpdateInput = {
   public_key?: string;
-  account?: { public_key?: string };
+  token_id?: string;
+  account?: { public_key?: string; token_id?: string };
   body?: {
     public_key?: string;
+    token_id?: string;
     events?: unknown[];
     actions?: unknown[];
   };

@@ -17,6 +17,10 @@ Feature: Indexer runtime process
     When the runtime source readers are created
     Then every runtime source reader replays its stream from the beginning
 
+  Scenario: Runtime config rejects durable resume without startup hydration
+    When the runtime config is resolved with durable resume enabled
+    Then the runtime config fails because startup hydration is not implemented
+
   Scenario: Runtime config honors deployment environment variables
     When the runtime config is resolved from the deployment environment
     Then the runtime uses NATS server "nats://nats:4222"

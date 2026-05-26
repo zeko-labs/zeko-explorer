@@ -51,6 +51,22 @@ const changedAccount = (
   },
 });
 
+const tokenChangedAccount = (
+  publicKey: string,
+  tokenId: string,
+  balance: string,
+  nonce: number,
+  zkappState?: readonly string[],
+  actionState?: readonly string[],
+  index = 0,
+): L2AccountChangeInput => ({
+  ...changedAccount(publicKey, balance, nonce, zkappState, actionState, index),
+  account: {
+    ...changedAccount(publicKey, balance, nonce, zkappState, actionState, index).account,
+    token_id: tokenId,
+  },
+});
+
 const delegatedAccount = (
   publicKey: string,
   delegate: string,
@@ -76,6 +92,19 @@ const zkappUpdate = (
   public_key: publicKey,
   events,
   actions,
+});
+
+const tokenZkappUpdate = (
+  publicKey: string,
+  tokenId: string,
+  actionState: string,
+): L2AccountUpdateInput => ({
+  body: {
+    public_key: publicKey,
+    token_id: tokenId,
+    events: [["900", "901"]],
+    actions: [{ fields: ["902"], before_action_state: "token-before", action_state: actionState }],
+  },
 });
 
 const bodyShapedZkappUpdate = (
@@ -232,6 +261,40 @@ describeFeature(feature, ({ Scenario }) => {
           changedAccount(publicKey, "500", 0, oneState, [
             actionState,
             "action-before-body",
+            "0",
+            "0",
+            "0",
+          ]),
+        ],
+      },
+    });
+  };
+
+  const consumeTokenZkapp = async (
+    targetLedgerHash: string,
+    publicKey: string,
+    tokenId: string,
+  ) => {
+    await indexer.consume({
+      subject: "zeko.l2.transactions",
+      payload: {
+        source_ledger_hash: store.syncStatus.get("l2-transactions")?.last_hash ?? "ledger-0",
+        target_ledger_hash: targetLedgerHash,
+        timestamp,
+        acc_set: "acc-set",
+        command: {
+          type: "zkapp_command",
+          hash: `tx-${targetLedgerHash}`,
+          sender: "B62qsender",
+          fee: "1",
+          nonce: 1,
+          account_updates: [tokenZkappUpdate(publicKey, tokenId, "token-after")],
+        },
+        changed_accounts: [
+          changedAccount("B62qsender", "999", 2),
+          tokenChangedAccount(publicKey, tokenId, "700", 1, oneState, [
+            "token-after",
+            "token-before",
             "0",
             "0",
             "0",
@@ -631,6 +694,102 @@ describeFeature(feature, ({ Scenario }) => {
             before_action_state: before,
             action_state: after,
           });
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "zkApp child rows link to the token account that emitted them",
+    ({ Given, And, When, Then }) => {
+      Given(
+        "account {string} exists for token {string} with action_state head {string}",
+        async (_context, publicKey: string, tokenId: string, actionState: string) => {
+          reset();
+          await consumePayment("ledger-token-zkapp-prior-native", undefined, [
+            tokenChangedAccount(publicKey, tokenId, "500", 0, oneState, [
+              actionState,
+              "0",
+              "0",
+              "0",
+              "0",
+            ]),
+          ]);
+        },
+      );
+
+      And(
+        "account {string} exists for token {string} with action_state head {string}",
+        async (_context, publicKey: string, tokenId: string, actionState: string) => {
+          await consumePayment("ledger-token-zkapp-prior-token", undefined, [
+            tokenChangedAccount(publicKey, tokenId, "600", 0, oneState, [
+              actionState,
+              "0",
+              "0",
+              "0",
+              "0",
+            ]),
+          ]);
+        },
+      );
+
+      When(
+        "the indexer consumes a token zkApp transaction for {string} on ledger {string}",
+        async (_context, publicKey: string, ledger: string) => {
+          await consumeTokenZkapp(ledger, publicKey, "2");
+        },
+      );
+
+      Then(
+        "one zkapp_event row exists for account {string} with token {string}",
+        (_context, publicKey: string, tokenId: string) => {
+          const account = store.accountByPublicKey(publicKey, tokenId);
+          expect(
+            [...store.zkappEvents.values()].filter(
+              (event) => event.emitting_account === account?.id,
+            ),
+          ).toHaveLength(1);
+        },
+      );
+
+      And(
+        "one zkapp_action row exists for account {string} with token {string}",
+        (_context, publicKey: string, tokenId: string) => {
+          const account = store.accountByPublicKey(publicKey, tokenId);
+          expect(
+            [...store.zkappActions.values()].filter(
+              (action) => action.emitting_account === account?.id,
+            ),
+          ).toHaveLength(1);
+        },
+      );
+
+      And(
+        "no zkApp child rows exist for account {string} with token {string}",
+        (_context, publicKey: string, tokenId: string) => {
+          const account = store.accountByPublicKey(publicKey, tokenId);
+          expect(
+            [...store.zkappEvents.values()].filter(
+              (event) => event.emitting_account === account?.id,
+            ),
+          ).toHaveLength(0);
+          expect(
+            [...store.zkappActions.values()].filter(
+              (action) => action.emitting_account === account?.id,
+            ),
+          ).toHaveLength(0);
+        },
+      );
+
+      And(
+        "the token zkapp_action row has before_action_state {string} and action_state {string}",
+        (_context, before: string, after: string) => {
+          const account = store.accountByPublicKey("B62qTokenContract", "2");
+          expect(
+            [...store.zkappActions.values()].find(
+              (action) => action.emitting_account === account?.id,
+            ),
+          ).toMatchObject({ before_action_state: before, action_state: after });
         },
       );
     },

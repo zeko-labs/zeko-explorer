@@ -51,11 +51,18 @@ const DEFAULT_STREAMS: RuntimeStreamConfig[] = [
 export function resolveIndexerRuntimeConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): IndexerRuntimeConfig {
+  const natsReplayFromStart = booleanEnv(env.ZEKO_INDEXER_NATS_REPLAY_FROM_START, true);
+  if (!natsReplayFromStart) {
+    throw new Error(
+      "Durable resume requires startup hydration from SurrealDB; set ZEKO_INDEXER_NATS_REPLAY_FROM_START=true",
+    );
+  }
+
   return {
     natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? env.NATS_URL ?? "nats://127.0.0.1:4222"),
     natsDurableName: env.ZEKO_INDEXER_NATS_DURABLE ?? "zeko-indexer",
     natsNextExpiresMs: positiveInteger(env.ZEKO_INDEXER_NATS_NEXT_EXPIRES_MS, 1_000),
-    natsReplayFromStart: booleanEnv(env.ZEKO_INDEXER_NATS_REPLAY_FROM_START, true),
+    natsReplayFromStart,
     streams: [...DEFAULT_STREAMS],
     surreal: {
       endpoint: env.ZEKO_INDEXER_SURREAL_ENDPOINT ?? env.SURREAL_URL ?? "http://127.0.0.1:8000",

@@ -22,6 +22,7 @@ describeFeature(feature, ({ Scenario }) => {
   let siblingCancelled: boolean;
   let runtimeError: unknown;
   let projectionEvents: string[];
+  let configError: unknown;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -102,6 +103,24 @@ describeFeature(feature, ({ Scenario }) => {
       });
     },
   );
+
+  Scenario("Runtime config rejects durable resume without startup hydration", ({ When, Then }) => {
+    When("the runtime config is resolved with durable resume enabled", () => {
+      configError = undefined;
+      try {
+        resolveIndexerRuntimeConfig({
+          ZEKO_INDEXER_NATS_REPLAY_FROM_START: "false",
+        });
+      } catch (error) {
+        configError = error;
+      }
+    });
+
+    Then("the runtime config fails because startup hydration is not implemented", () => {
+      expect(configError).toBeInstanceOf(Error);
+      expect((configError as Error).message).toContain("startup hydration");
+    });
+  });
 
   Scenario("Runtime config honors deployment environment variables", ({ When, Then, And }) => {
     When("the runtime config is resolved from the deployment environment", () => {
