@@ -556,9 +556,9 @@ DEFINE FIELD OVERWRITE data_quality_reasons ON TABLE bridge_operation TYPE optio
 DEFINE FIELD OVERWRITE source_network ON TABLE bridge_operation TYPE option<string>;
 DEFINE FIELD OVERWRITE source_provider ON TABLE bridge_operation TYPE option<string>;
 DEFINE FIELD OVERWRITE submit_tx_hash ON TABLE bridge_operation TYPE option<string>;
-DEFINE FIELD OVERWRITE submit_block_height ON TABLE bridge_operation TYPE int;
-DEFINE FIELD OVERWRITE sort_submit_block_height ON TABLE bridge_operation TYPE int;
-DEFINE FIELD OVERWRITE submit_timestamp ON TABLE bridge_operation TYPE datetime;
+DEFINE FIELD OVERWRITE submit_block_height ON TABLE bridge_operation TYPE option<int>;
+DEFINE FIELD OVERWRITE sort_submit_block_height ON TABLE bridge_operation TYPE option<int>;
+DEFINE FIELD OVERWRITE submit_timestamp ON TABLE bridge_operation TYPE option<datetime>;
 DEFINE FIELD OVERWRITE timeout_slot ON TABLE bridge_operation TYPE option<int>;
 DEFINE FIELD OVERWRITE holder_account_l1 ON TABLE bridge_operation TYPE option<string>;
 DEFINE FIELD OVERWRITE l1_witness_action_state ON TABLE bridge_operation TYPE option<string>;

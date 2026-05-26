@@ -235,7 +235,7 @@ function serializeBridgeOperation(row: BridgeOperationRow): Record<string, unkno
     submit_tx_hash: row.submit_tx_hash,
     submit_block_height: row.submit_block_height,
     sort_submit_block_height: row.sort_submit_block_height,
-    submit_timestamp: date(row.submit_timestamp),
+    submit_timestamp: row.submit_timestamp ? date(row.submit_timestamp) : undefined,
     timeout_slot: row.timeout_slot,
     holder_account_l1: row.holder_account_l1,
     l1_witness_action_state: row.l1_witness_action_state,

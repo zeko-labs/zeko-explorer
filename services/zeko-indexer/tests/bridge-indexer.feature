@@ -149,6 +149,13 @@ Feature: Bridge operation projection
     When the indexer consumes an L2 inner action for aux "aux-timeout-late-evidence" with action state "inner-timeout-late-evidence"
     Then bridge operation for aux "aux-timeout-late-evidence" sequence 0 has status "timed_out"
 
+  Scenario: Timed-out deposits can still be cancelled
+    Given the indexer consumed a deposit submission for aux "aux-timeout-cancel"
+    And the indexer consumes an L1 settlement at slot 600
+    When the indexer consumes a deposit cancellation for aux "aux-timeout-cancel"
+    Then bridge operation for aux "aux-timeout-cancel" sequence 0 has status "cancelled"
+    And bridge operation for aux "aux-timeout-cancel" sequence 0 has cancel tx hash "l1-cancel-aux-timeout-cancel"
+
   Scenario: Settlement slots advance withdrawal delay
     Given the indexer consumed an L2 inner action for aux "aux-settlement-delay" with action state "inner-settlement-delay"
     And the indexer consumed an L1 commit covering inner action state "inner-settlement-delay"
@@ -182,6 +189,11 @@ Feature: Bridge operation projection
     And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has submit tx hash "tx-inner-withdrawal-out-of-order"
     And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has sender "B62qUser"
     And bridge operation for aux "aux-withdrawal-out-of-order" sequence 0 has amount "1000000000"
+
+  Scenario: Out-of-order withdrawal finalization does not invent an L2 submit
+    When the indexer consumed an L1 withdrawal finalization for aux "aux-withdrawal-no-submit"
+    Then bridge operation for aux "aux-withdrawal-no-submit" sequence 0 has status "completed"
+    And bridge operation for aux "aux-withdrawal-no-submit" sequence 0 has no submit tx hash
 
   Scenario: Withdrawal finalization enriches an already witnessed withdrawal
     Given the indexer consumed an L2 inner action for aux "aux-withdrawal-witness-first" with action state "inner-withdrawal-witness-first"

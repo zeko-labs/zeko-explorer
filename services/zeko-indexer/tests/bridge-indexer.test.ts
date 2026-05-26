@@ -989,6 +989,31 @@ describeFeature(feature, ({ Scenario }) => {
     },
   );
 
+  Scenario("Timed-out deposits can still be cancelled", ({ Given, And, When, Then }) => {
+    reset();
+    Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+      consumeDeposit(aux),
+    );
+    And("the indexer consumes an L1 settlement at slot {int}", (_context, slot: number) =>
+      consumeSettlementAtSlot(slot),
+    );
+    When("the indexer consumes a deposit cancellation for aux {string}", (_context, aux: string) =>
+      consumeCancellation(aux),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+    And(
+      "bridge operation for aux {string} sequence {int} has cancel tx hash {string}",
+      (_, aux: string, sequence: number, txHash: string) => {
+        expect(operation(aux, sequence).cancel_tx_hash).toBe(txHash);
+      },
+    );
+  });
+
   Scenario("Settlement slots advance withdrawal delay", ({ Given, And, When, Then }) => {
     reset();
     Given(
@@ -1152,6 +1177,29 @@ describeFeature(feature, ({ Scenario }) => {
         "bridge operation for aux {string} sequence {int} has amount {string}",
         (_, aux: string, sequence: number, amount: string) => {
           expect(operation(aux, sequence).amount).toBe(amount);
+        },
+      );
+    },
+  );
+
+  Scenario(
+    "Out-of-order withdrawal finalization does not invent an L2 submit",
+    ({ When, Then, And }) => {
+      reset();
+      When(
+        "the indexer consumed an L1 withdrawal finalization for aux {string}",
+        (_context, aux: string) => consumeWithdrawalFinalization(aux),
+      );
+      Then(
+        "bridge operation for aux {string} sequence {int} has status {string}",
+        (_, aux: string, sequence: number, status: string) => {
+          expect(operation(aux, sequence).status).toBe(status);
+        },
+      );
+      And(
+        "bridge operation for aux {string} sequence {int} has no submit tx hash",
+        (_, aux: string, sequence: number) => {
+          expect(operation(aux, sequence).submit_tx_hash).toBeUndefined();
         },
       );
     },

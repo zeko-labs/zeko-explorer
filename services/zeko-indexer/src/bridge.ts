@@ -392,12 +392,12 @@ function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
   const cancelledSequence = event.cancel?.cancelledDepositIndex;
   const operation =
     cancelledSequence === undefined
-      ? firstOperationNeeding(store, event.aux, (candidate) => isActiveDeposit(candidate))
+      ? firstOperationNeeding(store, event.aux, (candidate) => isCancellableDeposit(candidate))
       : store
           .bridgeOperationsByAux(event.aux)
           .find(
             (candidate) =>
-              isActiveDeposit(candidate) && candidate.aux_sequence === cancelledSequence,
+              isCancellableDeposit(candidate) && candidate.aux_sequence === cancelledSequence,
           );
   if (!operation) {
     return;
@@ -425,9 +425,6 @@ function upsertWithdrawalFinalization(store: IndexerStore, event: L1BridgeEventI
       sender: event.userPk,
       recipient: event.recipient ?? UNKNOWN,
       amount: event.amount ?? UNKNOWN,
-      submit_tx_hash: event.txHash,
-      submit_block_height: event.block.height,
-      submit_timestamp: normalizeTimestamp(event.observedAt),
       source_network: event.network,
       source_provider: event.provider,
       data_quality: event.amount && event.recipient ? "complete" : "partial",
@@ -643,8 +640,8 @@ function createBridgeOperation(
     recipient: string;
     amount: string;
     submit_tx_hash?: string;
-    submit_block_height: number;
-    submit_timestamp: string;
+    submit_block_height?: number;
+    submit_timestamp?: string;
     timeout_slot?: number;
     holder_account_l1?: string;
     source_network?: string;
@@ -671,7 +668,8 @@ function createBridgeOperation(
     source_provider: input.source_provider,
     submit_tx_hash: input.submit_tx_hash,
     submit_block_height: input.submit_block_height,
-    sort_submit_block_height: -input.submit_block_height,
+    sort_submit_block_height:
+      input.submit_block_height === undefined ? undefined : -input.submit_block_height,
     submit_timestamp: input.submit_timestamp,
     timeout_slot: input.timeout_slot,
     holder_account_l1: input.holder_account_l1,
@@ -715,6 +713,13 @@ function isActiveBridgeOperation(operation: BridgeOperationRow): boolean {
 
 function isActiveDeposit(operation: BridgeOperationRow): boolean {
   return operation.type === "deposit" && isActiveBridgeOperation(operation);
+}
+
+function isCancellableDeposit(operation: BridgeOperationRow): boolean {
+  return (
+    operation.type === "deposit" &&
+    !["rolled_back", "cancelled", "completed"].includes(operation.status)
+  );
 }
 
 function depositStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {

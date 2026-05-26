@@ -315,9 +315,9 @@ export type BridgeOperationRow = {
   source_network?: string;
   source_provider?: string;
   submit_tx_hash?: string;
-  submit_block_height: number;
-  sort_submit_block_height: number;
-  submit_timestamp: string;
+  submit_block_height?: number;
+  sort_submit_block_height?: number;
+  submit_timestamp?: string;
   timeout_slot?: number;
   holder_account_l1?: string;
   l1_witness_action_state?: string;
