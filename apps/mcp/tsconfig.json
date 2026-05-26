@@ -2,12 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
+    "outDir": "../../.moon/cache/types/apps/mcp",
+    "tsBuildInfoFile": "../../.moon/cache/types/apps/mcp/tsconfig.tsbuildinfo",
     "paths": {
       "@zeko/domain": ["../../packages/domain/src/index.ts"],
       "@zeko/domain/*": ["../../packages/domain/src/*"]
-    },
-    "outDir": "../../.moon/cache/types/apps/mcp",
-    "tsBuildInfoFile": "../../.moon/cache/types/apps/mcp/tsconfig.tsbuildinfo"
+    }
   },
   "include": ["worker-configuration.d.ts", "src/**/*.ts"],
   "references": [

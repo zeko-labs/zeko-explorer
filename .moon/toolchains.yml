@@ -10,7 +10,7 @@ typescript:
   syncProjectReferences: true
   syncProjectReferencesToPaths: true
   includeProjectReferenceSources: false
-  pruneProjectReferences: false
+  pruneProjectReferences: true
   routeOutDirToCache: true
 
 node:

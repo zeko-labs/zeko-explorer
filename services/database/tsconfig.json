@@ -2,17 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "paths": {
-      "@zeko/domain": ["../../packages/domain/src/index.ts"],
-      "@zeko/domain/*": ["../../packages/domain/src/*"]
-    },
     "outDir": "../../.moon/cache/types/services/database",
     "tsBuildInfoFile": "../../.moon/cache/types/services/database/tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"],
-  "references": [
-    {
-      "path": "../../packages/domain"
-    }
-  ]
+  "include": ["src/**/*.ts"]
 }

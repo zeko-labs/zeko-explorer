@@ -6,7 +6,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@zeko/domain": "workspace:*"
+  "devDependencies": {
+    "@amiceli/vitest-cucumber": "catalog:"
   }
 }

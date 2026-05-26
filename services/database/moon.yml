@@ -4,13 +4,39 @@ layer: "library"
 stack: "backend"
 tags: ["surrealdb", "database"]
 
-dependsOn:
-  - "domain"
+fileGroups:
+  tests:
+    - "tests/features/**/*.feature"
+    - "tests/**/*.ts"
+    - "queries/**/*.surql"
+    - "surrealkit/**/*.surql"
+    - "surrealkit/**/*.toml"
+    - "moon.yml"
+    - "package.json"
+    - "tsconfig.json"
+    - "/docs/spikes/008-surrealdb-schema/surrealkit/**/*.surql"
+    - "/docs/spikes/008-surrealdb-schema/surrealkit/**/*.toml"
+    - "/package.json"
+    - "/pnpm-lock.yaml"
+    - "/pnpm-workspace.yaml"
 
 tasks:
-  migrate-local:
+  test:
+    command: "vitest"
+    args: ["run", "--passWithNoTests", "--testTimeout=60000", "--hookTimeout=60000"]
+    inputs:
+      - "@group(tests)"
+      - "$DATABASE_TEST_SURREAL_ENDPOINT"
+      - "$DATABASE_TEST_SURREALKIT_HOST"
+      - "$DATABASE_TEST_SURREAL_IMAGE"
+      - "$DATABASE_TEST_SURREAL_PORT"
+    options:
+      mergeArgs: "replace"
+      mergeInputs: "replace"
+
+  sync-local:
     command: "nu"
-    args: ["scripts/migrate-local.nu"]
+    args: ["scripts/sync-local.nu"]
     options:
       cache: false
       runInCI: false

@@ -1,9 +1,12 @@
 $schema: "https://moonrepo.dev/schemas/project.json"
 id: "root"
-language: "typescript"
+language: "unknown"
 layer: "configuration"
 stack: "unknown"
 tags: ["root"]
+
+toolchains:
+  typescript: false
 
 fileGroups:
   scripts:

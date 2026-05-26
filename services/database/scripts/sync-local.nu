@@ -10,4 +10,16 @@ let surrealkit_image = ($env.SURREALKIT_IMAGE? | default "ghcr.io/surrealdb/surr
 let docker_host_url = ($surreal_url | str replace "localhost" "host.docker.internal")
 let surrealkit_dir = ($root_dir | path join "services/database/surrealkit")
 
-docker run --rm --add-host "host.docker.internal:host-gateway" --volume $"($surrealkit_dir):/work" --workdir /work $surrealkit_image --host $docker_host_url --ns $surreal_namespace --db $surreal_database --user $surreal_user --pass $surreal_pass sync --fail-fast
+docker run \
+  --rm \
+  --add-host "host.docker.internal:host-gateway" \
+  --volume $"($surrealkit_dir):/work" \
+  --workdir /work \
+  $surrealkit_image \
+  --host $docker_host_url \
+  --ns $surreal_namespace \
+  --db $surreal_database \
+  --user $surreal_user \
+  --pass $surreal_pass \
+  sync \
+  --fail-fast

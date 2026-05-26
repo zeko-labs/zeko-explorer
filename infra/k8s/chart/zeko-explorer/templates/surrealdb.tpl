@@ -62,9 +62,9 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: surrealdb-migrations
+  name: surrealdb-surrealkit
   labels:
-    app.kubernetes.io/name: surrealdb-migrations
+    app.kubernetes.io/name: surrealdb-surrealkit
     {{- include "zeko-explorer.labels" . | nindent 4 }}
 data:
   surrealkit.toml: |-
@@ -75,17 +75,17 @@ data:
 {{ .Files.Get "surrealkit/database/schema/000_schema.surql" | indent 4 }}
   seed.surql: |-
 {{ .Files.Get "surrealkit/database/seed/seed.surql" | indent 4 }}
-  0001_initial_core.surql: |-
-{{ .Files.Get "surrealkit/migrations/0001_initial_core.surql" | indent 4 }}
-  0002_l1_watcher_and_bridge_quality.surql: |-
-{{ .Files.Get "surrealkit/migrations/0002_l1_watcher_and_bridge_quality.surql" | indent 4 }}
+{{- range $path, $_ := .Files.Glob "surrealkit/migrations/*.surql" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: surrealdb-migrate
+  name: surrealdb-surrealkit
   labels:
-    app.kubernetes.io/name: surrealdb-migrate
+    app.kubernetes.io/name: surrealdb-surrealkit
     {{- include "zeko-explorer.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
@@ -94,11 +94,11 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: surrealdb-migrate
+        app.kubernetes.io/name: surrealdb-surrealkit
     spec:
       restartPolicy: OnFailure
       containers:
-        - name: surrealdb-migrate
+        - name: surrealdb-surrealkit
           image: {{ .Values.images.surrealkit | quote }}
           workingDir: /work
           command: ["/bin/sh", "-ceu"]
@@ -106,12 +106,12 @@ spec:
             - |
               surrealkit --host http://surrealdb:8000 --ns {{ .Values.surrealdb.namespace }} --db {{ .Values.surrealdb.database }} --user {{ .Values.surrealdb.rootUser }} --pass {{ .Values.surrealdb.rootPassword }} sync --fail-fast
           volumeMounts:
-            - name: migrations
+            - name: surrealkit
               mountPath: /work
       volumes:
-        - name: migrations
+        - name: surrealkit
           configMap:
-            name: surrealdb-migrations
+            name: surrealdb-surrealkit
             items:
               - key: surrealkit.toml
                 path: surrealkit.toml
@@ -121,7 +121,7 @@ spec:
                 path: database/schema/000_schema.surql
               - key: seed.surql
                 path: database/seed/seed.surql
-              - key: 0001_initial_core.surql
-                path: migrations/0001_initial_core.surql
-              - key: 0002_l1_watcher_and_bridge_quality.surql
-                path: migrations/0002_l1_watcher_and_bridge_quality.surql
+{{- range $path, $_ := .Files.Glob "surrealkit/migrations/*.surql" }}
+              - key: {{ base $path }}
+                path: migrations/{{ base $path }}
+{{- end }}
