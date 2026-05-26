@@ -331,6 +331,13 @@ export function consumeBridgeL2Rollback(
     operation.l2_timestamp = undefined;
     if (operation.type === "withdrawal") {
       operation.submit_tx_hash = undefined;
+      operation.l1_witness_action_state = undefined;
+      operation.l1_witness_tx_hash = undefined;
+      operation.l1_witness_block_height = undefined;
+      operation.l1_witness_timestamp = undefined;
+      operation.l1_slot_range_lower = undefined;
+      operation.l1_slot_range_upper = undefined;
+      deleteWitnessLinksForOperation(store, operation.id);
     }
     operation.commit_action_state = undefined;
     deleteCommitLinksForOperation(store, operation.id);
@@ -835,6 +842,15 @@ function deleteL1LinksForOuterAction(store: IndexerStore, outerActionId: string)
 function deleteCommitLinksForOperation(store: IndexerStore, operationId: string): void {
   for (const [key, link] of store.l1ActionLinks) {
     if (link.out === operationId && link.role === "commit") {
+      store.l1ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
+    }
+  }
+}
+
+function deleteWitnessLinksForOperation(store: IndexerStore, operationId: string): void {
+  for (const [key, link] of store.l1ActionLinks) {
+    if (link.out === operationId && link.role === "witness") {
       store.l1ActionLinks.delete(key);
       store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
     }

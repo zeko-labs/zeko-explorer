@@ -67,6 +67,15 @@ Feature: Bridge operation projection
     Then bridge operation for aux "aux-withdrawal-witness-reinclude" sequence 0 has status "rolled_back"
     And bridge operation for aux "aux-withdrawal-witness-reinclude" sequence 1 has status "completed"
 
+  Scenario: L2 rollback of a completed withdrawal rolls back finalization evidence
+    Given the indexer consumed an L2 inner action for aux "aux-completed-withdrawal-l2-rollback" with action state "inner-completed-withdrawal-l2-rollback"
+    And the indexer consumed an L1 commit covering inner action state "inner-completed-withdrawal-l2-rollback"
+    And the indexer observes L1 slot 231 for aux "aux-completed-withdrawal-l2-rollback"
+    And the indexer consumes an L1 witness for aux "aux-completed-withdrawal-l2-rollback"
+    When the indexer consumes an L2 replacement from source ledger "ledger-0" to target ledger "ledger-completed-withdrawal-replacement"
+    Then bridge operation for aux "aux-completed-withdrawal-l2-rollback" sequence 0 has status "rolled_back"
+    And bridge operation for aux "aux-completed-withdrawal-l2-rollback" sequence 0 has no L1 witness tx hash
+
   Scenario: Repeated deposits with the same aux keep FIFO identity
     When the indexer consumes a deposit submission for aux "aux-shared"
     And the indexer consumes another deposit submission for aux "aux-shared"

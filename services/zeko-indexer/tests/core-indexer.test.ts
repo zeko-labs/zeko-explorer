@@ -2822,9 +2822,12 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
-  Scenario("Dev entrypoint resolves under raw Node", ({ Then }) => {
-    Then("node can execute the zeko-indexer dev entrypoint", async () => {
-      await execFileAsync(process.execPath, ["src/index.ts"], { cwd: serviceRoot });
+  Scenario("Dev entrypoint configuration resolves under raw Node", ({ Then }) => {
+    Then("node can execute the zeko-indexer dev entrypoint config check", async () => {
+      await execFileAsync(process.execPath, ["src/index.ts"], {
+        cwd: serviceRoot,
+        env: { ...process.env, ZEKO_INDEXER_CHECK_CONFIG: "1" },
+      });
     });
   });
 });
