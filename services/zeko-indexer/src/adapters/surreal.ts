@@ -1,4 +1,4 @@
-import type { BridgeProjectionRemovals, IndexerStore } from "../store.ts";
+import type { BridgeProjectionRemovals, CoreProjectionRemovals, IndexerStore } from "../store.ts";
 import type {
   BridgeOperationRow,
   InnerActionRow,
@@ -72,15 +72,17 @@ export async function writeIndexerProjectionToSurreal(
   client: SurrealHttpClient,
   store: IndexerStore,
 ): Promise<void> {
+  const coreRemovals = snapshotCoreProjectionRemovals(store.coreProjectionRemovals);
   const removals = snapshotBridgeProjectionRemovals(store.bridgeProjectionRemovals);
   const statements: string[] = [
-    ...coreProjectionStatements(store),
+    ...coreProjectionStatements(store, coreRemovals),
     ...bridgeProjectionStatements(store, removals),
   ];
   if (statements.length === 0) {
     return;
   }
   await client.query(statements.join("\n"));
+  clearSubmittedCoreProjectionRemovals(store.coreProjectionRemovals, coreRemovals);
   clearSubmittedBridgeProjectionRemovals(store.bridgeProjectionRemovals, removals);
 }
 
@@ -144,6 +146,14 @@ function snapshotBridgeProjectionRemovals(
   };
 }
 
+function snapshotCoreProjectionRemovals(removals: CoreProjectionRemovals): CoreProjectionRemovals {
+  return {
+    zkappEventIds: new Set(removals.zkappEventIds),
+    zkappActionIds: new Set(removals.zkappActionIds),
+    batchTransactionIds: new Set(removals.batchTransactionIds),
+  };
+}
+
 function bridgeRemovalStatements(removals: BridgeProjectionRemovals): string[] {
   return [
     ...[...removals.bridgeTransactionLinkIds].map((id) =>
@@ -167,6 +177,15 @@ function clearSubmittedBridgeProjectionRemovals(
   clearSubmittedIds(pending.outerActionIds, submitted.outerActionIds);
   clearSubmittedIds(pending.innerActionIds, submitted.innerActionIds);
   clearSubmittedIds(pending.bridgeOperationIds, submitted.bridgeOperationIds);
+}
+
+function clearSubmittedCoreProjectionRemovals(
+  pending: CoreProjectionRemovals,
+  submitted: CoreProjectionRemovals,
+): void {
+  clearSubmittedIds(pending.zkappEventIds, submitted.zkappEventIds);
+  clearSubmittedIds(pending.zkappActionIds, submitted.zkappActionIds);
+  clearSubmittedIds(pending.batchTransactionIds, submitted.batchTransactionIds);
 }
 
 function clearSubmittedIds(pending: Set<string>, submitted: Set<string>): void {

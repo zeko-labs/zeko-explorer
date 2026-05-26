@@ -1,4 +1,4 @@
-import type { IndexerStore } from "../store.ts";
+import type { CoreProjectionRemovals, IndexerStore } from "../store.ts";
 import type {
   AccountActivityRow,
   AccountRow,
@@ -9,10 +9,20 @@ import type {
   ZkappActionRow,
   ZkappEventRow,
 } from "../types.ts";
-import { date, record, stripUndefined, upsertRecord, upsertRelation } from "./surreal-sql.ts";
+import {
+  date,
+  deleteRecord,
+  record,
+  stripUndefined,
+  upsertRecord,
+  upsertRelation,
+} from "./surreal-sql.ts";
 
-export function coreProjectionStatements(store: IndexerStore): string[] {
-  const statements: string[] = [];
+export function coreProjectionStatements(
+  store: IndexerStore,
+  removals: CoreProjectionRemovals = emptyCoreProjectionRemovals(),
+): string[] {
+  const statements: string[] = coreRemovalStatements(removals);
   for (const row of store.accounts.values()) {
     statements.push(upsertRecord("account", row.id, serializeAccount(row, store)));
   }
@@ -50,6 +60,22 @@ export function coreProjectionStatements(store: IndexerStore): string[] {
     );
   }
   return statements;
+}
+
+function emptyCoreProjectionRemovals(): CoreProjectionRemovals {
+  return {
+    zkappEventIds: new Set(),
+    zkappActionIds: new Set(),
+    batchTransactionIds: new Set(),
+  };
+}
+
+function coreRemovalStatements(removals: CoreProjectionRemovals): string[] {
+  return [
+    ...[...removals.batchTransactionIds].map((id) => deleteRecord("batch_transaction", id)),
+    ...[...removals.zkappEventIds].map((id) => deleteRecord("zkapp_event", id)),
+    ...[...removals.zkappActionIds].map((id) => deleteRecord("zkapp_action", id)),
+  ];
 }
 
 function serializeAccount(row: AccountRow, store: IndexerStore): Record<string, unknown> {

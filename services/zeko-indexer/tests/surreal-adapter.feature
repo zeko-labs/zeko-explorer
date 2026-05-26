@@ -37,6 +37,16 @@ Feature: Surreal bridge adapter
     When the bridge projection is flushed once
     Then the SurrealDB SQL deletes only the removed L2 relation
 
+  Scenario: Tracked core removals delete stale zkApp rows
+    Given the in-memory projection has removed zkApp child rows
+    When the full indexer projection is flushed once
+    Then the SurrealDB SQL deletes the stale zkApp rows
+
+  Scenario: Moved batch links delete stale batch transaction relations
+    Given the in-memory projection has a removed batch transaction link and a replacement link
+    When the full indexer projection is flushed once
+    Then the SurrealDB SQL deletes the stale batch transaction relation before inserting the replacement
+
   Scenario: Concurrent flushes preserve removals recorded during an in-flight write
     Given the in-memory projection has a removed L2 action link
     When a second removed L2 action link is recorded while the first flush is in flight

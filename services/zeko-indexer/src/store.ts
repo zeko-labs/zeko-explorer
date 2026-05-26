@@ -32,6 +32,12 @@ export type BridgeProjectionRemovals = {
   readonly bridgeTransactionLinkIds: Set<string>;
 };
 
+export type CoreProjectionRemovals = {
+  readonly zkappEventIds: Set<string>;
+  readonly zkappActionIds: Set<string>;
+  readonly batchTransactionIds: Set<string>;
+};
+
 export type IndexerStore = {
   readonly accounts: Map<string, AccountRow>;
   readonly transactions: Map<string, TransactionRow>;
@@ -54,6 +60,7 @@ export type IndexerStore = {
   readonly l1RollbackAffectedSettlementIds: Set<string>;
   readonly l1RollbackAffectedBridgeEventIds: Set<string>;
   readonly l1RollbackAffectedOuterActionIds: Set<string>;
+  readonly coreProjectionRemovals: CoreProjectionRemovals;
   readonly bridgeProjectionRemovals: BridgeProjectionRemovals;
   readonly idFactory: IdFactory;
 
@@ -143,6 +150,11 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly l1RollbackAffectedSettlementIds = new Set<string>();
   readonly l1RollbackAffectedBridgeEventIds = new Set<string>();
   readonly l1RollbackAffectedOuterActionIds = new Set<string>();
+  readonly coreProjectionRemovals: CoreProjectionRemovals = {
+    zkappEventIds: new Set(),
+    zkappActionIds: new Set(),
+    batchTransactionIds: new Set(),
+  };
   readonly bridgeProjectionRemovals: BridgeProjectionRemovals = {
     outerActionIds: new Set(),
     innerActionIds: new Set(),

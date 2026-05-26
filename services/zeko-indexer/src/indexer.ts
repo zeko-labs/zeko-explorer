@@ -578,11 +578,13 @@ export class ZekoIndexer {
     }
     for (const [id, event] of this.#store.zkappEvents) {
       if (event.target_ledger_hash === ledgerHash) {
+        this.#store.coreProjectionRemovals.zkappEventIds.add(event.id);
         this.#store.zkappEvents.delete(id);
       }
     }
     for (const [id, action] of this.#store.zkappActions) {
       if (action.target_ledger_hash === ledgerHash) {
+        this.#store.coreProjectionRemovals.zkappActionIds.add(action.id);
         this.#store.zkappActions.delete(id);
       }
     }
@@ -732,6 +734,11 @@ export class ZekoIndexer {
       .sort((left, right) => left.block_height - right.block_height);
 
     for (const transaction of appliedTransactions) {
+      if (transaction.batch) {
+        this.#store.coreProjectionRemovals.batchTransactionIds.add(
+          `${transaction.batch}:${transaction.id}`,
+        );
+      }
       transaction.batch = undefined;
     }
 

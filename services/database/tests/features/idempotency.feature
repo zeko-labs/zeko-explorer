@@ -11,3 +11,7 @@ Feature: Idempotent writes through natural unique keys
   Scenario: Bridge aux sequence prevents duplicate correlation records
     When I try to insert another bridge operation with aux "aux-shared" and sequence 0
     Then the write should fail because of a unique index
+
+  Scenario: Token accounts share a public key without colliding
+    When I insert token accounts for public key "B62qTokenHolder"
+    Then both token account rows should exist for public key "B62qTokenHolder"

@@ -256,6 +256,81 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario("Tracked core removals delete stale zkApp rows", ({ Given, When, Then }) => {
+    Given("the in-memory projection has removed zkApp child rows", () => {
+      reset();
+      store.coreProjectionRemovals.zkappEventIds.add("zk-event-1");
+      store.coreProjectionRemovals.zkappActionIds.add("zk-action-1");
+    });
+
+    When("the full indexer projection is flushed once", async () => {
+      await writeIndexerProjectionToSurreal(client, store);
+    });
+
+    Then("the SurrealDB SQL deletes the stale zkApp rows", () => {
+      const sql = statements.join("\n");
+      expect(sql).toContain(`DELETE zkapp_event:${encodedRecordId("zk-event-1")}`);
+      expect(sql).toContain(`DELETE zkapp_action:${encodedRecordId("zk-action-1")}`);
+    });
+  });
+
+  Scenario(
+    "Moved batch links delete stale batch transaction relations",
+    ({ Given, When, Then }) => {
+      Given(
+        "the in-memory projection has a removed batch transaction link and a replacement link",
+        () => {
+          reset();
+          store.coreProjectionRemovals.batchTransactionIds.add("batch-old:tx-moved");
+          store.batches.set("ledger-new", {
+            id: "batch-new",
+            target_ledger_hash: "ledger-new",
+            batch_height: 1,
+            sort_batch_height: -1,
+            first_tx_height: 1,
+            last_tx_height: 1,
+            transaction_count: 1,
+            proof_status: "pending",
+            settlement_status: "pending",
+          });
+          store.transactions.set("tx-moved:ledger-new", {
+            id: "tx-moved",
+            hash: "tx-moved",
+            sequence_number: 1,
+            type: "payment",
+            status: "applied",
+            block_height: 1,
+            tx_index: 0,
+            sort_block_height: -1,
+            sort_tx_index: 0,
+            timestamp: "2026-05-13T00:00:00.000Z",
+            source_ledger_hash: "ledger-old",
+            target_ledger_hash: "ledger-new",
+            batch: "batch-new",
+          });
+        },
+      );
+
+      When("the full indexer projection is flushed once", async () => {
+        await writeIndexerProjectionToSurreal(client, store);
+      });
+
+      Then(
+        "the SurrealDB SQL deletes the stale batch transaction relation before inserting the replacement",
+        () => {
+          const sql = statements.join("\n");
+          const deleteIndex = sql.indexOf(
+            `DELETE batch_transaction:${encodedRecordId("batch-old:tx-moved")}`,
+          );
+          expect(deleteIndex).toBeGreaterThanOrEqual(0);
+          expect(sql.indexOf("INSERT RELATION INTO batch_transaction")).toBeGreaterThan(
+            deleteIndex,
+          );
+        },
+      );
+    },
+  );
+
   Scenario(
     "Concurrent flushes preserve removals recorded during an in-flight write",
     ({ Given, When, Then }) => {
