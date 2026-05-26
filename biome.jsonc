@@ -25,7 +25,20 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["*.ts", "**/*.ts"],
+                "message": "Use TypeScript bundler resolution; do not include .ts in import specifiers."
+              }
+            ]
+          }
+        }
+      }
     }
   }
 }

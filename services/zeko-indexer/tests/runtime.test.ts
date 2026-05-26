@@ -19,7 +19,7 @@ describeFeature(feature, ({ Scenario }) => {
   let config: ReturnType<typeof resolveIndexerRuntimeConfig>;
   let source: AsyncIterable<ConsumeEnvelope>;
   let sourceConfigs: NatsEnvelopeSourceConfig[];
-  let surrealSql: string[];
+  let surqlStatements: string[];
   let siblingCancelled: boolean;
   let runtimeError: unknown;
   let projectionEvents: string[];
@@ -216,29 +216,29 @@ describeFeature(feature, ({ Scenario }) => {
     );
 
     When("the runtime processes the source with the default SurrealDB projection", async () => {
-      const surqlStatements: string[] = [];
+      const capturedSurqlStatements: string[] = [];
       const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
         envelopeSources: [source],
         surrealClient: {
           async query(surql: string) {
-            surqlStatements.push(surql);
+            capturedSurqlStatements.push(surql);
           },
         },
       });
       await runtime.done;
-      surrealSql = surqlStatements;
+      surqlStatements = capturedSurqlStatements;
     });
 
     Then("the SurrealDB SurrealQL writes the core account row", () => {
-      expect(surrealSql.join("\n")).toContain("UPSERT account:");
+      expect(surqlStatements.join("\n")).toContain("UPSERT account:");
     });
 
     And("the SurrealDB SurrealQL writes the core transaction row", () => {
-      expect(surrealSql.join("\n")).toContain("UPSERT transaction:");
+      expect(surqlStatements.join("\n")).toContain("UPSERT transaction:");
     });
 
     And("the SurrealDB SurrealQL writes the core account activity row", () => {
-      expect(surrealSql.join("\n")).toContain("UPSERT account_activity:");
+      expect(surqlStatements.join("\n")).toContain("UPSERT account_activity:");
     });
   });
 

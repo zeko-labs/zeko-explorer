@@ -1,4 +1,12 @@
 import { createHash } from "node:crypto";
+import {
+  depositStatus,
+  isActiveBridgeOperation,
+  isActiveDeposit,
+  isCancellableDeposit,
+  withdrawalRollbackStatus,
+  withdrawalStatus,
+} from "./bridge-status";
 import type { IndexerStore } from "./store";
 import { normalizeTimestamp } from "./store";
 import type {
@@ -705,66 +713,6 @@ function firstOperationNeeding(
   predicate: (operation: BridgeOperationRow) => boolean,
 ): BridgeOperationRow | undefined {
   return store.bridgeOperationsByAux(aux).find(predicate);
-}
-
-function isActiveBridgeOperation(operation: BridgeOperationRow): boolean {
-  return !["rolled_back", "cancelled", "timed_out"].includes(operation.status);
-}
-
-function isActiveDeposit(operation: BridgeOperationRow): boolean {
-  return operation.type === "deposit" && isActiveBridgeOperation(operation);
-}
-
-function isCancellableDeposit(operation: BridgeOperationRow): boolean {
-  return (
-    operation.type === "deposit" &&
-    !["rolled_back", "cancelled", "completed"].includes(operation.status)
-  );
-}
-
-function depositStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {
-  if (["rolled_back", "cancelled", "timed_out"].includes(operation.status)) {
-    return operation.status;
-  }
-  if (!operation.l1_witness_action_state) {
-    return "submitted";
-  }
-  if (operation.l2_action_state && operation.commit_action_state) {
-    return "completed";
-  }
-  if (operation.commit_action_state) {
-    return "committed";
-  }
-  return "l1_witnessed";
-}
-
-function withdrawalStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {
-  if (operation.status === "rolled_back" || operation.status === "cancelled") {
-    return operation.status;
-  }
-  if (operation.l1_witness_action_state || operation.l1_witness_tx_hash) {
-    return "completed";
-  }
-  if (operation.commit_action_state) {
-    return "committed";
-  }
-  if (operation.l2_action_state) {
-    return "l2_witnessed";
-  }
-  return "submitted";
-}
-
-function withdrawalRollbackStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {
-  if (operation.l1_witness_action_state || operation.l1_witness_tx_hash) {
-    return "completed";
-  }
-  if (operation.commit_action_state) {
-    return "committed";
-  }
-  if (operation.l2_action_state) {
-    return "l2_witnessed";
-  }
-  return "rolled_back";
 }
 
 function linkL1Action(
