@@ -1572,6 +1572,70 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "L2 rollback projects deletion for reverted account transaction links",
+    ({ Given, When, And, Then }) => {
+      const oldAccountLinkByHash = new Map<string, string>();
+
+      Given(
+        "the indexer flushed account transaction links for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          const priorLedger = ledger.replace(/-2$/, "-1");
+          await consumePayment(priorLedger);
+          await consumePayment(ledger);
+          const revertedTx = store.transactionByHash(`tx-${ledger}`);
+          const oldActivity = [...store.accountActivities.values()].find(
+            (activity) =>
+              activity.transaction === revertedTx?.id &&
+              ["sender", "receiver", "fee_payer", "touched"].includes(activity.role),
+          );
+          expect(revertedTx).toBeDefined();
+          expect(oldActivity).toBeDefined();
+          oldAccountLinkByHash.set(
+            revertedTx?.hash ?? "",
+            `${oldActivity?.transaction}:${oldActivity?.account}:${oldActivity?.role}:${oldActivity?.activity_index}`,
+          );
+          await writeIndexerProjectionToSurreal(projectionClient, store);
+          projectionStatements = [];
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And("the full indexer projection is flushed again", async () => {
+        await writeIndexerProjectionToSurreal(projectionClient, store);
+      });
+
+      Then(
+        "the SurrealDB SQL deletes the old account transaction link for transaction {string}",
+        (_context, hash: string) => {
+          const relationId = oldAccountLinkByHash.get(hash);
+          expect(relationId).toBeDefined();
+          expect(projectionStatements.join("\n")).toContain(
+            `DELETE account_transaction:${encodedRecordId(relationId ?? "")}`,
+          );
+        },
+      );
+
+      And(
+        "the SurrealDB SQL does not reinsert the old account transaction link for transaction {string}",
+        (_context, hash: string) => {
+          const relationId = oldAccountLinkByHash.get(hash);
+          expect(relationId).toBeDefined();
+          expect(projectionStatements.join("\n")).not.toContain(
+            `id: account_transaction:${encodedRecordId(relationId ?? "")}`,
+          );
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Stale settlements do not resurrect L2 rolled-back batches",
     ({ Given, And, When, Then }) => {
       Given(

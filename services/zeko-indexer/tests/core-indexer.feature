@@ -178,6 +178,13 @@ Feature: Unified Zeko indexer
     And the full indexer projection is flushed again
     Then the SurrealDB SQL deletes the old batch link for transaction "tx-ledger-rollback-link-delete-2"
 
+  Scenario: L2 rollback projects deletion for reverted account transaction links
+    Given the indexer flushed account transaction links for ledger "ledger-rollback-account-link-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-rollback-account-link-1" to target ledger "ledger-rollback-account-link-3"
+    And the full indexer projection is flushed again
+    Then the SurrealDB SQL deletes the old account transaction link for transaction "tx-ledger-rollback-account-link-2"
+    And the SurrealDB SQL does not reinsert the old account transaction link for transaction "tx-ledger-rollback-account-link-2"
+
   Scenario: Stale settlements do not resurrect L2 rolled-back batches
     Given the indexer consumed a payment transaction for ledger "ledger-stale-settlement-1"
     And the indexer consumed a payment transaction for ledger "ledger-stale-settlement-2"

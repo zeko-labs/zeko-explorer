@@ -544,6 +544,13 @@ export class ZekoIndexer {
       if (tx.target_ledger_hash === ledgerHash) {
         tx.status = "reverted";
         tx.rollback_reason = "l2_hash_chain_break";
+        for (const activity of this.#store.accountActivities.values()) {
+          if (activity.transaction === tx.id && isAccountTransactionRole(activity.role)) {
+            this.#store.coreProjectionRemovals.accountTransactionIds.add(
+              accountTransactionRelationId(activity),
+            );
+          }
+        }
       }
     }
     for (const batch of this.#store.batches.values()) {

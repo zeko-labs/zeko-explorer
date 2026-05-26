@@ -514,6 +514,27 @@ describeFeature(feature, ({ Scenario }) => {
     });
   });
 
+  Scenario("Deposit commit waits for L1 witness evidence", ({ Given, And, When, Then }) => {
+    reset();
+    Given("the indexer consumed a deposit submission for aux {string}", (_context, aux: string) =>
+      consumeDeposit(aux),
+    );
+    And(
+      "the indexer consumes an L2 inner action for aux {string} with action state {string}",
+      (_context, aux: string, actionState: string) => consumeInnerAction(aux, actionState),
+    );
+    When(
+      "the indexer consumed an L1 commit covering inner action state {string}",
+      (_context, innerActionState: string) => consumeCommit(innerActionState),
+    );
+    Then(
+      "bridge operation for aux {string} sequence {int} has status {string}",
+      (_, aux: string, sequence: number, status: string) => {
+        expect(operation(aux, sequence).status).toBe(status);
+      },
+    );
+  });
+
   Scenario(
     "Late L2 inner actions replay previously indexed commits",
     ({ Given, And, When, Then }) => {

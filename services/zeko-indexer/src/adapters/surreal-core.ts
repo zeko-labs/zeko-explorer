@@ -275,6 +275,12 @@ function accountTransactionRelations(store: IndexerStore) {
   return [...store.accountActivities.values()]
     .filter((activity) => isAccountTransactionRole(activity.role))
     .filter((activity) => store.accountById(activity.account) !== undefined)
+    .filter((activity) => {
+      const transaction = [...store.transactions.values()].find(
+        (candidate) => candidate.id === activity.transaction,
+      );
+      return transaction?.status !== "reverted";
+    })
     .map((activity) => ({
       id: `${activity.transaction}:${activity.account}:${activity.role}:${activity.activity_index}`,
       in: activity.transaction,

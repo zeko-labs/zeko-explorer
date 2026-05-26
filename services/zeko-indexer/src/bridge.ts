@@ -726,16 +726,16 @@ function depositStatus(operation: BridgeOperationRow): BridgeOperationRow["statu
   if (["rolled_back", "cancelled", "timed_out"].includes(operation.status)) {
     return operation.status;
   }
+  if (!operation.l1_witness_action_state) {
+    return "submitted";
+  }
   if (operation.l2_action_state && operation.commit_action_state) {
     return "completed";
   }
   if (operation.commit_action_state) {
     return "committed";
   }
-  if (operation.l1_witness_action_state) {
-    return "l1_witnessed";
-  }
-  return "submitted";
+  return "l1_witnessed";
 }
 
 function withdrawalStatus(operation: BridgeOperationRow): BridgeOperationRow["status"] {

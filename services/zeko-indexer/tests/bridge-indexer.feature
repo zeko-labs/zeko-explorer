@@ -30,6 +30,12 @@ Feature: Bridge operation projection
     When the indexer consumes an L2 inner action for aux "aux-deposit-waits-commit" with action state "inner-waits-commit"
     Then bridge operation for aux "aux-deposit-waits-commit" sequence 0 has status "l1_witnessed"
 
+  Scenario: Deposit commit waits for L1 witness evidence
+    Given the indexer consumed a deposit submission for aux "aux-deposit-waits-witness"
+    And the indexer consumes an L2 inner action for aux "aux-deposit-waits-witness" with action state "inner-waits-witness"
+    When the indexer consumed an L1 commit covering inner action state "inner-waits-witness"
+    Then bridge operation for aux "aux-deposit-waits-witness" sequence 0 has status "submitted"
+
   Scenario: Non-bridge zkApp actions are not projected as bridge operations
     When the indexer consumes a non-bridge zkApp action for aux "aux-not-bridge"
     Then no bridge operation exists for aux "aux-not-bridge"
