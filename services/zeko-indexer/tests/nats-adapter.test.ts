@@ -1,11 +1,14 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
-import { resolveNatsEnvelopeSourceConfig } from "../src/index";
+import { consumeNatsMessage, resolveNatsEnvelopeSourceConfig } from "../src/index";
 
 const feature = await loadFeature("tests/nats-adapter.feature");
+const textEncoder = new TextEncoder();
 
 describeFeature(feature, ({ Scenario }) => {
   let resolved: ReturnType<typeof resolveNatsEnvelopeSourceConfig>;
+  let acknowledged: boolean;
+  let delivered: ReturnType<typeof consumeNatsMessage>;
 
   Scenario("Minimal source config resolves to the default L1 stream", ({ When, Then, And }) => {
     When(
@@ -42,4 +45,28 @@ describeFeature(feature, ({ Scenario }) => {
       });
     },
   );
+
+  Scenario("Invalid subscribed payloads are acknowledged and dropped", ({ When, Then, And }) => {
+    When(
+      "a schema-invalid NATS message is consumed on subject {string}",
+      (_context, subject: string) => {
+        acknowledged = false;
+        delivered = consumeNatsMessage({
+          subject,
+          data: textEncoder.encode(JSON.stringify({ schemaVersion: 1 })),
+          ack() {
+            acknowledged = true;
+          },
+        });
+      },
+    );
+
+    Then("the NATS message is acknowledged", () => {
+      expect(acknowledged).toBe(true);
+    });
+
+    And("no envelope is delivered", () => {
+      expect(delivered).toBeUndefined();
+    });
+  });
 });

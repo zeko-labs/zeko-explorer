@@ -33,6 +33,12 @@ export type ResolvedNatsEnvelopeSourceConfig = NatsEnvelopeSourceConfig & {
   nextExpiresMs: number;
 };
 
+export type NatsEnvelopeMessage = {
+  readonly subject: string;
+  readonly data: Uint8Array;
+  ack(): void;
+};
+
 export async function* consumeNatsEnvelopes(
   config: NatsEnvelopeSourceConfig,
 ): AsyncGenerator<ConsumeEnvelope> {
@@ -60,10 +66,11 @@ export async function* consumeNatsEnvelopes(
       if (!message) {
         continue;
       }
-      const envelope = parseNatsEnvelope(message.subject, textDecoder.decode(message.data));
-      if (envelope) {
-        yield envelope;
+      const envelope = consumeNatsMessage(message);
+      if (!envelope) {
+        continue;
       }
+      yield envelope;
       message.ack();
     }
   } finally {
@@ -128,6 +135,20 @@ export function parseNatsEnvelope(subject: string, data: string): ConsumeEnvelop
       return { subject, payload: parse(EventSchemas.daSignatures, payload) };
     default:
       return undefined;
+  }
+}
+
+export function consumeNatsMessage(message: NatsEnvelopeMessage): ConsumeEnvelope | undefined {
+  try {
+    const envelope = parseNatsEnvelope(message.subject, textDecoder.decode(message.data));
+    if (!envelope) {
+      message.ack();
+      return undefined;
+    }
+    return envelope;
+  } catch {
+    message.ack();
+    return undefined;
   }
 }
 
