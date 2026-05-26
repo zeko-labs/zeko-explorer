@@ -64,6 +64,9 @@ export function coreProjectionStatements(
 
 function emptyCoreProjectionRemovals(): CoreProjectionRemovals {
   return {
+    accountIds: new Set(),
+    accountTransactionIds: new Set(),
+    pendingDaLedgerHashes: new Set(),
     zkappEventIds: new Set(),
     zkappActionIds: new Set(),
     batchTransactionIds: new Set(),
@@ -72,9 +75,12 @@ function emptyCoreProjectionRemovals(): CoreProjectionRemovals {
 
 function coreRemovalStatements(removals: CoreProjectionRemovals): string[] {
   return [
+    ...[...removals.accountTransactionIds].map((id) => deleteRecord("account_transaction", id)),
     ...[...removals.batchTransactionIds].map((id) => deleteRecord("batch_transaction", id)),
+    ...[...removals.pendingDaLedgerHashes].map((id) => deleteRecord("pending_da_attestation", id)),
     ...[...removals.zkappEventIds].map((id) => deleteRecord("zkapp_event", id)),
     ...[...removals.zkappActionIds].map((id) => deleteRecord("zkapp_action", id)),
+    ...[...removals.accountIds].map((id) => deleteRecord("account", id)),
   ];
 }
 
@@ -268,6 +274,7 @@ function serializeSigner(row: {
 function accountTransactionRelations(store: IndexerStore) {
   return [...store.accountActivities.values()]
     .filter((activity) => isAccountTransactionRole(activity.role))
+    .filter((activity) => store.accountById(activity.account) !== undefined)
     .map((activity) => ({
       id: `${activity.transaction}:${activity.account}:${activity.role}:${activity.activity_index}`,
       in: activity.transaction,

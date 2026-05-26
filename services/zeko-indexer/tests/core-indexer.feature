@@ -163,6 +163,12 @@ Feature: Unified Zeko indexer
     And batch for ledger "ledger-rollback-batch-3" has transaction_count 2
     And transactions "tx-ledger-rollback-batch-1" and "tx-ledger-rollback-batch-3" are linked to batch for ledger "ledger-rollback-batch-3"
 
+  Scenario: L2 rollback projects deletion for cleared batch links
+    Given the indexer flushed a settled batch for ledger "ledger-rollback-link-delete-2"
+    When the indexer consumes a replacement transaction from source ledger "ledger-rollback-link-delete-1" to target ledger "ledger-rollback-link-delete-3"
+    And the full indexer projection is flushed again
+    Then the SurrealDB SQL deletes the old batch link for transaction "tx-ledger-rollback-link-delete-2"
+
   Scenario: Stale settlements do not resurrect L2 rolled-back batches
     Given the indexer consumed a payment transaction for ledger "ledger-stale-settlement-1"
     And the indexer consumed a payment transaction for ledger "ledger-stale-settlement-2"
@@ -222,6 +228,12 @@ Feature: Unified Zeko indexer
     And the indexer consumed a payment transaction creating account "B62qNewAccount" for ledger "ledger-account-reverted"
     When the indexer consumes a replacement transaction from source ledger "ledger-account-keep" to target ledger "ledger-account-replacement"
     Then account "B62qNewAccount" no longer exists
+
+  Scenario: L2 rollback projects deletion for accounts first created by the reverted range
+    Given the indexer flushed an account created on reverted ledger "ledger-account-delete-reverted"
+    When the indexer consumes a replacement transaction from source ledger "ledger-account-delete-keep" to target ledger "ledger-account-delete-replacement"
+    And the full indexer projection is flushed again
+    Then the SurrealDB SQL deletes account "B62qDeletedAccount"
 
   Scenario: L2 rollback restores delegated account state
     Given the indexer consumed an account update for "B62qDelegator" with delegate "B62qDelegateA" on ledger "ledger-delegate-keep"
@@ -290,6 +302,12 @@ Feature: Unified Zeko indexer
     Then batch for ledger "ledger-finality-before-l2" has proof_status "proved"
     And batch for ledger "ledger-finality-before-l2" has da_status "attested" and da_source "proved"
     And no pending DA attestation remains for "ledger-finality-before-l2"
+
+  Scenario: Materialized proved finality projects deletion for transferred pending DA
+    Given the indexer flushed proved finality before L2 transaction for ledger "ledger-pending-da-delete"
+    When the indexer consumes a payment transaction for ledger "ledger-pending-da-delete"
+    And the full indexer projection is flushed again
+    Then the SurrealDB SQL deletes pending DA attestation for "ledger-pending-da-delete"
 
   Scenario: Direct DA signatures respect source precedence
     Given batch for ledger "ledger-da-2" is attested from source "proved"

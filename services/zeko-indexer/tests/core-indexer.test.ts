@@ -10,6 +10,8 @@ import {
   InMemoryIndexerStore,
   type L2AccountChangeInput,
   type L2AccountUpdateInput,
+  type SurrealHttpClient,
+  writeIndexerProjectionToSurreal,
   ZekoIndexer,
 } from "../src/index";
 
@@ -111,6 +113,8 @@ describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
   let indexer: ZekoIndexer;
   let lastError: unknown;
+  let projectionStatements: string[];
+  let projectionClient: SurrealHttpClient;
 
   const reset = () => {
     store = new InMemoryIndexerStore();
@@ -122,6 +126,12 @@ describeFeature(feature, ({ Scenario }) => {
       },
     });
     lastError = undefined;
+    projectionStatements = [];
+    projectionClient = {
+      async query(sql: string): Promise<void> {
+        projectionStatements.push(sql);
+      },
+    };
   };
 
   const consumePayment = async (
@@ -1356,6 +1366,53 @@ describeFeature(feature, ({ Scenario }) => {
   );
 
   Scenario(
+    "L2 rollback projects deletion for cleared batch links",
+    ({ Given, When, And, Then }) => {
+      const oldBatchLinkByHash = new Map<string, string>();
+
+      Given(
+        "the indexer flushed a settled batch for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          const priorLedger = ledger.replace(/-2$/, "-1");
+          await consumePayment(priorLedger);
+          await consumePayment(ledger);
+          await indexer.consume({ subject: "zeko.l1.settlements", payload: settlement(ledger) });
+          const revertedTx = store.transactionByHash(`tx-${ledger}`);
+          const oldBatch = revertedTx?.batch;
+          expect(revertedTx).toBeDefined();
+          expect(oldBatch).toBeDefined();
+          oldBatchLinkByHash.set(revertedTx?.hash ?? "", `${oldBatch}:${revertedTx?.id}`);
+          await writeIndexerProjectionToSurreal(projectionClient, store);
+          projectionStatements = [];
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And("the full indexer projection is flushed again", async () => {
+        await writeIndexerProjectionToSurreal(projectionClient, store);
+      });
+
+      Then(
+        "the SurrealDB SQL deletes the old batch link for transaction {string}",
+        (_context, hash: string) => {
+          const relationId = oldBatchLinkByHash.get(hash);
+          expect(relationId).toBeDefined();
+          expect(projectionStatements.join("\n")).toContain(
+            `DELETE batch_transaction:${encodedRecordId(relationId ?? "")}`,
+          );
+        },
+      );
+    },
+  );
+
+  Scenario(
     "Stale settlements do not resurrect L2 rolled-back batches",
     ({ Given, And, When, Then }) => {
       Given(
@@ -1703,6 +1760,46 @@ describeFeature(feature, ({ Scenario }) => {
 
       Then("account {string} no longer exists", (_context, publicKey: string) => {
         expect(store.accountByPublicKey(publicKey)).toBeUndefined();
+      });
+    },
+  );
+
+  Scenario(
+    "L2 rollback projects deletion for accounts first created by the reverted range",
+    ({ Given, When, And, Then }) => {
+      const accountIdsByPublicKey = new Map<string, string>();
+
+      Given(
+        "the indexer flushed an account created on reverted ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await consumePayment("ledger-account-delete-keep");
+          await consumePayment(ledger, undefined, [changedAccount("B62qDeletedAccount", "25", 0)]);
+          const account = store.accountByPublicKey("B62qDeletedAccount");
+          expect(account).toBeDefined();
+          accountIdsByPublicKey.set("B62qDeletedAccount", account?.id ?? "");
+          await writeIndexerProjectionToSurreal(projectionClient, store);
+          projectionStatements = [];
+        },
+      );
+
+      When(
+        "the indexer consumes a replacement transaction from source ledger {string} to target ledger {string}",
+        async (_context, source: string, target: string) => {
+          await consumePayment(target, source);
+        },
+      );
+
+      And("the full indexer projection is flushed again", async () => {
+        await writeIndexerProjectionToSurreal(projectionClient, store);
+      });
+
+      Then("the SurrealDB SQL deletes account {string}", (_context, publicKey: string) => {
+        const accountId = accountIdsByPublicKey.get(publicKey);
+        expect(accountId).toBeDefined();
+        expect(projectionStatements.join("\n")).toContain(
+          `DELETE account:${encodedRecordId(accountId ?? "")}`,
+        );
       });
     },
   );
@@ -2144,6 +2241,49 @@ describeFeature(feature, ({ Scenario }) => {
       And("no pending DA attestation remains for {string}", (_context, ledger: string) => {
         expect(store.pendingDa.has(ledger)).toBe(false);
       });
+    },
+  );
+
+  Scenario(
+    "Materialized proved finality projects deletion for transferred pending DA",
+    ({ Given, When, And, Then }) => {
+      Given(
+        "the indexer flushed proved finality before L2 transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          reset();
+          await indexer.consume({
+            subject: "zeko.l2.finality",
+            payload: {
+              ledger_hash: ledger,
+              level: "proved",
+              source_ledger_hash: "prev",
+              timestamp,
+            },
+          });
+          await writeIndexerProjectionToSurreal(projectionClient, store);
+          projectionStatements = [];
+        },
+      );
+
+      When(
+        "the indexer consumes a payment transaction for ledger {string}",
+        async (_context, ledger: string) => {
+          await consumePayment(ledger);
+        },
+      );
+
+      And("the full indexer projection is flushed again", async () => {
+        await writeIndexerProjectionToSurreal(projectionClient, store);
+      });
+
+      Then(
+        "the SurrealDB SQL deletes pending DA attestation for {string}",
+        (_context, ledger: string) => {
+          expect(projectionStatements.join("\n")).toContain(
+            `DELETE pending_da_attestation:${encodedRecordId(ledger)}`,
+          );
+        },
+      );
     },
   );
 
@@ -2933,3 +3073,7 @@ const daSignature = (ledger: string, publicKey: string, signedAt = timestamp) =>
   instanceId: `instance-${publicKey}`,
   signedAt,
 });
+
+function encodedRecordId(id: string): string {
+  return `hex_${Buffer.from(id, "utf8").toString("hex")}`;
+}

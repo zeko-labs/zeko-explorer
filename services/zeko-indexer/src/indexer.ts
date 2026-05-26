@@ -351,7 +351,7 @@ export class ZekoIndexer {
     );
     this.linkTransactionsToBatch(ledgerHash, observedAt);
     this.applyDaAttestation(ledgerHash, "settlement", observedAt);
-    this.#store.pendingDa.delete(ledgerHash);
+    this.removePendingDa(ledgerHash);
     this.#store.pendingFinality.delete(ledgerHash);
     advanceBridgeClock(this.#store, event.block.slot, this.#options.bridge);
   }
@@ -490,7 +490,7 @@ export class ZekoIndexer {
     const cutoff = Date.parse(normalizeTimestamp(now)) - maxAgeDays * 24 * 60 * 60 * 1000;
     for (const [ledgerHash, pending] of this.#store.pendingDa) {
       if (Date.parse(pending.received_at) <= cutoff) {
-        this.#store.pendingDa.delete(ledgerHash);
+        this.removePendingDa(ledgerHash);
         this.#pendingDaSigners.delete(ledgerHash);
       }
     }
@@ -528,7 +528,7 @@ export class ZekoIndexer {
     detectedAt = normalizeTimestamp(Date.now()),
     preRollbackAccounts = this.snapshotAccountsForRollback(rollbackScope),
   ): void {
-    this.#store.pendingDa.delete(ledgerHash);
+    this.removePendingDa(ledgerHash);
     this.#store.pendingFinality.delete(ledgerHash);
     this.#pendingDaSigners.delete(ledgerHash);
     const invalidatedBatchIds = new Set(
@@ -538,6 +538,7 @@ export class ZekoIndexer {
     );
     for (const tx of this.#store.transactions.values()) {
       if (tx.batch && invalidatedBatchIds.has(tx.batch)) {
+        this.#store.coreProjectionRemovals.batchTransactionIds.add(`${tx.batch}:${tx.id}`);
         tx.batch = undefined;
       }
       if (tx.target_ledger_hash === ledgerHash) {
@@ -629,6 +630,7 @@ export class ZekoIndexer {
             detectedAt,
           );
         }
+        this.markAccountRemoved(beforeRollback);
         this.#store.accounts.delete(accountKey(beforeRollback.public_key, beforeRollback.token_id));
         continue;
       }
@@ -909,8 +911,26 @@ export class ZekoIndexer {
       },
       attestedAt ?? normalizeTimestamp(Date.now()),
     );
-    this.#store.pendingDa.delete(ledgerHash);
+    this.removePendingDa(ledgerHash);
     this.#pendingDaSigners.delete(ledgerHash);
+  }
+
+  private removePendingDa(ledgerHash: string): void {
+    if (this.#store.pendingDa.has(ledgerHash)) {
+      this.#store.coreProjectionRemovals.pendingDaLedgerHashes.add(ledgerHash);
+    }
+    this.#store.pendingDa.delete(ledgerHash);
+  }
+
+  private markAccountRemoved(account: AccountRow): void {
+    this.#store.coreProjectionRemovals.accountIds.add(account.id);
+    for (const activity of this.#store.accountActivities.values()) {
+      if (activity.account === account.id && isAccountTransactionRole(activity.role)) {
+        this.#store.coreProjectionRemovals.accountTransactionIds.add(
+          accountTransactionRelationId(activity),
+        );
+      }
+    }
   }
 
   private upsertPendingDa(
@@ -979,6 +999,14 @@ const accountRole = (
   }
   return "touched";
 };
+
+const accountTransactionRelationId = (activity: AccountActivityRow): string =>
+  `${activity.transaction}:${activity.account}:${activity.role}:${activity.activity_index}`;
+
+const isAccountTransactionRole = (
+  role: AccountActivityRow["role"],
+): role is "sender" | "receiver" | "fee_payer" | "touched" =>
+  role === "sender" || role === "receiver" || role === "fee_payer" || role === "touched";
 
 const accountUpdatePublicKey = (update: L2AccountUpdateInput): string | undefined =>
   update.public_key ?? update.account?.public_key ?? update.body?.public_key;

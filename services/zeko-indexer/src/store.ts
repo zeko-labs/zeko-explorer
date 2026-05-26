@@ -33,6 +33,9 @@ export type BridgeProjectionRemovals = {
 };
 
 export type CoreProjectionRemovals = {
+  readonly accountIds: Set<string>;
+  readonly accountTransactionIds: Set<string>;
+  readonly pendingDaLedgerHashes: Set<string>;
   readonly zkappEventIds: Set<string>;
   readonly zkappActionIds: Set<string>;
   readonly batchTransactionIds: Set<string>;
@@ -151,6 +154,9 @@ export class InMemoryIndexerStore implements IndexerStore {
   readonly l1RollbackAffectedBridgeEventIds = new Set<string>();
   readonly l1RollbackAffectedOuterActionIds = new Set<string>();
   readonly coreProjectionRemovals: CoreProjectionRemovals = {
+    accountIds: new Set(),
+    accountTransactionIds: new Set(),
+    pendingDaLedgerHashes: new Set(),
     zkappEventIds: new Set(),
     zkappActionIds: new Set(),
     batchTransactionIds: new Set(),

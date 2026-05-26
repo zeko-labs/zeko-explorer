@@ -148,6 +148,9 @@ function snapshotBridgeProjectionRemovals(
 
 function snapshotCoreProjectionRemovals(removals: CoreProjectionRemovals): CoreProjectionRemovals {
   return {
+    accountIds: new Set(removals.accountIds),
+    accountTransactionIds: new Set(removals.accountTransactionIds),
+    pendingDaLedgerHashes: new Set(removals.pendingDaLedgerHashes),
     zkappEventIds: new Set(removals.zkappEventIds),
     zkappActionIds: new Set(removals.zkappActionIds),
     batchTransactionIds: new Set(removals.batchTransactionIds),
@@ -183,6 +186,9 @@ function clearSubmittedCoreProjectionRemovals(
   pending: CoreProjectionRemovals,
   submitted: CoreProjectionRemovals,
 ): void {
+  clearSubmittedIds(pending.accountIds, submitted.accountIds);
+  clearSubmittedIds(pending.accountTransactionIds, submitted.accountTransactionIds);
+  clearSubmittedIds(pending.pendingDaLedgerHashes, submitted.pendingDaLedgerHashes);
   clearSubmittedIds(pending.zkappEventIds, submitted.zkappEventIds);
   clearSubmittedIds(pending.zkappActionIds, submitted.zkappActionIds);
   clearSubmittedIds(pending.batchTransactionIds, submitted.batchTransactionIds);
