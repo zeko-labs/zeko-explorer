@@ -21,6 +21,13 @@ import {
   upsertPendingDa,
 } from "./da";
 import {
+  batchBySettlementId,
+  latestAccountActivityInLedger,
+  latestAccountActivityOutsideRollback,
+  ledgerHasAppliedTransactions,
+  transactionByHashAndLedger,
+} from "./indexer-queries";
+import {
   ledgerHasRevertedTransactions,
   type ZekoIndexerOptions,
   type ZekoIndexerState,
@@ -231,9 +238,10 @@ function assertNewZkappActionStates(state: ZekoIndexerState, event: L2Transactio
     return;
   }
 
-  const existingActionStates = new Set(
-    [...state.store.zkappActions.values()].map((action) => action.action_state),
-  );
+  const existingActionStates = new Set<string>();
+  for (const action of state.store.zkappActions.values()) {
+    existingActionStates.add(action.action_state);
+  }
   const incomingActionStates = new Set<string>();
   for (const update of event.command.account_updates ?? []) {
     const publicKey = accountUpdatePublicKey(update);
@@ -270,10 +278,7 @@ function consumeL2Finality(state: ZekoIndexerState, event: L2FinalityInput): voi
   ) {
     return;
   }
-  const indexedTargetLedger = [...state.store.transactions.values()].some(
-    (transaction) =>
-      transaction.status === "applied" && transaction.target_ledger_hash === event.ledger_hash,
-  );
+  const indexedTargetLedger = ledgerHasAppliedTransactions(state, event.ledger_hash);
   if (!batch && !indexedTargetLedger) {
     state.store.pendingFinality.set(event.ledger_hash, {
       ledger_hash: event.ledger_hash,
@@ -359,9 +364,7 @@ function consumeL1Rollback(state: ZekoIndexerState, event: L1RollbackInput): voi
   consumeBridgeRollback(state.store, event);
   for (const settlementId of event.affected.settlementIds) {
     state.store.l1RollbackAffectedSettlementIds.add(settlementId);
-    const batch = [...state.store.batches.values()].find(
-      (candidate) => candidate.settlement_id === settlementId,
-    );
+    const batch = batchBySettlementId(state, settlementId);
     if (!batch) {
       continue;
     }
@@ -439,11 +442,12 @@ function rollbackL2Ledger(
   removePendingDa(state, ledgerHash);
   state.store.pendingFinality.delete(ledgerHash);
   state.pendingDaSigners.delete(ledgerHash);
-  const invalidatedBatchIds = new Set(
-    [...state.store.batches.values()]
-      .filter((batch) => rollbackScope.has(batch.target_ledger_hash))
-      .map((batch) => batch.id),
-  );
+  const invalidatedBatchIds = new Set<string>();
+  for (const batch of state.store.batches.values()) {
+    if (rollbackScope.has(batch.target_ledger_hash)) {
+      invalidatedBatchIds.add(batch.id);
+    }
+  }
   for (const tx of state.store.transactions.values()) {
     if (tx.batch && invalidatedBatchIds.has(tx.batch)) {
       state.store.coreProjectionRemovals.batchTransactionIds.add(`${tx.batch}:${tx.id}`);
@@ -506,34 +510,18 @@ function rollbackL2Ledger(
   }
   consumeBridgeL2Rollback(state.store, { rollbackId: `l2-rollback-${ledgerHash}`, ledgerHash });
 
-  const affectedAccounts = new Set(
-    [...state.store.accountActivities.values()]
-      .filter((activity) => activity.target_ledger_hash === ledgerHash)
-      .map((activity) => activity.account),
-  );
+  const affectedAccounts = new Set<string>();
+  for (const activity of state.store.accountActivityByLedger(ledgerHash)) {
+    affectedAccounts.add(activity.account);
+  }
   for (const accountId of affectedAccounts) {
-    const latest = [...state.store.accountActivities.values()]
-      .filter((activity) => {
-        const transaction = [...state.store.transactions.values()].find(
-          (candidate) => candidate.id === activity.transaction,
-        );
-        return (
-          activity.account === accountId &&
-          !rollbackScope.has(activity.target_ledger_hash) &&
-          transaction?.status !== "reverted"
-        );
-      })
-      .sort((left, right) => right.block_height - left.block_height)[0];
+    const latest = latestAccountActivityOutsideRollback(state, accountId, rollbackScope);
     const beforeRollback = preRollbackAccounts.get(accountId);
     if (!beforeRollback) {
       continue;
     }
     const account = state.store.accountById(accountId) ?? { ...beforeRollback };
-    const revertedActivity = [...state.store.accountActivities.values()]
-      .filter(
-        (activity) => activity.account === accountId && activity.target_ledger_hash === ledgerHash,
-      )
-      .sort((left, right) => right.block_height - left.block_height)[0];
+    const revertedActivity = latestAccountActivityInLedger(state, accountId, ledgerHash);
     if (!latest) {
       if (revertedActivity) {
         writeRollbackActivity(
@@ -576,17 +564,21 @@ function snapshotAccountsForRollback(
   state: ZekoIndexerState,
   rollbackScope: Set<string>,
 ): Map<string, AccountRow> {
-  const accountIds = new Set(
-    [...state.store.accountActivities.values()]
-      .filter((activity) => rollbackScope.has(activity.target_ledger_hash))
-      .map((activity) => activity.account),
-  );
-  return new Map(
-    [...accountIds]
-      .map((accountId) => state.store.accountById(accountId))
-      .filter((account): account is AccountRow => account !== undefined)
-      .map((account) => [account.id, { ...account }]),
-  );
+  const accountIds = new Set<string>();
+  for (const activity of state.store.accountActivities.values()) {
+    if (rollbackScope.has(activity.target_ledger_hash)) {
+      accountIds.add(activity.account);
+    }
+  }
+
+  const accounts = new Map<string, AccountRow>();
+  for (const accountId of accountIds) {
+    const account = state.store.accountById(accountId);
+    if (account) {
+      accounts.set(account.id, { ...account });
+    }
+  }
+  return accounts;
 }
 
 function writeRollbackActivity(
@@ -637,10 +629,7 @@ function linkTransactionsToBatch(
   ledgerHash: string,
   timestamp: string,
 ): void {
-  const indexedTarget = [...state.store.transactions.values()].some(
-    (transaction) =>
-      transaction.status === "applied" && transaction.target_ledger_hash === ledgerHash,
-  );
+  const indexedTarget = ledgerHasAppliedTransactions(state, ledgerHash);
   if (!indexedTarget) {
     return;
   }
@@ -802,16 +791,6 @@ function markAccountRemoved(state: ZekoIndexerState, account: AccountRow): void 
   }
 }
 
-function transactionByHashAndLedger(
-  state: ZekoIndexerState,
-  hash: string,
-  targetLedgerHash: string,
-): TransactionRow | undefined {
-  return [...state.store.transactions.values()].find(
-    (transaction) =>
-      transaction.hash === hash && transaction.target_ledger_hash === targetLedgerHash,
-  );
-}
 function transactionKey(hash: string, targetLedgerHash: string): string {
   return `${hash}:${targetLedgerHash}`;
 }

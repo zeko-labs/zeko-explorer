@@ -2,6 +2,7 @@ import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
   InMemoryIndexerStore,
+  type OuterActionRow,
   type SurrealClient,
   writeBridgeProjectionToSurreal,
   writeIndexerProjectionToSurreal,
@@ -514,9 +515,10 @@ describeFeature(feature, ({ Scenario }) => {
   });
 });
 
-function outerAction(id: string) {
+function outerAction(id: string): OuterActionRow {
   return {
     id,
+    outer_action_id: id,
     after_state: `${id}-after`,
     before_state: `${id}-before`,
     kind: "witness" as const,

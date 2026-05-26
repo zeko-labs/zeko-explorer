@@ -1,10 +1,10 @@
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
+import type { DaSignatureEvent } from "@zeko/nats";
 import { Field, PrivateKey, Signature } from "o1js";
 import { expect } from "vitest";
 import {
   type ConsumeEnvelope,
   createIndexerRuntime,
-  type DaSignatureInput,
   InMemoryIndexerStore,
   type NatsEnvelopeSourceConfig,
   resolveIndexerRuntimeConfig,
@@ -12,6 +12,10 @@ import {
 
 const feature = await loadFeature("tests/features/runtime.feature");
 const timestamp = "2026-05-13T00:00:00.000Z";
+type ZekoMultisigDaSignatureEvent = Extract<
+  DaSignatureEvent,
+  { implementation: "zeko-multisig-v1" }
+>;
 
 describeFeature(feature, ({ Scenario }) => {
   let store: InMemoryIndexerStore;
@@ -24,8 +28,8 @@ describeFeature(feature, ({ Scenario }) => {
   let runtimeError: unknown;
   let projectionEvents: string[];
   let configError: unknown;
-  let directDaEvent: DaSignatureInput;
-  let malformedDaEvent: DaSignatureInput;
+  let directDaEvent: ZekoMultisigDaSignatureEvent;
+  let malformedDaEvent: ZekoMultisigDaSignatureEvent;
 
   Scenario(
     "Runtime consumes envelopes and flushes projection after each message",
@@ -86,6 +90,7 @@ describeFeature(feature, ({ Scenario }) => {
       const ledgerHash = "101";
       const accSet = "202";
       directDaEvent = {
+        schemaVersion: 1,
         implementation: "zeko-multisig-v1",
         ledgerHash,
         accSet,

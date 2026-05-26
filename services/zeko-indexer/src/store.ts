@@ -70,6 +70,7 @@ export type IndexerStore = {
   accountByPublicKey(publicKey: string, tokenId?: string): AccountRow | undefined;
   accountById(id: string): AccountRow | undefined;
   transactionByHash(hash: string): TransactionRow | undefined;
+  transactionById(id: string): TransactionRow | undefined;
   batchByLedger(ledgerHash: string): BatchRow | undefined;
   accountActivityByLedger(ledgerHash: string): AccountActivityRow[];
   zkappEventsByAccount(publicKey: string): ZkappEventRow[];
@@ -129,15 +130,170 @@ export const timestampToMillis = (timestamp: string | number): number => {
 export const normalizeTimestamp = (timestamp: string | number): string =>
   new Date(timestampToMillis(timestamp)).toISOString();
 
+type IndexedMapHooks<Key, Value> = {
+  set?(key: Key, value: Value, previous: Value | undefined): void;
+  delete?(key: Key, previous: Value): void;
+  clear?(): void;
+};
+
+class IndexedMap<Key, Value> extends Map<Key, Value> {
+  constructor(private readonly hooks: IndexedMapHooks<Key, Value>) {
+    super();
+  }
+
+  override set(key: Key, value: Value): this {
+    const previous = super.get(key);
+    super.set(key, value);
+    this.hooks.set?.(key, value, previous);
+    return this;
+  }
+
+  override delete(key: Key): boolean {
+    const previous = super.get(key);
+    const deleted = super.delete(key);
+    if (deleted && previous !== undefined) {
+      this.hooks.delete?.(key, previous);
+    }
+    return deleted;
+  }
+
+  override clear(): void {
+    if (this.size === 0) {
+      return;
+    }
+    super.clear();
+    this.hooks.clear?.();
+  }
+}
+
 export class InMemoryIndexerStore implements IndexerStore {
-  readonly accounts = new Map<string, AccountRow>();
-  readonly transactions = new Map<string, TransactionRow>();
-  readonly accountActivities = new Map<string, AccountActivityRow>();
-  readonly zkappEvents = new Map<string, ZkappEventRow>();
-  readonly zkappActions = new Map<string, ZkappActionRow>();
+  readonly #accountsById = new Map<string, AccountRow>();
+  readonly #transactionsById = new Map<string, TransactionRow>();
+  readonly #transactionsByHash = new Map<string, Set<TransactionRow>>();
+  readonly #accountActivitiesByLedger = new Map<string, Set<AccountActivityRow>>();
+  readonly #zkappEventsByAccount = new Map<string, Set<ZkappEventRow>>();
+  readonly #zkappActionsByAccount = new Map<string, Set<ZkappActionRow>>();
+  readonly #zkappEventsByLedger = new Map<string, Set<ZkappEventRow>>();
+  readonly #zkappActionsByLedger = new Map<string, Set<ZkappActionRow>>();
+  readonly #bridgeOperationsByAux = new Map<string, Set<BridgeOperationRow>>();
+  readonly #bridgeOperationsById = new Map<string, BridgeOperationRow>();
+
+  readonly accounts = new IndexedMap<string, AccountRow>({
+    set: (_key, account, previous) => {
+      if (previous) {
+        this.#accountsById.delete(previous.id);
+      }
+      this.#accountsById.set(account.id, account);
+    },
+    delete: (_key, account) => {
+      if (this.#accountsById.get(account.id) === account) {
+        this.#accountsById.delete(account.id);
+      }
+    },
+    clear: () => this.#accountsById.clear(),
+  });
+  readonly transactions = new IndexedMap<string, TransactionRow>({
+    set: (_key, transaction, previous) => {
+      if (previous) {
+        removeFromSetIndex(this.#transactionsByHash, previous.hash, previous);
+        if (this.#transactionsById.get(previous.id) === previous) {
+          this.#transactionsById.delete(previous.id);
+        }
+      }
+      addToSetIndex(this.#transactionsByHash, transaction.hash, transaction);
+      this.#transactionsById.set(transaction.id, transaction);
+    },
+    delete: (_key, transaction) => {
+      removeFromSetIndex(this.#transactionsByHash, transaction.hash, transaction);
+      if (this.#transactionsById.get(transaction.id) === transaction) {
+        this.#transactionsById.delete(transaction.id);
+      }
+    },
+    clear: () => {
+      this.#transactionsByHash.clear();
+      this.#transactionsById.clear();
+    },
+  });
+  readonly accountActivities = new IndexedMap<string, AccountActivityRow>({
+    set: (_key, activity, previous) => {
+      if (previous) {
+        removeFromSetIndex(this.#accountActivitiesByLedger, previous.target_ledger_hash, previous);
+      }
+      addToSetIndex(this.#accountActivitiesByLedger, activity.target_ledger_hash, activity);
+    },
+    delete: (_key, activity) => {
+      removeFromSetIndex(this.#accountActivitiesByLedger, activity.target_ledger_hash, activity);
+    },
+    clear: () => this.#accountActivitiesByLedger.clear(),
+  });
+  readonly zkappEvents = new IndexedMap<string, ZkappEventRow>({
+    set: (_key, event, previous) => {
+      if (previous) {
+        removeFromSetIndex(
+          this.#zkappEventsByAccount,
+          previous.emitting_account_public_key,
+          previous,
+        );
+        removeFromSetIndex(this.#zkappEventsByLedger, previous.target_ledger_hash, previous);
+      }
+      addToSetIndex(this.#zkappEventsByAccount, event.emitting_account_public_key, event);
+      addToSetIndex(this.#zkappEventsByLedger, event.target_ledger_hash, event);
+    },
+    delete: (_key, event) => {
+      removeFromSetIndex(this.#zkappEventsByAccount, event.emitting_account_public_key, event);
+      removeFromSetIndex(this.#zkappEventsByLedger, event.target_ledger_hash, event);
+    },
+    clear: () => {
+      this.#zkappEventsByAccount.clear();
+      this.#zkappEventsByLedger.clear();
+    },
+  });
+  readonly zkappActions = new IndexedMap<string, ZkappActionRow>({
+    set: (_key, action, previous) => {
+      if (previous) {
+        removeFromSetIndex(
+          this.#zkappActionsByAccount,
+          previous.emitting_account_public_key,
+          previous,
+        );
+        removeFromSetIndex(this.#zkappActionsByLedger, previous.target_ledger_hash, previous);
+      }
+      addToSetIndex(this.#zkappActionsByAccount, action.emitting_account_public_key, action);
+      addToSetIndex(this.#zkappActionsByLedger, action.target_ledger_hash, action);
+    },
+    delete: (_key, action) => {
+      removeFromSetIndex(this.#zkappActionsByAccount, action.emitting_account_public_key, action);
+      removeFromSetIndex(this.#zkappActionsByLedger, action.target_ledger_hash, action);
+    },
+    clear: () => {
+      this.#zkappActionsByAccount.clear();
+      this.#zkappActionsByLedger.clear();
+    },
+  });
   readonly outerActions = new Map<string, OuterActionRow>();
   readonly innerActions = new Map<string, InnerActionRow>();
-  readonly bridgeOperations = new Map<string, BridgeOperationRow>();
+  readonly bridgeOperations = new IndexedMap<string, BridgeOperationRow>({
+    set: (_key, operation, previous) => {
+      if (previous) {
+        removeFromSetIndex(this.#bridgeOperationsByAux, previous.aux, previous);
+        if (this.#bridgeOperationsById.get(previous.id) === previous) {
+          this.#bridgeOperationsById.delete(previous.id);
+        }
+      }
+      addToSetIndex(this.#bridgeOperationsByAux, operation.aux, operation);
+      this.#bridgeOperationsById.set(operation.id, operation);
+    },
+    delete: (_key, operation) => {
+      removeFromSetIndex(this.#bridgeOperationsByAux, operation.aux, operation);
+      if (this.#bridgeOperationsById.get(operation.id) === operation) {
+        this.#bridgeOperationsById.delete(operation.id);
+      }
+    },
+    clear: () => {
+      this.#bridgeOperationsByAux.clear();
+      this.#bridgeOperationsById.clear();
+    },
+  });
   readonly l1ActionLinks = new Map<string, L1ActionLinkRow>();
   readonly l2ActionLinks = new Map<string, L2ActionLinkRow>();
   readonly bridgeTransactionLinks = new Map<string, BridgeTransactionLinkRow>();
@@ -178,14 +334,32 @@ export class InMemoryIndexerStore implements IndexerStore {
   }
 
   accountById(id: string): AccountRow | undefined {
-    return [...this.accounts.values()].find((account) => account.id === id);
+    return this.#accountsById.get(id);
   }
 
   transactionByHash(hash: string): TransactionRow | undefined {
-    const matches = [...this.transactions.values()]
-      .filter((transaction) => transaction.hash === hash)
-      .sort((left, right) => right.block_height - left.block_height);
-    return matches.find((transaction) => transaction.status === "applied") ?? matches[0];
+    const matches = this.#transactionsByHash.get(hash);
+    if (!matches) {
+      return undefined;
+    }
+    let latest: TransactionRow | undefined;
+    let latestApplied: TransactionRow | undefined;
+    for (const transaction of matches) {
+      if (!latest || transaction.block_height > latest.block_height) {
+        latest = transaction;
+      }
+      if (
+        transaction.status === "applied" &&
+        (!latestApplied || transaction.block_height > latestApplied.block_height)
+      ) {
+        latestApplied = transaction;
+      }
+    }
+    return latestApplied ?? latest;
+  }
+
+  transactionById(id: string): TransactionRow | undefined {
+    return this.#transactionsById.get(id);
   }
 
   batchByLedger(ledgerHash: string): BatchRow | undefined {
@@ -193,43 +367,37 @@ export class InMemoryIndexerStore implements IndexerStore {
   }
 
   accountActivityByLedger(ledgerHash: string): AccountActivityRow[] {
-    return [...this.accountActivities.values()].filter(
-      (activity) => activity.target_ledger_hash === ledgerHash,
-    );
+    return [...(this.#accountActivitiesByLedger.get(ledgerHash) ?? [])];
   }
 
   zkappEventsByAccount(publicKey: string): ZkappEventRow[] {
-    return [...this.zkappEvents.values()]
-      .filter((event) => event.emitting_account_public_key === publicKey)
-      .sort((left, right) => left.sequence_number - right.sequence_number);
+    return [...(this.#zkappEventsByAccount.get(publicKey) ?? [])].sort(
+      (left, right) => left.sequence_number - right.sequence_number,
+    );
   }
 
   zkappActionsByAccount(publicKey: string): ZkappActionRow[] {
-    return [...this.zkappActions.values()]
-      .filter((action) => action.emitting_account_public_key === publicKey)
-      .sort((left, right) => left.sequence_number - right.sequence_number);
+    return [...(this.#zkappActionsByAccount.get(publicKey) ?? [])].sort(
+      (left, right) => left.sequence_number - right.sequence_number,
+    );
   }
 
   zkappEventsByLedger(ledgerHash: string): ZkappEventRow[] {
-    return [...this.zkappEvents.values()].filter(
-      (event) => event.target_ledger_hash === ledgerHash,
-    );
+    return [...(this.#zkappEventsByLedger.get(ledgerHash) ?? [])];
   }
 
   zkappActionsByLedger(ledgerHash: string): ZkappActionRow[] {
-    return [...this.zkappActions.values()].filter(
-      (action) => action.target_ledger_hash === ledgerHash,
-    );
+    return [...(this.#zkappActionsByLedger.get(ledgerHash) ?? [])];
   }
 
   bridgeOperationsByAux(aux: string): BridgeOperationRow[] {
-    return [...this.bridgeOperations.values()]
-      .filter((operation) => operation.aux === aux)
-      .sort((left, right) => left.aux_sequence - right.aux_sequence);
+    return [...(this.#bridgeOperationsByAux.get(aux) ?? [])].sort(
+      (left, right) => left.aux_sequence - right.aux_sequence,
+    );
   }
 
   bridgeOperationById(id: string): BridgeOperationRow | undefined {
-    return [...this.bridgeOperations.values()].find((operation) => operation.id === id);
+    return this.#bridgeOperationsById.get(id);
   }
 
   innerActionByState(actionState: string): InnerActionRow | undefined {
@@ -253,7 +421,7 @@ export class InMemoryIndexerStore implements IndexerStore {
   }
 
   nextBridgeSequence(aux: string): number {
-    return this.bridgeOperationsByAux(aux).length;
+    return this.#bridgeOperationsByAux.get(aux)?.size ?? 0;
   }
 
   upsertBatchForTest(ledgerHash: string, patch: Partial<BatchRow>): BatchRow {
@@ -277,6 +445,26 @@ export class InMemoryIndexerStore implements IndexerStore {
     };
     this.batches.set(ledgerHash, batch);
     return batch;
+  }
+}
+
+function addToSetIndex<Key, Value>(index: Map<Key, Set<Value>>, key: Key, value: Value): void {
+  const values = index.get(key);
+  if (values) {
+    values.add(value);
+    return;
+  }
+  index.set(key, new Set([value]));
+}
+
+function removeFromSetIndex<Key, Value>(index: Map<Key, Set<Value>>, key: Key, value: Value): void {
+  const values = index.get(key);
+  if (!values) {
+    return;
+  }
+  values.delete(value);
+  if (values.size === 0) {
+    index.delete(key);
   }
 }
 

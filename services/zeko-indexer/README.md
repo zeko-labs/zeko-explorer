@@ -23,13 +23,7 @@ The package exposes a small public surface through `src/public.ts`:
 - `src/bridge-status.ts` contains the bridge lifecycle transition rules as pure functions.
 - `src/adapters/nats.ts` and `src/adapters/surreal.ts` are runtime adapters. The SurrealDB adapter uses the SDK; generated statements are SurrealQL strings.
 
-The implementation is intentionally functional at the domain boundaries: event consumers mutate the store as the projection context, while lifecycle and precedence rules live in small pure helpers. This follows the state-machine/reducer style from the PRD and spikes, and the finite-state transition approach described in resources such as Robert Nystrom's _Game Programming Patterns_, without adding a framework around replayable projections.
-
-## State Machine Rationale
-
-Bridge operations and data-availability status are modeled as explicit transition rules because their behavior depends on event order, rollback, and previously observed facts. `bridge-status.ts` represents the bridge status machine, and `da.ts` represents data-availability source precedence plus quorum transitions.
-
-XState was considered for these domains. It is not used here because the indexer is a deterministic projection over unbounded event history, not a long-running actor workflow with timers, spawned child actors, or UI-visible intermediate states. The current reducer/state-machine modules keep replay deterministic, serializable, and easy to exercise through BDD scenarios. XState would be a good fit later if bridge operations become independently persisted workflow actors with durable timers or external commands.
+The implementation is intentionally functional at the domain boundaries: event consumers mutate the store as the projection context, while lifecycle and precedence rules live in small pure helpers.
 
 ## Testing
 
@@ -73,5 +67,3 @@ Runtime configuration is resolved from environment variables:
 - `ZEKO_INDEXER_BRIDGE_WITHDRAWAL_DELAY_SLOTS`
 
 The runtime consumes all configured streams concurrently and serializes projection flushes so SurrealDB writes remain deterministic relative to processed envelopes.
-
-Terminology: use `surql` or SurrealQL for SurrealDB statements in code and documentation. Do not use SQL terminology unless referring to an actual SQL database or a vendor protocol path.

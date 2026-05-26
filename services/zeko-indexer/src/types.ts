@@ -189,7 +189,7 @@ export type TransactionRow = {
   target_ledger_hash: string;
   batch?: string;
   rollback_reason?: string;
-  raw_command?: L2CommandInput;
+  raw_command?: unknown;
 };
 
 export type AccountActivityRow = {

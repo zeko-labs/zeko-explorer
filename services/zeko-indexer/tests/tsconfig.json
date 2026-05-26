@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noUncheckedIndexedAccess": false,
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["node", "vitest"]
+  },
+  "include": ["**/*.ts"]
+}

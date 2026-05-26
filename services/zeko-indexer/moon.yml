@@ -34,3 +34,13 @@ tasks:
   start:
     command: "node"
     args: ["dist/index.mjs"]
+
+  test-typecheck:
+    command: "tsgo"
+    args: ["-p", "tests/tsconfig.json", "--noEmit"]
+    deps:
+      - "^:typecheck"
+    inputs:
+      - "@group(sources)"
+      - "@group(tests)"
+      - "tests/tsconfig.json"

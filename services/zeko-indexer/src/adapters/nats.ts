@@ -1,10 +1,11 @@
 import { AckPolicy, DeliverPolicy, jetstream, jetstreamManager } from "@nats-io/jetstream";
-import { connect } from "@nats-io/transport-node";
+import transportNode from "@nats-io/transport-node";
 import { EventSchemas, NATS_SUBJECTS } from "@zeko/nats";
 import { parse } from "valibot";
 import type { ConsumeEnvelope } from "../types";
 
 const textDecoder = new TextDecoder();
+const { connect } = transportNode;
 
 export const INDEXER_NATS_SUBJECTS = [
   NATS_SUBJECTS.l2Transactions,

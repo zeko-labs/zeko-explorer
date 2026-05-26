@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describeFeature, loadFeature } from "@amiceli/vitest-cucumber";
+import type { DaSignatureEvent, L1SettlementEvent } from "@zeko/nats";
 import { AccountUpdate, Field } from "o1js";
 import { expect } from "vitest";
 import {
@@ -3278,7 +3279,7 @@ const settlement = (
   finalityLevel: "settling" | "finalized" = "settling",
   provider: "mina" | "ethereum" = "mina",
   settlementId = `settlement-${ledger}`,
-) => ({
+): L1SettlementEvent => ({
   schemaVersion: 1,
   provider,
   network: "zeko-m-devnet",
@@ -3308,7 +3309,11 @@ const settlement = (
   },
 });
 
-const daSignature = (ledger: string, publicKey: string, signedAt = timestamp) => ({
+const daSignature = (
+  ledger: string,
+  publicKey: string,
+  signedAt = timestamp,
+): DaSignatureEvent => ({
   schemaVersion: 1,
   implementation: "zeko-multisig-v1",
   ledgerHash: ledger,
