@@ -1,0 +1,827 @@
+import { createHash } from "node:crypto";
+import {
+  depositStatus,
+  isActiveBridgeOperation,
+  isActiveDeposit,
+  isCancellableDeposit,
+  withdrawalRollbackStatus,
+  withdrawalStatus,
+} from "./bridge-status.ts";
+import type { IndexerStore } from "./store.ts";
+import { normalizeTimestamp } from "./store.ts";
+import type {
+  BridgeOperationRow,
+  InnerActionRow,
+  L1BridgeEventInput,
+  L1OuterActionInput,
+  OuterActionRow,
+  TransactionRow,
+  ZkappActionRow,
+} from "./types.ts";
+
+export type BridgeProjectorOptions = {
+  withdrawalDelaySlots?: number;
+};
+
+const UNKNOWN = "unknown";
+const DEFAULT_WITHDRAWAL_DELAY_SLOTS = 100;
+const OUTER_ACTION_INDEX_STRIDE = 1_000_000;
+
+export function consumeL1BridgeEvent(store: IndexerStore, event: L1BridgeEventInput): void {
+  if (store.l1RollbackAffectedBridgeEventIds.has(event.bridgeEventId)) {
+    return;
+  }
+  if (store.bridgeEventOperationIds.has(event.bridgeEventId)) {
+    return;
+  }
+
+  switch (event.type) {
+    case "deposit_submitted":
+      upsertDepositSubmission(store, event);
+      return;
+    case "deposit_cancelled":
+      cancelDeposit(store, event);
+      return;
+    case "withdrawal_finalized":
+      upsertWithdrawalFinalization(store, event);
+      return;
+  }
+}
+
+export function consumeL1OuterAction(
+  store: IndexerStore,
+  event: L1OuterActionInput,
+  options: BridgeProjectorOptions = {},
+): void {
+  if (event.actionKind === "unknown" || event.parsed.kind === "unknown") {
+    return;
+  }
+  if (
+    store.l1RollbackAffectedOuterActionIds.has(event.outerActionId) ||
+    store.outerActions.has(event.outerActionId)
+  ) {
+    return;
+  }
+
+  const timestamp = normalizeTimestamp(event.observedAt);
+  const parsed = event.parsed;
+  const afterState = event.actionState.after ?? event.actionState.current;
+  const row = {
+    id: event.outerActionId,
+    outer_action_id: event.outerActionId,
+    after_state: afterState,
+    before_state: event.actionState.before,
+    kind: parsed.kind,
+    action_index: outerActionPosition(event.archive.transactionSequenceNumber, event.actionIndex),
+    block_height: event.block.height,
+    block_state_hash: event.block.hash,
+    timestamp,
+    network: event.network,
+    provider: event.provider,
+    global_slot: event.block.slot,
+    distance_from_max_block_height: event.archive.distanceFromMaxBlockHeight,
+    txn_hash: event.txHash,
+    fields: event.rawFields,
+    slot_range_lower: parsed.slotRange.lower,
+    slot_range_upper: parsed.slotRange.upper,
+    marked_as_canonical_at: timestamp,
+    ...(parsed.kind === "commit"
+      ? {
+          ledger: parsed.ledgerHash,
+          inner_action_state: parsed.innerActionState,
+          inner_action_state_length: parsed.innerActionStateLength,
+          synchronized_outer_action_state: parsed.synchronizedOuterActionState,
+          synchronized_outer_action_state_length: parsed.synchronizedOuterActionStateLength,
+        }
+      : { aux: parsed.aux }),
+  };
+  store.outerActions.set(event.outerActionId, row);
+
+  if (parsed.kind === "witness") {
+    applyOuterWitness(store, row, parsed.aux);
+  } else {
+    applyOuterCommit(store, row, parsed.innerActionState, parsed.innerActionStateLength);
+  }
+
+  advanceBridgeClock(store, event.block.slot, options);
+}
+
+export function advanceBridgeClock(
+  store: IndexerStore,
+  slot: number | undefined,
+  options: BridgeProjectorOptions = {},
+): void {
+  markTimedOutDeposits(store, slot);
+  markWithdrawalDelayPassed(store, slot, options.withdrawalDelaySlots);
+}
+
+function outerActionPosition(transactionSequenceNumber: number, actionIndex: number): number {
+  return transactionSequenceNumber * OUTER_ACTION_INDEX_STRIDE + actionIndex;
+}
+
+export function consumeBridgeInnerAction(
+  store: IndexerStore,
+  transaction: TransactionRow,
+  action: ZkappActionRow,
+): void {
+  const aux = bridgeAuxFromInnerFields(action.fields);
+  if (!aux) {
+    return;
+  }
+
+  const row: InnerActionRow = {
+    id: action.id,
+    after_state: action.action_state,
+    before_state: action.before_action_state,
+    action_index: action.sequence_number,
+    block_height: action.block_height,
+    timestamp: action.timestamp,
+    txn_hash: transaction.hash,
+    transaction: transaction.id,
+    fields: action.fields,
+    aux,
+    marked_as_canonical_at: action.timestamp,
+    target_ledger_hash: action.target_ledger_hash,
+  };
+  store.innerActions.set(row.after_state, row);
+
+  const existingDeposit = firstOperationNeeding(
+    store,
+    aux,
+    (operation) => isActiveDeposit(operation) && operation.l2_action_state === undefined,
+  );
+  if (existingDeposit) {
+    existingDeposit.l2_action_state = row.after_state;
+    existingDeposit.l2_tx_hash = transaction.hash;
+    existingDeposit.l2_block_height = transaction.block_height;
+    existingDeposit.l2_timestamp = transaction.timestamp;
+    setBridgeStatus(existingDeposit, depositStatus(existingDeposit));
+    linkL2Action(store, existingDeposit, row, "mint");
+    linkBridgeTransaction(store, existingDeposit, transaction, "l2_finalize");
+    replayKnownCommits(store);
+    return;
+  }
+
+  const existingWithdrawal = firstOperationNeeding(
+    store,
+    aux,
+    (operation) =>
+      operation.type === "withdrawal" &&
+      isActiveBridgeOperation(operation) &&
+      operation.l2_action_state === undefined,
+  );
+  const operation =
+    existingWithdrawal ??
+    createBridgeOperation(store, {
+      type: "withdrawal",
+      status: "submitted",
+      aux,
+      sender: transaction.sender_public_key ?? transaction.fee_payer_public_key ?? UNKNOWN,
+      recipient: action.fields[2] ?? transaction.receiver_public_key ?? UNKNOWN,
+      amount: action.fields[3] ?? transaction.amount ?? UNKNOWN,
+      submit_tx_hash: transaction.hash,
+      submit_block_height: transaction.block_height,
+      submit_timestamp: transaction.timestamp,
+      data_quality: action.fields.length >= 4 ? "complete" : "partial",
+      data_quality_reasons:
+        action.fields.length >= 4 ? undefined : ["inner_action_missing_user_fields"],
+    });
+
+  enrichWithdrawalFromL2Submit(operation, transaction, action);
+  operation.l2_action_state = row.after_state;
+  operation.l2_tx_hash = transaction.hash;
+  operation.l2_block_height = transaction.block_height;
+  operation.l2_timestamp = transaction.timestamp;
+  setBridgeStatus(operation, withdrawalStatus(operation));
+  linkL2Action(store, operation, row, "burn");
+  linkBridgeTransaction(store, operation, transaction, "submit");
+  replayKnownCommits(store);
+}
+
+function enrichWithdrawalFromL2Submit(
+  operation: BridgeOperationRow,
+  transaction: TransactionRow,
+  action: ZkappActionRow,
+): void {
+  operation.sender = transaction.sender_public_key ?? transaction.fee_payer_public_key ?? UNKNOWN;
+  operation.recipient = action.fields[2] ?? transaction.receiver_public_key ?? UNKNOWN;
+  operation.amount = action.fields[3] ?? transaction.amount ?? UNKNOWN;
+  operation.submit_tx_hash = transaction.hash;
+  operation.submit_block_height = transaction.block_height;
+  operation.sort_submit_block_height = -transaction.block_height;
+  operation.submit_timestamp = transaction.timestamp;
+  operation.data_quality = action.fields.length >= 4 ? "complete" : "partial";
+  operation.data_quality_reasons =
+    action.fields.length >= 4 ? undefined : ["inner_action_missing_user_fields"];
+  operation.search_text = [
+    operation.aux,
+    operation.status,
+    operation.type,
+    operation.sender,
+    operation.recipient,
+  ]
+    .filter((value) => value && value !== UNKNOWN)
+    .join(" ");
+}
+
+export function consumeBridgeRollback(
+  store: IndexerStore,
+  event: {
+    rollbackId: string;
+    detectedAt: string;
+    affected: {
+      outerActionIds: string[];
+      bridgeEventIds: string[];
+    };
+  },
+): void {
+  for (const bridgeEventId of event.affected.bridgeEventIds) {
+    store.l1RollbackAffectedBridgeEventIds.add(bridgeEventId);
+    const effect = store.bridgeEventEffects.get(bridgeEventId);
+    const operationId = effect?.operation ?? store.bridgeEventOperationIds.get(bridgeEventId);
+    const operation = operationId ? store.bridgeOperationById(operationId) : undefined;
+    if (!operation) {
+      continue;
+    }
+    if (effect?.previous) {
+      const previous = cloneBridgeOperation(effect.previous);
+      store.bridgeOperations.set(bridgeKey(previous.aux, previous.aux_sequence), previous);
+    } else {
+      setBridgeStatus(operation, "rolled_back");
+      operation.rollback_reason = event.rollbackId;
+    }
+  }
+
+  for (const outerActionId of event.affected.outerActionIds) {
+    store.l1RollbackAffectedOuterActionIds.add(outerActionId);
+    const outerAction = store.outerActions.get(outerActionId);
+    store.outerActions.delete(outerActionId);
+    store.bridgeProjectionRemovals.outerActionIds.add(outerActionId);
+    deleteL1LinksForOuterAction(store, outerActionId);
+    if (!outerAction) {
+      continue;
+    }
+
+    for (const operation of store.bridgeOperations.values()) {
+      let affected = false;
+      if (operation.l1_witness_action_state === outerAction.after_state) {
+        const committedSlotRangeUpper = operation.commit_action_state
+          ? commitSlotRangeUpper(store, operation.commit_action_state)
+          : undefined;
+        operation.l1_witness_action_state = undefined;
+        operation.l1_witness_tx_hash = undefined;
+        operation.l1_witness_block_height = undefined;
+        operation.l1_witness_timestamp = undefined;
+        operation.l1_slot_range_lower = undefined;
+        operation.l1_slot_range_upper = committedSlotRangeUpper;
+        affected = true;
+      }
+      if (operation.commit_action_state === outerAction.after_state) {
+        operation.commit_action_state = undefined;
+        affected = true;
+      }
+      if (affected) {
+        const nextStatus =
+          operation.type === "withdrawal" &&
+          operation.commit_action_state !== undefined &&
+          operation.l1_witness_action_state === undefined &&
+          operation.l1_witness_tx_hash === undefined
+            ? "delay_passed"
+            : operation.type === "deposit"
+              ? depositStatus(operation)
+              : withdrawalStatus(operation);
+        setBridgeStatus(operation, nextStatus);
+      }
+    }
+  }
+}
+
+export function consumeBridgeL2Rollback(
+  store: IndexerStore,
+  event: { rollbackId: string; ledgerHash: string },
+): void {
+  const removedInnerActions = new Map<string, InnerActionRow>();
+  for (const [state, innerAction] of store.innerActions) {
+    if (innerAction.target_ledger_hash === event.ledgerHash) {
+      removedInnerActions.set(innerAction.id, innerAction);
+      store.innerActions.delete(state);
+      store.bridgeProjectionRemovals.innerActionIds.add(innerAction.id);
+    }
+  }
+
+  if (removedInnerActions.size === 0) {
+    return;
+  }
+
+  const affectedOperationIds = new Set<string>();
+  for (const [key, link] of store.l2ActionLinks) {
+    if (removedInnerActions.has(link.out)) {
+      affectedOperationIds.add(link.in);
+      store.l2ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l2ActionLinkIds.add(link.id);
+    }
+  }
+
+  const removedTransactionIds = new Set(
+    [...removedInnerActions.values()].map((innerAction) => innerAction.transaction),
+  );
+  for (const [key, link] of store.bridgeTransactionLinks) {
+    if (removedTransactionIds.has(link.out)) {
+      affectedOperationIds.add(link.in);
+      store.bridgeTransactionLinks.delete(key);
+      store.bridgeProjectionRemovals.bridgeTransactionLinkIds.add(link.id);
+    }
+  }
+
+  for (const operationId of affectedOperationIds) {
+    const operation = store.bridgeOperationById(operationId);
+    if (!operation) {
+      continue;
+    }
+    operation.l2_action_state = undefined;
+    operation.l2_tx_hash = undefined;
+    operation.l2_block_height = undefined;
+    operation.l2_timestamp = undefined;
+    if (operation.type === "withdrawal") {
+      operation.submit_tx_hash = undefined;
+      operation.l1_witness_action_state = undefined;
+      operation.l1_witness_tx_hash = undefined;
+      operation.l1_witness_block_height = undefined;
+      operation.l1_witness_timestamp = undefined;
+      operation.l1_slot_range_lower = undefined;
+      operation.l1_slot_range_upper = undefined;
+      deleteWitnessLinksForOperation(store, operation.id);
+    }
+    operation.commit_action_state = undefined;
+    deleteCommitLinksForOperation(store, operation.id);
+    setBridgeStatus(
+      operation,
+      operation.type === "deposit" ? depositStatus(operation) : withdrawalRollbackStatus(operation),
+    );
+    if (operation.status === "rolled_back") {
+      operation.rollback_reason = event.rollbackId;
+    }
+  }
+}
+
+function upsertDepositSubmission(store: IndexerStore, event: L1BridgeEventInput): void {
+  if (!event.aux) {
+    return;
+  }
+  const existingWitnessedDeposit = firstOperationNeeding(
+    store,
+    event.aux,
+    (operation) => isActiveDeposit(operation) && operation.submit_tx_hash === undefined,
+  );
+  const previous = cloneOptionalBridgeOperation(existingWitnessedDeposit);
+  const operation = createBridgeOperation(store, {
+    type: "deposit",
+    status: "submitted",
+    aux: event.aux,
+    auxSequence: existingWitnessedDeposit?.aux_sequence,
+    sender: event.userPk,
+    recipient: event.recipient ?? UNKNOWN,
+    amount: event.amount ?? UNKNOWN,
+    submit_tx_hash: event.txHash,
+    submit_block_height: event.block.height,
+    submit_timestamp: normalizeTimestamp(event.observedAt),
+    timeout_slot: event.deposit?.timeoutSlot,
+    holder_account_l1: event.deposit?.holderAccountL1,
+    source_network: event.network,
+    source_provider: event.provider,
+    data_quality: event.amount && event.recipient ? "complete" : "partial",
+    data_quality_reasons:
+      event.amount && event.recipient ? undefined : ["bridge_event_missing_amount_or_recipient"],
+  });
+  setBridgeStatus(operation, depositStatus(operation));
+  store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
+  recordBridgeEventEffect(store, event, operation, previous);
+}
+
+function cancelDeposit(store: IndexerStore, event: L1BridgeEventInput): void {
+  if (!event.aux) {
+    return;
+  }
+  const cancelledSequence = event.cancel?.cancelledDepositIndex;
+  const operation =
+    cancelledSequence === undefined
+      ? firstOperationNeeding(store, event.aux, (candidate) => isCancellableDeposit(candidate))
+      : store
+          .bridgeOperationsByAux(event.aux)
+          .find(
+            (candidate) =>
+              isCancellableDeposit(candidate) && candidate.aux_sequence === cancelledSequence,
+          );
+  if (!operation) {
+    return;
+  }
+  const previous = cloneBridgeOperation(operation);
+  operation.cancel_tx_hash = event.txHash;
+  setBridgeStatus(operation, "cancelled");
+  store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
+  recordBridgeEventEffect(store, event, operation, previous);
+}
+
+function upsertWithdrawalFinalization(store: IndexerStore, event: L1BridgeEventInput): void {
+  if (!event.aux) {
+    return;
+  }
+  const existing = withdrawalForFinalization(store, event);
+  const previous = cloneOptionalBridgeOperation(existing);
+  const operation =
+    existing ??
+    createBridgeOperation(store, {
+      type: "withdrawal",
+      status: "completed",
+      aux: event.aux,
+      auxSequence: event.operationIndex,
+      sender: event.userPk,
+      recipient: event.recipient ?? UNKNOWN,
+      amount: event.amount ?? UNKNOWN,
+      source_network: event.network,
+      source_provider: event.provider,
+      data_quality: event.amount && event.recipient ? "complete" : "partial",
+      data_quality_reasons:
+        event.amount && event.recipient ? undefined : ["l1_withdrawal_event_without_l2_action"],
+    });
+
+  operation.l1_witness_tx_hash = event.txHash;
+  operation.l1_witness_block_height = event.block.height;
+  operation.l1_witness_timestamp = normalizeTimestamp(event.observedAt);
+  setBridgeStatus(operation, withdrawalStatus(operation));
+  store.bridgeEventOperationIds.set(event.bridgeEventId, operation.id);
+  recordBridgeEventEffect(store, event, operation, previous);
+}
+
+function withdrawalForFinalization(
+  store: IndexerStore,
+  event: L1BridgeEventInput,
+): BridgeOperationRow | undefined {
+  if (!event.aux) {
+    return undefined;
+  }
+  const candidates = store
+    .bridgeOperationsByAux(event.aux)
+    .filter((operation) => operation.type === "withdrawal" && isActiveBridgeOperation(operation));
+  if (event.operationIndex !== undefined) {
+    return candidates.find((operation) => operation.aux_sequence === event.operationIndex);
+  }
+  return (
+    candidates.find((operation) => operation.l1_witness_tx_hash === undefined) ?? candidates[0]
+  );
+}
+
+function applyOuterWitness(
+  store: IndexerStore,
+  outerAction: {
+    id: string;
+    after_state: string;
+    txn_hash: string;
+    block_height: number;
+    timestamp: string;
+    slot_range_lower: number;
+    slot_range_upper: number;
+  },
+  aux: string,
+): void {
+  const existingWithdrawal = firstOperationNeeding(
+    store,
+    aux,
+    (operation) =>
+      operation.type === "withdrawal" &&
+      isActiveBridgeOperation(operation) &&
+      operation.l1_witness_action_state === undefined,
+  );
+  if (existingWithdrawal) {
+    existingWithdrawal.l1_witness_action_state = outerAction.after_state;
+    existingWithdrawal.l1_witness_tx_hash = outerAction.txn_hash;
+    existingWithdrawal.l1_witness_block_height = outerAction.block_height;
+    existingWithdrawal.l1_witness_timestamp = outerAction.timestamp;
+    existingWithdrawal.l1_slot_range_lower = outerAction.slot_range_lower;
+    existingWithdrawal.l1_slot_range_upper = outerAction.slot_range_upper;
+    setBridgeStatus(existingWithdrawal, "completed");
+    linkL1Action(store, outerAction.id, existingWithdrawal, "witness");
+    return;
+  }
+
+  const operation =
+    firstOperationNeeding(
+      store,
+      aux,
+      (candidate) => isActiveDeposit(candidate) && candidate.l1_witness_action_state === undefined,
+    ) ??
+    createBridgeOperation(store, {
+      type: "deposit",
+      status: "l1_witnessed",
+      aux,
+      sender: UNKNOWN,
+      recipient: UNKNOWN,
+      amount: UNKNOWN,
+      submit_block_height: outerAction.block_height,
+      submit_timestamp: outerAction.timestamp,
+      data_quality: "partial",
+      data_quality_reasons: ["l1_witness_arrived_before_deposit_submission"],
+    });
+
+  operation.l1_witness_action_state = outerAction.after_state;
+  operation.l1_witness_tx_hash = outerAction.txn_hash;
+  operation.l1_witness_block_height = outerAction.block_height;
+  operation.l1_witness_timestamp = outerAction.timestamp;
+  operation.l1_slot_range_lower = outerAction.slot_range_lower;
+  operation.l1_slot_range_upper = outerAction.slot_range_upper;
+  setBridgeStatus(operation, depositStatus(operation));
+  linkL1Action(store, outerAction.id, operation, "witness");
+}
+
+function applyOuterCommit(
+  store: IndexerStore,
+  outerAction: { id: string; after_state: string; slot_range_upper: number },
+  innerActionState: string,
+  innerActionStateLength: number,
+): void {
+  for (const innerAction of coveredInnerActions(store, innerActionState, innerActionStateLength)) {
+    const operation = firstOperationNeeding(
+      store,
+      innerAction.aux,
+      (candidate) =>
+        isActiveBridgeOperation(candidate) &&
+        candidate.l2_action_state === innerAction.after_state &&
+        candidate.commit_action_state === undefined,
+    );
+    if (!operation) {
+      continue;
+    }
+    operation.commit_action_state = outerAction.after_state;
+    operation.l1_slot_range_upper = outerAction.slot_range_upper;
+    setBridgeStatus(
+      operation,
+      operation.type === "deposit" ? depositStatus(operation) : withdrawalStatus(operation),
+    );
+    linkL1Action(store, outerAction.id, operation, "commit");
+  }
+}
+
+function replayKnownCommits(store: IndexerStore): void {
+  for (const outerAction of store.outerActions.values()) {
+    if (isCommitOuterAction(outerAction)) {
+      applyOuterCommit(
+        store,
+        outerAction,
+        outerAction.inner_action_state,
+        outerAction.inner_action_state_length,
+      );
+    }
+  }
+}
+
+function commitSlotRangeUpper(store: IndexerStore, actionState: string): number | undefined {
+  const commit = [...store.outerActions.values()].find(
+    (outerAction) => outerAction.after_state === actionState && isCommitOuterAction(outerAction),
+  );
+  return commit?.slot_range_upper;
+}
+
+function coveredInnerActions(
+  store: IndexerStore,
+  headState: string,
+  length: number,
+): InnerActionRow[] {
+  const covered: InnerActionRow[] = [];
+  let cursor: string | undefined = headState;
+  for (let index = 0; index < length && cursor; index += 1) {
+    const action = store.innerActionByState(cursor);
+    if (!action) {
+      break;
+    }
+    covered.push(action);
+    cursor = action.before_state;
+  }
+  return covered.reverse();
+}
+
+function markTimedOutDeposits(store: IndexerStore, currentSlot: number | undefined): void {
+  if (currentSlot === undefined) {
+    return;
+  }
+  for (const operation of store.bridgeOperations.values()) {
+    if (
+      operation.type === "deposit" &&
+      operation.timeout_slot !== undefined &&
+      operation.timeout_slot < currentSlot &&
+      ["submitted", "l1_witnessed", "committed"].includes(operation.status)
+    ) {
+      setBridgeStatus(operation, "timed_out");
+    }
+  }
+}
+
+function markWithdrawalDelayPassed(
+  store: IndexerStore,
+  currentSlot: number | undefined,
+  withdrawalDelaySlots = DEFAULT_WITHDRAWAL_DELAY_SLOTS,
+): void {
+  if (currentSlot === undefined) {
+    return;
+  }
+  for (const operation of store.bridgeOperations.values()) {
+    if (
+      operation.type === "withdrawal" &&
+      operation.status === "committed" &&
+      operation.l1_slot_range_upper !== undefined &&
+      currentSlot > operation.l1_slot_range_upper + withdrawalDelaySlots
+    ) {
+      setBridgeStatus(operation, "delay_passed");
+    }
+  }
+}
+
+function bridgeAuxFromInnerFields(fields: string[]): string | undefined {
+  if (fields[0] !== "1") {
+    return undefined;
+  }
+  return fields[1];
+}
+
+function createBridgeOperation(
+  store: IndexerStore,
+  input: {
+    type: BridgeOperationRow["type"];
+    status: BridgeOperationRow["status"];
+    aux: string;
+    auxSequence?: number;
+    sender: string;
+    recipient: string;
+    amount: string;
+    submit_tx_hash?: string;
+    submit_block_height?: number;
+    submit_timestamp?: string;
+    timeout_slot?: number;
+    holder_account_l1?: string;
+    source_network?: string;
+    source_provider?: string;
+    data_quality: BridgeOperationRow["data_quality"];
+    data_quality_reasons?: string[];
+  },
+): BridgeOperationRow {
+  const auxSequence = input.auxSequence ?? store.nextBridgeSequence(input.aux);
+  const existing = store.bridgeOperations.get(bridgeKey(input.aux, auxSequence));
+  const operation: BridgeOperationRow = {
+    ...existing,
+    id: existing?.id ?? bridgeOperationId(input.aux, auxSequence),
+    type: input.type,
+    status: input.status,
+    aux: input.aux,
+    aux_sequence: auxSequence,
+    sender: input.sender,
+    recipient: input.recipient,
+    amount: input.amount,
+    data_quality: input.data_quality,
+    data_quality_reasons: input.data_quality_reasons,
+    source_network: input.source_network,
+    source_provider: input.source_provider,
+    submit_tx_hash: input.submit_tx_hash,
+    submit_block_height: input.submit_block_height,
+    sort_submit_block_height:
+      input.submit_block_height === undefined ? undefined : -input.submit_block_height,
+    submit_timestamp: input.submit_timestamp,
+    timeout_slot: input.timeout_slot,
+    holder_account_l1: input.holder_account_l1,
+  };
+  refreshBridgeSearchText(operation);
+  store.bridgeOperations.set(bridgeKey(input.aux, auxSequence), operation);
+  return operation;
+}
+
+function setBridgeStatus(
+  operation: BridgeOperationRow,
+  status: BridgeOperationRow["status"],
+): void {
+  operation.status = status;
+  refreshBridgeSearchText(operation);
+}
+
+function refreshBridgeSearchText(operation: BridgeOperationRow): void {
+  operation.search_text = [
+    operation.aux,
+    operation.status,
+    operation.type,
+    operation.sender,
+    operation.recipient,
+  ]
+    .filter((value) => value && value !== UNKNOWN)
+    .join(" ");
+}
+
+function firstOperationNeeding(
+  store: IndexerStore,
+  aux: string,
+  predicate: (operation: BridgeOperationRow) => boolean,
+): BridgeOperationRow | undefined {
+  return store.bridgeOperationsByAux(aux).find(predicate);
+}
+
+function linkL1Action(
+  store: IndexerStore,
+  outerActionId: string,
+  operation: BridgeOperationRow,
+  role: "witness" | "commit",
+): void {
+  const key = `${outerActionId}:${operation.id}:${role}`;
+  store.l1ActionLinks.set(key, { id: key, in: outerActionId, out: operation.id, role });
+}
+
+function linkL2Action(
+  store: IndexerStore,
+  operation: BridgeOperationRow,
+  action: InnerActionRow,
+  role: "mint" | "burn",
+): void {
+  const key = `${operation.id}:${action.id}:${role}`;
+  store.l2ActionLinks.set(key, { id: key, in: operation.id, out: action.id, role });
+}
+
+function linkBridgeTransaction(
+  store: IndexerStore,
+  operation: BridgeOperationRow,
+  transaction: TransactionRow,
+  role: "submit" | "l2_finalize",
+): void {
+  const key = `${operation.id}:${transaction.id}:${role}`;
+  store.bridgeTransactionLinks.set(key, { id: key, in: operation.id, out: transaction.id, role });
+}
+
+function bridgeKey(aux: string, sequence: number): string {
+  return `${aux}:${sequence}`;
+}
+
+function bridgeOperationId(aux: string, sequence: number): string {
+  const digest = createHash("sha256").update(aux).update("\0").update(`${sequence}`).digest("hex");
+  return `bridge_${digest.slice(0, 32)}`;
+}
+
+function recordBridgeEventEffect(
+  store: IndexerStore,
+  event: L1BridgeEventInput,
+  operation: BridgeOperationRow,
+  previous: BridgeOperationRow | undefined,
+): void {
+  store.bridgeEventEffects.set(event.bridgeEventId, {
+    bridge_event_id: event.bridgeEventId,
+    operation: operation.id,
+    type: event.type,
+    previous,
+  });
+}
+
+function cloneBridgeOperation(operation: BridgeOperationRow): BridgeOperationRow {
+  return {
+    ...operation,
+    data_quality_reasons: operation.data_quality_reasons
+      ? [...operation.data_quality_reasons]
+      : undefined,
+  };
+}
+
+function cloneOptionalBridgeOperation(
+  operation: BridgeOperationRow | undefined,
+): BridgeOperationRow | undefined {
+  return operation ? cloneBridgeOperation(operation) : undefined;
+}
+
+function deleteL1LinksForOuterAction(store: IndexerStore, outerActionId: string): void {
+  for (const [key, link] of store.l1ActionLinks) {
+    if (link.in === outerActionId) {
+      store.l1ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
+    }
+  }
+}
+
+function deleteCommitLinksForOperation(store: IndexerStore, operationId: string): void {
+  for (const [key, link] of store.l1ActionLinks) {
+    if (link.out === operationId && link.role === "commit") {
+      store.l1ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
+    }
+  }
+}
+
+function deleteWitnessLinksForOperation(store: IndexerStore, operationId: string): void {
+  for (const [key, link] of store.l1ActionLinks) {
+    if (link.out === operationId && link.role === "witness") {
+      store.l1ActionLinks.delete(key);
+      store.bridgeProjectionRemovals.l1ActionLinkIds.add(link.id);
+    }
+  }
+}
+
+function isCommitOuterAction(outerAction: OuterActionRow): outerAction is OuterActionRow & {
+  inner_action_state: string;
+  inner_action_state_length: number;
+} {
+  return (
+    outerAction.kind === "commit" &&
+    outerAction.inner_action_state !== undefined &&
+    outerAction.inner_action_state_length !== undefined
+  );
+}

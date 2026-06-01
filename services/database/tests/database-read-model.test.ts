@@ -1,7 +1,7 @@
 import { loadFeature } from "@amiceli/vitest-cucumber";
 import { afterAll, beforeAll } from "vitest";
-import { startSurreal, stopSurreal } from "./lib/surreal-client";
-import { describeDatabaseFeature } from "./support/database-steps";
+import { startSurreal, stopSurreal } from "./lib/surreal-client.ts";
+import { describeDatabaseFeature } from "./support/database-steps.ts";
 
 const featureFiles = [
   "tests/features/initial_schema.feature",

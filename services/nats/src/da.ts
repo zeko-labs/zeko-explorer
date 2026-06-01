@@ -1,7 +1,7 @@
 import type { InferOutput } from "valibot";
 import { boolean, literal, optional, picklist, strictObject, union } from "valibot";
 
-import { NonEmptyStringSchema, NonNegativeIntegerSchema, SchemaVersion1Schema } from "./shared";
+import { NonEmptyStringSchema, NonNegativeIntegerSchema, SchemaVersion1Schema } from "./shared.ts";
 
 export const DaImplementationSchema = picklist(["zeko-multisig-v1", "celestia-v1"]);
 

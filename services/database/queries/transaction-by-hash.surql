@@ -5,4 +5,5 @@
 -- EXPLAIN END
 SELECT * FROM transaction
 WHERE hash = $hash
+ORDER BY sort_block_height ASC, sort_tx_index ASC, id ASC
 LIMIT 1;

@@ -1,4 +1,4 @@
-import { describeFeature, type loadFeature } from "@amiceli/vitest-cucumber";
+import { describeFeature, type loadFeature, type StepTest } from "@amiceli/vitest-cucumber";
 import { expect } from "vitest";
 import {
   parseParam,
@@ -6,8 +6,8 @@ import {
   runSurql,
   type SurrealParam,
   syncSchema,
-} from "../lib/surreal-client";
-import { fixtureIds, seedExplorerFixture } from "./fixtures";
+} from "../lib/surreal-client.ts";
+import { fixtureIds, seedExplorerFixture } from "./fixtures.ts";
 
 type DataTable = Array<Record<string, string>>;
 type Row = Record<string, unknown>;
@@ -29,7 +29,7 @@ type TestWorld = {
 };
 
 type DatabaseFeature = Awaited<ReturnType<typeof loadFeature>>;
-type StepDefinitions = Parameters<Parameters<typeof describeFeature>[1]>[0];
+type StepDefinition = StepTest["Given"];
 
 let scenarioCount = 0;
 let world: TestWorld = newWorld();
@@ -78,6 +78,39 @@ CREATE transaction:01J0000000000000000000DUPE SET hash = "${hash}", sequence_num
       });
 
       When(
+        "I try to insert another transaction with hash {string} on target ledger {string}",
+        async (_ctx, hash: string, targetLedgerHash: string) => {
+          const ids = fixtureIds();
+          const result = await runSurql(
+            world.db,
+            reIncludedTransactionSurql(hash, targetLedgerHash, ids.alice, ids.bob),
+            { allowError: true },
+          );
+          world.lastError = result.find((entry) => entry.status !== "OK")?.result;
+        },
+      );
+
+      const insertReIncludedTransaction = async (hash: string, targetLedgerHash: string) => {
+        const ids = fixtureIds();
+        await runSurql(
+          world.db,
+          reIncludedTransactionSurql(hash, targetLedgerHash, ids.alice, ids.bob),
+        );
+      };
+
+      GivenOrAnd(
+        "I insert another transaction with hash {string} on target ledger {string}",
+        async (_ctx, hash: string, targetLedgerHash: string) =>
+          insertReIncludedTransaction(hash, targetLedgerHash),
+      );
+
+      When(
+        "I insert another transaction with hash {string} on target ledger {string}",
+        async (_ctx, hash: string, targetLedgerHash: string) =>
+          insertReIncludedTransaction(hash, targetLedgerHash),
+      );
+
+      When(
         "I try to insert another bridge operation with aux {string} and sequence {int}",
         async (_ctx, aux: string, sequence: number) => {
           const result = await runSurql(
@@ -88,6 +121,42 @@ CREATE bridge_operation:01J0000000000000000000BODU SET type = "deposit", status 
             { allowError: true },
           );
           world.lastError = result.find((entry) => entry.status !== "OK")?.result;
+        },
+      );
+
+      When("I insert token accounts for public key {string}", async (_ctx, publicKey: string) => {
+        await runSurql(
+          world.db,
+          `
+CREATE account:01JTOKEN000000000000000001 SET id = "01JTOKEN000000000000000001", public_key = "${publicKey}", token_id = "1", balance = "100", nonce = 0;
+CREATE account:01JTOKEN000000000000000002 SET id = "01JTOKEN000000000000000002", public_key = "${publicKey}", token_id = "2", balance = "200", nonce = 0;
+`,
+        );
+      });
+
+      GivenOrAnd(
+        "an earlier token account exists for public key {string}",
+        async (_ctx, publicKey: string) => {
+          await runSurql(
+            world.db,
+            `
+CREATE account:01JEARLIERTOKEN00000000001 SET id = "01JEARLIERTOKEN00000000001", public_key = "${publicKey}", token_id = "2", balance = "1", nonce = 0;
+`,
+          );
+        },
+      );
+
+      GivenOrAnd(
+        "a token sender transaction exists for public key {string} on target ledger {string}",
+        async (_ctx, publicKey: string, targetLedgerHash: string) => {
+          await runSurql(
+            world.db,
+            `
+CREATE account:01JTOKENSENDER0000000001 SET id = "01JTOKENSENDER0000000001", public_key = "${publicKey}", token_id = "2", balance = "1", nonce = 0;
+CREATE transaction:01JTOKENTX000000000001 SET hash = "tx-token-sent", sequence_number = 1001, type = "payment", status = "applied", sender = account:01JTOKENSENDER0000000001, sender_public_key = "${publicKey}", block_height = 1001, tx_index = 0, sort_block_height = -1001, sort_tx_index = 0, timestamp = d"2026-05-01T00:12:00Z", source_ledger_hash = "ledger-token-source", target_ledger_hash = "${targetLedgerHash}";
+RELATE transaction:01JTOKENTX000000000001->account_transaction:01JTOKENEDGE0000000001->account:01JTOKENSENDER0000000001 SET role = "sender", account_public_key = "${publicKey}", sort_block_height = -1001, sort_tx_index = 0;
+`,
+          );
         },
       );
 
@@ -227,10 +296,76 @@ UPDATE batch SET da_status = "attested", da_source = "da-direct", da_attested_at
         },
       );
 
+      ThenOrAnd(
+        "graph field {string} should not include target ledger {string}",
+        (_ctx, field: string, targetLedgerHash: string) => {
+          const first = world.lastResult[0];
+          expect(first).toBeDefined();
+          const rows = first[field];
+          expect(rows, `${field} should be an array`).toEqual(expect.any(Array));
+          expect((rows as Row[]).map((row) => row.target_ledger_hash)).not.toContain(
+            targetLedgerHash,
+          );
+        },
+      );
+
       Then("the write should fail because of a unique index", () => {
         expect(world.lastError, "Expected write error").toBeTruthy();
         expect(String(world.lastError)).toMatch(/already contains|Database index|unique/i);
       });
+
+      Then(
+        "transaction hash {string} should have {int} rows",
+        async (_ctx, hash: string, count: number) => {
+          const rows = await runSurql<Row[]>(
+            world.db,
+            `SELECT * FROM transaction WHERE hash = "${hash}";`,
+          );
+          const result = rows.at(-1)?.result;
+          expect(result).toEqual(expect.any(Array));
+          expect(result).toHaveLength(count);
+        },
+      );
+
+      Then(
+        "both token account rows should exist for public key {string}",
+        async (_ctx, publicKey: string, table?: DataTable) => {
+          const rows = await runSurql<Row[]>(
+            world.db,
+            `SELECT * FROM account WHERE public_key = "${publicKey}";`,
+          );
+          const result = rows.at(-1)?.result ?? [];
+          expect(result).toEqual(expect.any(Array));
+          expect(result).toHaveLength(2);
+          world.lastResult = await queryFile<Row[]>(world.db, "account-profile-overview", {
+            ...(table === undefined
+              ? { activity_limit: 3, sent_limit: 3, received_limit: 3, bridge_limit: 3 }
+              : paramsFromTable(table)),
+            public_key: publicKey,
+          });
+        },
+      );
+
+      Then(
+        "the exact search account result should have token id {string}",
+        (_ctx, tokenId: string) => {
+          const first = firstExactSearchResult();
+          const accounts = first.accounts;
+          expect(accounts).toEqual(expect.any(Array));
+          expect((accounts as Row[])[0]?.token_id).toBe(tokenId);
+        },
+      );
+
+      Then(
+        "the exact search transaction result should contain target ledgers {string}",
+        (_ctx, targetLedgers: string) => {
+          const first = firstExactSearchResult();
+          const transactions = first.transactions;
+          expect(transactions).toEqual(expect.any(Array));
+          const actual = (transactions as Row[]).map((row) => row.target_ledger_hash);
+          expect(actual).toEqual(targetLedgers.split(","));
+        },
+      );
 
       Then(
         "a row in {string} exists with ledger_hash {string} and source {string}",
@@ -332,15 +467,37 @@ async function findBatchByTargetLedgerHash(targetLedgerHash: string): Promise<Ro
     world.db,
     `SELECT * FROM batch WHERE target_ledger_hash = "${targetLedgerHash}";`,
   );
-  const result = rows.at(-1)?.result;
+  const result = rows.at(-1)?.result ?? [];
   expect(result).toEqual(expect.any(Array));
   return result[0];
 }
 
-function defineAliases(
-  first: StepDefinitions["Given"],
-  second: StepDefinitions["And"],
-): StepDefinitions["Given"] {
+function firstExactSearchResult(): Row {
+  const result: unknown = world.lastResult;
+  const first = Array.isArray(result) ? result[0] : result;
+  if (!isRow(first)) {
+    throw new Error("Expected exact search result row");
+  }
+  return first;
+}
+
+function isRow(value: unknown): value is Row {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function reIncludedTransactionSurql(
+  hash: string,
+  targetLedgerHash: string,
+  sender: string,
+  receiver: string,
+): string {
+  const id = `01JRE${Buffer.from(targetLedgerHash, "utf8").toString("hex").slice(0, 20)}`;
+  return `
+CREATE transaction:${id} SET hash = "${hash}", sequence_number = 1000, type = "payment", status = "applied", sender = ${sender}, receiver = ${receiver}, block_height = 1000, tx_index = 0, sort_block_height = -1000, sort_tx_index = 0, timestamp = d"2026-05-01T00:11:00Z", source_ledger_hash = "reinclude-source", target_ledger_hash = "${targetLedgerHash}";
+`;
+}
+
+function defineAliases(first: StepDefinition, second: StepDefinition): StepDefinition {
   return (name, callback) => {
     first(name, callback);
     second(name, callback);

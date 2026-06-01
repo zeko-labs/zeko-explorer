@@ -1,7 +1,7 @@
 import type { InferOutput } from "valibot";
 import { array, literal, optional, picklist, strictObject, tuple, union } from "valibot";
 
-import { NATS_SUBJECTS } from "./constants";
+import { NATS_SUBJECTS } from "./constants.ts";
 import {
   L1EnvelopeSchema,
   L1ProviderSchema,
@@ -10,7 +10,7 @@ import {
   NonNegativeIntegerSchema,
   SchemaVersion1Schema,
   SlotRangeSchema,
-} from "./shared";
+} from "./shared.ts";
 
 export const L1SettlementEventTypeSchema = picklist(["detected", "finalized"]);
 

@@ -1,4 +1,4 @@
-import { NATS_SUBJECTS, type NetworkId } from "../../src/index";
+import { NATS_SUBJECTS, type NetworkId } from "../../src/index.ts";
 
 const network = "zeko-m-devnet" satisfies NetworkId;
 const observedAt = "2026-05-13T00:00:00.000Z";

@@ -34,6 +34,16 @@ tasks:
       mergeArgs: "replace"
       mergeInputs: "replace"
 
+  test-typecheck:
+    command: "tsgo"
+    args: ["-p", "tests/tsconfig.json", "--noEmit"]
+    deps:
+      - "^:typecheck"
+    inputs:
+      - "@group(sources)"
+      - "@group(tests)"
+      - "tests/tsconfig.json"
+
   sync-local:
     command: "nu"
     args: ["scripts/sync-local.nu"]

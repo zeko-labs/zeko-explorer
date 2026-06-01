@@ -3,8 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/public.ts"
+  },
   "dependencies": {
+    "@nats-io/jetstream": "catalog:",
+    "@nats-io/transport-node": "catalog:",
     "@zeko/database": "workspace:*",
-    "@zeko/nats": "workspace:*"
+    "@zeko/nats": "workspace:*",
+    "o1js": "catalog:",
+    "surrealdb": "catalog:",
+    "ulid": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@amiceli/vitest-cucumber": "catalog:"
   }
 }

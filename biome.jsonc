@@ -25,7 +25,33 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": [
+                  "./**",
+                  "../**",
+                  "!./**/*.ts",
+                  "!../**/*.ts",
+                  "!./**/*.tsx",
+                  "!../**/*.tsx",
+                  "!./**/*.json",
+                  "!../**/*.json"
+                ],
+                "message": "Use explicit .ts extensions for relative TypeScript imports."
+              },
+              {
+                "group": ["./**/*.js", "../**/*.js", "./**/*.jsx", "../**/*.jsx"],
+                "message": "Use .ts/.tsx source extensions in TypeScript imports."
+              }
+            ]
+          }
+        }
+      }
     }
   }
 }

@@ -3,7 +3,12 @@
 -- EXPLAIN(v3 fixture): SelectProject -> Compute -> RecordIdScan -> GraphEdgeScan -> CurrentValueSource -> IndexScan; indexes idx_ia_txn_hash_order, idx_action_hash_order, idx_event_hash_order.
 -- Full plan: harness/reports/explain-current.md#transaction-detail-by-hash.
 -- EXPLAIN END
-LET $tx_id = (SELECT VALUE id FROM transaction WHERE hash = $hash LIMIT 1)[0];
+LET $tx_id = (
+  SELECT id, sort_block_height, sort_tx_index FROM transaction
+  WHERE hash = $hash
+  ORDER BY sort_block_height ASC, sort_tx_index ASC, id ASC
+  LIMIT 1
+)[0].id;
 
 SELECT *,
   ->account_transaction->account AS related_accounts,

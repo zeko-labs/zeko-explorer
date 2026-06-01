@@ -16,7 +16,7 @@ import {
   NonEmptyStringSchema,
   NonNegativeIntegerSchema,
   OptionalStringRecordSchema,
-} from "./shared";
+} from "./shared.ts";
 
 // Transaction diffs are producer-owned Da_layer.Diff JSON plus target_ledger_hash/genesis.
 // looseObject preserves future raw diff fields instead of silently stripping them.
@@ -41,6 +41,9 @@ export const L2ChangedAccountSchema = looseObject({
     delegate: optional(NonEmptyStringSchema),
     token_id: optional(NonEmptyStringSchema),
     zkapp_state: optional(array(NonEmptyStringSchema)),
+    action_state: optional(array(NonEmptyStringSchema)),
+    verification_key_hash: optional(NonEmptyStringSchema),
+    zkapp_uri: optional(NonEmptyStringSchema),
     permissions: OptionalStringRecordSchema,
     timing: OptionalStringRecordSchema,
   }),

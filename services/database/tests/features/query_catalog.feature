@@ -20,6 +20,14 @@ Feature: Query catalog
     Then the result should contain one row
     And field "hash" of the first row should equal "tx-005"
 
+  Scenario: Natural transaction lookup returns the newest re-included hash
+    Given I insert another transaction with hash "tx-005" on target ledger "ledger-reincluded"
+    When I run query "transaction-by-hash" with:
+      | key | value    |
+      | hash | "tx-005" |
+    Then the result should contain one row
+    And field "target_ledger_hash" of the first row should equal "ledger-reincluded"
+
   Scenario: Transaction investigation by hash includes bounded related data
     When I run query "transaction-detail-by-hash" with:
       | key | value |
@@ -31,6 +39,17 @@ Feature: Query catalog
     And field "hash" of the first row should equal "tx-006"
     And the graph field "bridge_operations" of the first row should contain 1 rows
     And the graph field "inner_actions" of the first row should contain 1 rows
+
+  Scenario: Transaction investigation by hash returns the newest re-included hash
+    Given I insert another transaction with hash "tx-005" on target ledger "ledger-reincluded"
+    When I run query "transaction-detail-by-hash" with:
+      | key                | value    |
+      | hash               | "tx-005" |
+      | event_limit        | 10       |
+      | action_limit       | 10       |
+      | inner_action_limit | 10       |
+    Then the result should contain one row
+    And field "target_ledger_hash" of the first row should equal "ledger-reincluded"
 
   Scenario: Account profile query loads current state and first-page feeds
     When I run query "account-profile-overview" with:
@@ -44,6 +63,55 @@ Feature: Query catalog
     And field "public_key" of the first row should equal "B62qAlice"
     And the graph field "recent_activity" of the first row should contain 3 rows
     And the graph field "recent_bridge_operations" of the first row should contain 2 rows
+
+  Scenario: Public key account lookup returns the native token account
+    Given an earlier token account exists for public key "B62qAlice"
+    When I run query "account-by-public-key" with:
+      | key        | value       |
+      | public_key | "B62qAlice" |
+    Then the result should contain one row
+    And field "token_id" of the first row should equal "1"
+
+  Scenario: Account profile lookup returns the native token account
+    Given an earlier token account exists for public key "B62qAlice"
+    When I run query "account-profile-overview" with:
+      | key | value |
+      | public_key     | "B62qAlice" |
+      | activity_limit | 3           |
+      | sent_limit     | 3           |
+      | received_limit | 3           |
+      | bridge_limit   | 3           |
+    Then the result should contain one row
+    And field "token_id" of the first row should equal "1"
+
+  Scenario: Account profile lookup excludes token-account transaction feeds
+    Given a token sender transaction exists for public key "B62qAlice" on target ledger "ledger-token-sent"
+    When I run query "account-profile-overview" with:
+      | key | value |
+      | public_key     | "B62qAlice" |
+      | activity_limit | 5           |
+      | sent_limit     | 10          |
+      | received_limit | 10          |
+      | bridge_limit   | 3           |
+    Then the result should contain one row
+    And field "token_id" of the first row should equal "1"
+    And graph field "recent_sent_transactions" should not include target ledger "ledger-token-sent"
+
+  Scenario: Exact identifier search returns the native token account
+    Given an earlier token account exists for public key "B62qAlice"
+    When I run query "search-exact-identifiers" with:
+      | key   | value       |
+      | term  | "B62qAlice" |
+      | limit | 3           |
+    Then the exact search account result should have token id "1"
+
+  Scenario: Exact identifier search returns every re-included transaction hash
+    Given I insert another transaction with hash "tx-005" on target ledger "ledger-reincluded"
+    When I run query "search-exact-identifiers" with:
+      | key   | value    |
+      | term  | "tx-005" |
+      | limit | 3        |
+    Then the exact search transaction result should contain target ledgers "ledger-reincluded,ledger-105"
 
   Scenario: Smart contract transaction feed is receiver-indexed
     When I run query "transactions-by-receiver-first-page" with:
