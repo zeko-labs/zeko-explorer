@@ -106,6 +106,44 @@ describeFeature(feature, ({ Scenario }) => {
     });
   };
 
+  const consumeWitnessInTransaction = async (
+    aux: string,
+    txHash: string,
+    actionIndex: number,
+    blockHeight = 5010,
+    slot = 130,
+  ) => {
+    await indexer.consume({
+      subject: "zeko.l1.outer-actions",
+      payload: {
+        ...l1Envelope(blockHeight, slot),
+        subject: "zeko.l1.outer-actions",
+        outerActionId: `outer-witness-${txHash}-${actionIndex}`,
+        txHash,
+        accountUpdateId: `au-witness-${actionIndex}`,
+        actionIndex,
+        actionKind: "witness",
+        actionState: {
+          current: `outer-witness-${txHash}-${actionIndex}`,
+          vector: ["a", "b", "c", "d", "e"],
+          before: `outer-before-${txHash}-${actionIndex}`,
+          after: `outer-witness-${txHash}-${actionIndex}`,
+        },
+        rawFields: ["1", aux],
+        parsed: {
+          kind: "witness",
+          aux,
+          slotRange: { lower: 100, upper: 130 },
+        },
+        archive: {
+          transactionSequenceNumber: blockHeight,
+          chainStatus: "canonical",
+          distanceFromMaxBlockHeight: 0,
+        },
+      },
+    });
+  };
+
   const consumeCommit = async (innerActionState: string, blockHeight = 5020, slot = 131) => {
     await indexer.consume({
       subject: "zeko.l1.outer-actions",
@@ -824,6 +862,27 @@ describeFeature(feature, ({ Scenario }) => {
       ).toHaveLength(1);
     });
   });
+
+  Scenario(
+    "Multiple outer actions in one L1 transaction keep unique positions",
+    ({ When, Then }) => {
+      reset();
+      When(
+        "the indexer consumes L1 witnesses for aux {string} and {string} in one transaction",
+        async (_context, firstAux: string, secondAux: string) => {
+          await consumeWitnessInTransaction(firstAux, "l1-multi-action", 0);
+          await consumeWitnessInTransaction(secondAux, "l1-multi-action", 1);
+        },
+      );
+      Then("outer action rows have unique action indexes", () => {
+        const indexes = [...store.outerActions.values()]
+          .filter((row) => row.txn_hash === "l1-multi-action")
+          .map((row) => row.action_index);
+        expect(indexes).toHaveLength(2);
+        expect(new Set(indexes).size).toBe(indexes.length);
+      });
+    },
+  );
 
   Scenario("Deposit cancellation updates the matching operation", ({ Given, When, Then, And }) => {
     reset();

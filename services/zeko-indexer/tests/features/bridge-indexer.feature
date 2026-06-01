@@ -109,6 +109,10 @@ Feature: Bridge operation projection
     Then exactly 1 bridge operation exists for aux "aux-replayed-witness"
     And one L1 witness link exists for aux "aux-replayed-witness"
 
+  Scenario: Multiple outer actions in one L1 transaction keep unique positions
+    When the indexer consumes L1 witnesses for aux "aux-shared-l1-a" and "aux-shared-l1-b" in one transaction
+    Then outer action rows have unique action indexes
+
   Scenario: Deposit cancellation updates the matching operation
     Given the indexer consumed a deposit submission for aux "aux-cancel"
     When the indexer consumes a deposit cancellation for aux "aux-cancel"

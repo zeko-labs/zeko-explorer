@@ -23,8 +23,9 @@ export type BridgeProjectorOptions = {
   withdrawalDelaySlots?: number;
 };
 
-const DEFAULT_WITHDRAWAL_DELAY_SLOTS = 100;
 const UNKNOWN = "unknown";
+const DEFAULT_WITHDRAWAL_DELAY_SLOTS = 100;
+const OUTER_ACTION_INDEX_STRIDE = 1_000_000;
 
 export function consumeL1BridgeEvent(store: IndexerStore, event: L1BridgeEventInput): void {
   if (store.l1RollbackAffectedBridgeEventIds.has(event.bridgeEventId)) {
@@ -71,7 +72,7 @@ export function consumeL1OuterAction(
     after_state: afterState,
     before_state: event.actionState.before,
     kind: parsed.kind,
-    action_index: event.archive.transactionSequenceNumber,
+    action_index: outerActionPosition(event.archive.transactionSequenceNumber, event.actionIndex),
     block_height: event.block.height,
     block_state_hash: event.block.hash,
     timestamp,
@@ -112,6 +113,10 @@ export function advanceBridgeClock(
 ): void {
   markTimedOutDeposits(store, slot);
   markWithdrawalDelayPassed(store, slot, options.withdrawalDelaySlots);
+}
+
+function outerActionPosition(transactionSequenceNumber: number, actionIndex: number): number {
+  return transactionSequenceNumber * OUTER_ACTION_INDEX_STRIDE + actionIndex;
 }
 
 export function consumeBridgeInnerAction(

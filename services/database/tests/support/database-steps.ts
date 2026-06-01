@@ -146,6 +146,20 @@ CREATE account:01JEARLIERTOKEN00000000001 SET id = "01JEARLIERTOKEN00000000001",
         },
       );
 
+      GivenOrAnd(
+        "a token sender transaction exists for public key {string} on target ledger {string}",
+        async (_ctx, publicKey: string, targetLedgerHash: string) => {
+          await runSurql(
+            world.db,
+            `
+CREATE account:01JTOKENSENDER0000000001 SET id = "01JTOKENSENDER0000000001", public_key = "${publicKey}", token_id = "2", balance = "1", nonce = 0;
+CREATE transaction:01JTOKENTX000000000001 SET hash = "tx-token-sent", sequence_number = 1001, type = "payment", status = "applied", sender = account:01JTOKENSENDER0000000001, sender_public_key = "${publicKey}", block_height = 1001, tx_index = 0, sort_block_height = -1001, sort_tx_index = 0, timestamp = d"2026-05-01T00:12:00Z", source_ledger_hash = "ledger-token-source", target_ledger_hash = "${targetLedgerHash}";
+RELATE transaction:01JTOKENTX000000000001->account_transaction:01JTOKENEDGE0000000001->account:01JTOKENSENDER0000000001 SET role = "sender", account_public_key = "${publicKey}", sort_block_height = -1001, sort_tx_index = 0;
+`,
+          );
+        },
+      );
+
       When(
         "I mark target ledger {string} as rolled back",
         async (_ctx, targetLedgerHash: string) => {
@@ -279,6 +293,19 @@ UPDATE batch SET da_status = "attested", da_source = "da-direct", da_attested_at
           const rows = first[field];
           expect(rows, `${field} should be an array`).toEqual(expect.any(Array));
           expect(rows).toHaveLength(count);
+        },
+      );
+
+      ThenOrAnd(
+        "graph field {string} should not include target ledger {string}",
+        (_ctx, field: string, targetLedgerHash: string) => {
+          const first = world.lastResult[0];
+          expect(first).toBeDefined();
+          const rows = first[field];
+          expect(rows, `${field} should be an array`).toEqual(expect.any(Array));
+          expect((rows as Row[]).map((row) => row.target_ledger_hash)).not.toContain(
+            targetLedgerHash,
+          );
         },
       );
 

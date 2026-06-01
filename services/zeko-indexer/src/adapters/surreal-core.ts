@@ -109,9 +109,9 @@ function serializeTransaction(row: TransactionRow, store: IndexerStore): Record<
     sequence_number: row.sequence_number,
     type: row.type,
     status: row.status,
-    sender: accountReference(store, row.sender_public_key),
-    receiver: accountReference(store, row.receiver_public_key),
-    fee_payer: accountReference(store, row.fee_payer_public_key),
+    sender: transactionAccountReference(store, row, row.sender_public_key, ["sender"]),
+    receiver: transactionAccountReference(store, row, row.receiver_public_key, ["receiver"]),
+    fee_payer: transactionAccountReference(store, row, row.fee_payer_public_key, ["fee_payer"]),
     sender_public_key: row.sender_public_key,
     receiver_public_key: row.receiver_public_key,
     fee_payer_public_key: row.fee_payer_public_key,
@@ -257,6 +257,27 @@ function serializeSyncStatus(row: SyncStatusRow): Record<string, unknown> {
 function accountReference(store: IndexerStore, publicKey: string | undefined) {
   const account = publicKey ? store.accountByPublicKey(publicKey) : undefined;
   return account ? record("account", account.id) : undefined;
+}
+
+function transactionAccountReference(
+  store: IndexerStore,
+  transaction: TransactionRow,
+  publicKey: string | undefined,
+  roles: AccountActivityRow["role"][],
+) {
+  if (!publicKey) {
+    return undefined;
+  }
+  for (const activity of store.accountActivities.values()) {
+    if (
+      activity.transaction === transaction.id &&
+      activity.account_public_key === publicKey &&
+      roles.includes(activity.role)
+    ) {
+      return record("account", activity.account);
+    }
+  }
+  return accountReference(store, publicKey);
 }
 
 function serializeSigner(row: {

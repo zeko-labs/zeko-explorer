@@ -22,6 +22,11 @@ Feature: Surreal bridge adapter
     When the full indexer projection is flushed once
     Then the SurrealDB SurrealQL writes the bridge-linked transaction once with account details
 
+  Scenario: Full projection keeps token-specific transaction account references
+    Given the in-memory projection has a token transaction with native and token account rows
+    When the full indexer projection is flushed once
+    Then the SurrealDB SurrealQL writes the token transaction with the token account reference
+
   Scenario: Inner actions retain their source transaction record
     Given the in-memory projection has an inner action from transaction "tx-1"
     When the bridge projection is flushed once

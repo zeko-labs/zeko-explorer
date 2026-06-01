@@ -84,6 +84,19 @@ Feature: Query catalog
     Then the result should contain one row
     And field "token_id" of the first row should equal "1"
 
+  Scenario: Account profile lookup excludes token-account transaction feeds
+    Given a token sender transaction exists for public key "B62qAlice" on target ledger "ledger-token-sent"
+    When I run query "account-profile-overview" with:
+      | key | value |
+      | public_key     | "B62qAlice" |
+      | activity_limit | 5           |
+      | sent_limit     | 10          |
+      | received_limit | 10          |
+      | bridge_limit   | 3           |
+    Then the result should contain one row
+    And field "token_id" of the first row should equal "1"
+    And graph field "recent_sent_transactions" should not include target ledger "ledger-token-sent"
+
   Scenario: Exact identifier search returns the native token account
     Given an earlier token account exists for public key "B62qAlice"
     When I run query "search-exact-identifiers" with:

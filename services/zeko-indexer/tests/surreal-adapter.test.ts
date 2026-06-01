@@ -187,6 +187,77 @@ describeFeature(feature, ({ Scenario }) => {
     );
   });
 
+  Scenario(
+    "Full projection keeps token-specific transaction account references",
+    ({ Given, When, Then }) => {
+      Given(
+        "the in-memory projection has a token transaction with native and token account rows",
+        () => {
+          reset();
+          store.accounts.set("B62qTokenSender:1", {
+            id: "account-native-sender",
+            public_key: "B62qTokenSender",
+            token_id: "1",
+            balance: "100",
+            nonce: 1,
+          });
+          store.accounts.set("B62qTokenSender:2", {
+            id: "account-token-sender",
+            public_key: "B62qTokenSender",
+            token_id: "2",
+            balance: "50",
+            nonce: 1,
+          });
+          store.transactions.set("tx-token:ledger-token", {
+            id: "tx-token",
+            hash: "tx-token",
+            sequence_number: 2,
+            type: "payment",
+            status: "applied",
+            sender_public_key: "B62qTokenSender",
+            block_height: 11,
+            tx_index: 0,
+            sort_block_height: -11,
+            sort_tx_index: 0,
+            timestamp: "2026-05-13T00:00:00.000Z",
+            source_ledger_hash: "ledger-0",
+            target_ledger_hash: "ledger-token",
+          });
+          store.accountActivities.set("activity-token-sender", {
+            id: "activity-token-sender",
+            account: "account-token-sender",
+            account_public_key: "B62qTokenSender",
+            transaction: "tx-token",
+            role: "sender",
+            block_height: 11,
+            tx_index: 0,
+            activity_index: 0,
+            sort_block_height: -11,
+            sort_tx_index: 0,
+            sort_activity_index: 0,
+            timestamp: "2026-05-13T00:00:00.000Z",
+            target_ledger_hash: "ledger-token",
+          });
+        },
+      );
+
+      When("the full indexer projection is flushed once", async () => {
+        await writeIndexerProjectionToSurreal(client, store);
+      });
+
+      Then(
+        "the SurrealDB SurrealQL writes the token transaction with the token account reference",
+        () => {
+          const surql = statements.join("\n");
+          expect(surql).toContain(`"sender": account:${encodedRecordId("account-token-sender")}`);
+          expect(surql).not.toContain(
+            `"sender": account:${encodedRecordId("account-native-sender")}`,
+          );
+        },
+      );
+    },
+  );
+
   Scenario("Inner actions retain their source transaction record", ({ Given, When, Then }) => {
     Given(
       "the in-memory projection has an inner action from transaction {string}",
