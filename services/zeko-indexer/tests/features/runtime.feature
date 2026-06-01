@@ -36,8 +36,10 @@ Feature: Indexer runtime process
   Scenario: Runtime config honors deployment environment variables
     When the runtime config is resolved from the deployment environment
     Then the runtime uses NATS server "nats://nats:4222"
+    And the runtime uses durable name "deployment-indexer"
     And the runtime uses Surreal endpoint "http://surrealdb:8000"
     And the runtime uses Surreal database "explorer"
+    And the runtime configures bridge inner action public key "B62qBridgeInner"
 
   Scenario: Runtime stop cancels an idle source
     Given an idle runtime envelope source
@@ -60,3 +62,8 @@ Feature: Indexer runtime process
     Given two finite runtime envelope sources with bridge deposits
     When the runtime processes them through a delayed projection writer
     Then projection flushes do not overlap
+
+  Scenario: Runtime closes its projection client after sources finish
+    Given a finite runtime envelope source with ordinary L2 transaction "tx-runtime-close"
+    When the runtime processes the source with a closeable SurrealDB projection client
+    Then the runtime closes the SurrealDB projection client

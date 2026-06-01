@@ -28,6 +28,7 @@ describeFeature(feature, ({ Scenario }) => {
   let runtimeError: unknown;
   let projectionEvents: string[];
   let configError: unknown;
+  let surrealClientClosed: boolean;
   let directDaEvent: ZekoMultisigDaSignatureEvent;
   let malformedDaEvent: ZekoMultisigDaSignatureEvent;
 
@@ -203,14 +204,20 @@ describeFeature(feature, ({ Scenario }) => {
     When("the runtime config is resolved from the deployment environment", () => {
       config = resolveIndexerRuntimeConfig({
         NATS_URL: "nats://nats:4222",
+        ZEKO_INDEXER_NATS_DURABLE_NAME: "deployment-indexer",
         SURREAL_URL: "http://surrealdb:8000",
         SURREAL_NAMESPACE: "zeko",
         SURREAL_DATABASE: "explorer",
+        ZEKO_INDEXER_BRIDGE_INNER_ACTION_PUBLIC_KEYS: "B62qBridgeInner",
       });
     });
 
     Then("the runtime uses NATS server {string}", (_context, server: string) => {
       expect(config.natsServers).toEqual([server]);
+    });
+
+    And("the runtime uses durable name {string}", (_context, durableName: string) => {
+      expect(config.natsDurableName).toBe(durableName);
     });
 
     And("the runtime uses Surreal endpoint {string}", (_context, endpoint: string) => {
@@ -220,6 +227,13 @@ describeFeature(feature, ({ Scenario }) => {
     And("the runtime uses Surreal database {string}", (_context, database: string) => {
       expect(config.surreal.database).toBe(database);
     });
+
+    And(
+      "the runtime configures bridge inner action public key {string}",
+      (_context, publicKey: string) => {
+        expect(config.indexer?.bridge?.innerActionPublicKeys?.has(publicKey)).toBe(true);
+      },
+    );
   });
 
   Scenario("Runtime stop cancels an idle source", ({ Given, When, Then }) => {
@@ -340,6 +354,36 @@ describeFeature(feature, ({ Scenario }) => {
 
     Then("projection flushes do not overlap", () => {
       expect(projectionEvents).toEqual(["start-1", "finish-1", "start-2", "finish-2"]);
+    });
+  });
+
+  Scenario("Runtime closes its projection client after sources finish", ({ Given, When, Then }) => {
+    Given(
+      "a finite runtime envelope source with ordinary L2 transaction {string}",
+      (_context, txHash: string) => {
+        source = finiteSource([ordinaryL2Transaction(txHash)]);
+      },
+    );
+
+    When(
+      "the runtime processes the source with a closeable SurrealDB projection client",
+      async () => {
+        surrealClientClosed = false;
+        const runtime = createIndexerRuntime(resolveIndexerRuntimeConfig(), {
+          envelopeSources: [source],
+          surrealClient: {
+            async query(): Promise<void> {},
+            async close(): Promise<void> {
+              surrealClientClosed = true;
+            },
+          },
+        });
+        await runtime.done;
+      },
+    );
+
+    Then("the runtime closes the SurrealDB projection client", () => {
+      expect(surrealClientClosed).toBe(true);
     });
   });
 });

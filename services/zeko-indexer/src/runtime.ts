@@ -67,7 +67,8 @@ export function resolveIndexerRuntimeConfig(
 
   return {
     natsServers: splitCsv(env.ZEKO_INDEXER_NATS_SERVERS ?? env.NATS_URL ?? "nats://127.0.0.1:4222"),
-    natsDurableName: env.ZEKO_INDEXER_NATS_DURABLE ?? "zeko-indexer",
+    natsDurableName:
+      env.ZEKO_INDEXER_NATS_DURABLE_NAME ?? env.ZEKO_INDEXER_NATS_DURABLE ?? "zeko-indexer",
     natsNextExpiresMs: positiveInteger(env.ZEKO_INDEXER_NATS_NEXT_EXPIRES_MS, 1_000),
     natsBatchSize: positiveInteger(env.ZEKO_INDEXER_NATS_BATCH_SIZE, 1),
     natsMaxInFlight: positiveInteger(
@@ -90,7 +91,13 @@ export function resolveIndexerRuntimeConfig(
         verifySignature: verifyZekoMultisigDaSignature,
       },
       bridge: {
-        innerActionPublicKeys: new Set(splitCsv(env.ZEKO_INDEXER_BRIDGE_INNER_PUBLIC_KEYS ?? "")),
+        innerActionPublicKeys: new Set(
+          splitCsv(
+            env.ZEKO_INDEXER_BRIDGE_INNER_ACTION_PUBLIC_KEYS ??
+              env.ZEKO_INDEXER_BRIDGE_INNER_PUBLIC_KEYS ??
+              "",
+          ),
+        ),
         withdrawalDelaySlots: positiveInteger(env.ZEKO_INDEXER_BRIDGE_WITHDRAWAL_DELAY_SLOTS, 100),
       },
     },
@@ -133,7 +140,13 @@ export function createIndexerRuntime(
 
   return {
     store,
-    done: runRuntimeSources(envelopeSources, indexer, store, writeProjection, abortController),
+    done: runRuntimeSources(
+      envelopeSources,
+      indexer,
+      store,
+      writeProjection,
+      abortController,
+    ).finally(() => surrealClient.close?.()),
     stop() {
       abortController.abort();
     },
