@@ -5,9 +5,9 @@
 -- EXPLAIN END
 LET $latest_tx = (SELECT block_height, timestamp, sort_block_height, sort_tx_index FROM transaction ORDER BY sort_block_height ASC, sort_tx_index ASC LIMIT 1)[0];
 LET $latest_batch = (SELECT batch_height, sort_batch_height FROM batch ORDER BY sort_batch_height ASC LIMIT 1)[0];
-LET $transaction_count = (SELECT VALUE count() FROM transaction GROUP ALL)[0];
-LET $account_count = (SELECT VALUE count() FROM account GROUP ALL)[0];
-LET $bridge_operation_count = (SELECT VALUE count() FROM bridge_operation GROUP ALL)[0];
+LET $transaction_count = (SELECT count() AS count FROM transaction GROUP ALL)[0].count;
+LET $account_count = (SELECT count() AS count FROM account GROUP ALL)[0].count;
+LET $bridge_operation_count = (SELECT count() AS count FROM bridge_operation GROUP ALL)[0].count;
 LET $tx_1m = array::len(SELECT VALUE id FROM transaction WHERE timestamp >= time::now() - 1m);
 LET $tx_5m = array::len(SELECT VALUE id FROM transaction WHERE timestamp >= time::now() - 5m);
 

@@ -54,6 +54,19 @@ tasks:
     inputs:
       - "@group(prd)"
 
+  check-database-images:
+    command: "node"
+    args: ["scripts/check-database-images.ts"]
+    deps:
+      - "root:typecheck"
+    inputs:
+      - "moon.yml"
+      - ".github/workflows/ci.yaml"
+      - "scripts/check-database-images.ts"
+      - "services/database/database-images.json"
+    options:
+      cache: false
+
   actionlint:
     command: "actionlint"
     toolchains: ["system"]
