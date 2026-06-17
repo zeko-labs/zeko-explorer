@@ -493,8 +493,9 @@ footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 1
 <p>Withdrawal finalization:</p>
 <ul>
 <li>Source: L1 transaction that emits outer witness action on <code>OUTER_PK</code> and finalize-withdrawal event fields.</li>
-<li>Decode recipient and amount from finalize event.</li>
-<li>Verify <code>withdrawalAux(amount, recipient) === witness.action[1]</code>.</li>
+<li>Decode <code>(withdrawal_index, withdrawal_params)</code> from the finalize event.</li>
+<li>Verify full-params <code>withdrawalAux(withdrawal_params) === witness.action[1]</code>.</li>
+<li>Publish <code>withdrawalIndex</code>; this is the withdrawal identity. Aux is only a checksum.</li>
 <li><code>userPk</code>: signed finalizer account update if present, otherwise fee payer with <code>userPkSource: &quot;fee_payer&quot;</code>.</li>
 </ul>
 <p>Cancel deposit:</p>
@@ -591,7 +592,7 @@ footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 1
 <li>Mina daemon GraphQL schema: <code>bestChain</code>, <code>block</code>, <code>newBlock</code>, <code>chainReorganization</code>, <code>account</code>, <code>ZkappCommand.accountUpdates</code>, and <code>AccountUpdateBody.actions/events/appState/preconditions</code>.</li>
 <li>Archive-Node-API schema: <code>actions</code>, <code>events</code>, <code>networkState</code>, block range cap, action-state filters, and <code>blocks</code> output limitations.</li>
 <li><a href="../../PRD.html">PRD.html</a> L1 Watcher, bridge, rollback, finality, and deployment structure sections.</li>
-<li><code>spikes/002-bridge-correlation/results.md</code> for <code>aux</code>, user key, cancel observability, and bridge lifecycle constraints.</li>
+<li><code>spikes/002-bridge-correlation/results.html</code> for <code>aux</code>, user key, cancel observability, and bridge lifecycle constraints.</li>
 <li><code>spikes/003-zkapp-state-display/results.md</code> for Mina action/event/state field behavior.</li>
 </ul></article>
     </section>

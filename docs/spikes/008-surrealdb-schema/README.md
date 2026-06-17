@@ -10,7 +10,7 @@
 
 Earlier spikes have settled individual pieces of the data layer in isolation:
 
-- Spike 002 (bridge correlation) defines the `bridge_operation` table — composite `(aux, aux_sequence)` correlation, FIFO disambiguation, status lifecycle, indexes for the `(sender|recipient)` pubkey filter.
+- Spike 002 (bridge correlation) defines the `bridge_operation` table — deposit `(aux, aux_sequence)` FIFO disambiguation, withdrawal `withdrawal_index` correlation per the Spike 002 addendum, status lifecycle, indexes for the `(sender|recipient)` pubkey filter.
 - Spike 005 (Relay pagination) commits us to **ULID** primary keys on every indexed row, exposed as `Node.id` for Relay Connections, and to keyset pagination over indexed sort columns.
 - Spikes 001 / 006 / 007 produce the upstream events (sequencer connector, L1 watcher, DA monitor) that the indexer projects into rows.
 
@@ -103,6 +103,7 @@ All persistent state in the explorer's own database. **In scope**:
 ## References
 
 - Spike 002 results — `bridge_operation` table, indexes, correlation key.
+- Spike 002 withdrawal-index addendum — withdrawal identity is `withdrawal_index`; `aux` is only a checksum for withdrawals.
 - Spike 005 results — Relay Connection schema, ULID primary keys, keyset pagination strategy.
 - Spike 001 results — sequencer connector boundary, what events the indexer must consume.
 - PRD Section 5.2 (Indexer) and Section 6 (GraphQL API).

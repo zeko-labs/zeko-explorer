@@ -101,11 +101,11 @@ footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 1
   <main class="page">
     <section class="hero">
       <div>
-        <div class="eyebrow">spikes/002-bridge-correlation/results.md</div>
+        <div class="eyebrow">spikes/002-bridge-correlation/results.html</div>
         <h1>Spike 002: Bridge Operation L1 ↔ L2 Correlation — Results</h1>
-        <p class="subtitle">Converted from Markdown to a human-readable HTML report with improved navigation, table layout, and code readability.</p>
+        <p class="subtitle">Canonical spike report with improved navigation, table layout, and code readability.</p>
         <div class="meta"><span class="pill"><strong>Status</strong>Complete</span><span class="pill"><strong>Date</strong>2026-04-08</span><span class="pill"><strong>Lines</strong>705</span><span class="pill"><strong>Sections</strong>39</span><span class="pill"><strong>Tables</strong>8</span><span class="pill"><strong>Code blocks</strong>12</span></div>
-        <nav class="quick-nav"><a href="./README.md">README</a><a href="./results.html">Results</a></nav>
+        <nav class="quick-nav"><a href="./README.md">README</a><a href="./results.html">Results</a><a href="./addendums/withdrawal-index-correlation.html">Withdrawal Index Addendum</a></nav>
       </div>
       <div class="map"><svg viewBox="0 0 560 260" role="img" aria-label="Document structure summary">
   <rect width="560" height="260" rx="18" fill="#081425"/>
@@ -341,7 +341,7 @@ footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 1
 </ol>
 <h3 id="aux-is-not-unique-collision-handling" tabindex="-1"><a class="header-anchor" href="#aux-is-not-unique-collision-handling"><code>aux</code> is NOT unique — collision handling</a></h3>
 <p><strong>Deposit aux</strong> is deterministic from <code>(holderAccountL1, amount, recipient, timeout)</code>. Two identical deposits from the same holder produce the same aux.</p>
-<p><strong>Withdrawal aux</strong> is deterministic from <code>(amount, recipient)</code>. Even fewer inputs — repeated withdrawals of the same amount to the same recipient always collide.</p>
+<p><strong>Withdrawal aux</strong> is deterministic from withdrawal parameters and can collide for repeated identical withdrawals. It is a checksum/search field, not a sufficient finalization identity.</p>
 <p>The on-chain protocol disambiguates via sequential counters stored in the helper account's zkApp state:</p>
 <ul>
 <li><strong><code>prevNextDeposit</code></strong> — <code>helperAccount.zkappState[0]</code> on L2, tracks consumed deposit index (<code>zeko-bridge-sdk/src/index.ts:421-445</code>).</li>
@@ -349,7 +349,7 @@ footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 1
 <li><strong><code>prevNextCancelledDeposit</code></strong> — <code>helperAccountL1.zkappState[0]</code> on L1, tracks cancelled deposit index (<code>zeko-bridge-sdk/src/utils.ts:417-420</code>).</li>
 </ul>
 <p>Matching is done in FIFO order: the counters establish which operations have been consumed, and the next matching aux in sequence is the correct one.</p>
-<p><strong>Implication for the new indexer:</strong> Use <code>(aux, aux_sequence)</code> as the composite unique key for <code>bridge_operation</code>. When creating a bridge operation, assign <code>aux_sequence = count of existing records with the same aux</code>. When the second side arrives, match to the lowest <code>aux_sequence</code> record missing that side (FIFO). This mirrors the on-chain counter semantics.</p>
+<p><strong>Implication for the new indexer:</strong> Use <code>(aux, aux_sequence)</code> for deposit FIFO collision handling and generic bridge search/display. For withdrawals, use the contract-emitted <code>withdrawal_index</code> as the canonical finalization identity and treat <code>aux</code> only as a checksum. See <a href="./addendums/withdrawal-index-correlation.html">the withdrawal-index addendum</a>.</p>
 <hr>
 <h2 id="3-user-public-key-extraction" tabindex="-1"><a class="header-anchor" href="#3-user-public-key-extraction">3. User Public Key Extraction</a></h2>
 <p>The indexer watches zkApp contract PKs (<code>OUTER_PK</code>, <code>INNER_PK</code>), not individual user PKs. But <code>bridge_operation</code> records need <code>sender</code>/<code>recipient</code> for per-user queries. There are two data sources:</p>
@@ -368,7 +368,7 @@ transferrer.body.actions = Actions.pushAction(transferrer.body.actions, [
 </code></pre>
 <p>The L1 Watcher can observe these user-level actions and extract: the user's PK (the signer), the amount, timeout, holder account, and the target Zeko zkApp. It can then compute <code>depositAux()</code> from these fields, establishing the correlation key.</p>
 <p>For withdrawals, the user's <code>submitWithdrawal</code> emits actions on the user's own PK with <code>[recipient1, recipient2, amount]</code> (<code>zeko-bridge-sdk/src/index.ts:560-563</code>). The L1 Watcher can observe the finalization transaction on L1 which includes withdrawal params and the user's PK.</p>
-<p>The exact schema for <code>zeko.l1.bridge-events</code> messages is undefined — it depends on spike 006 (L1 Watcher). But the available data is deterministic: the L1 Watcher can extract user PKs, amounts, and compute aux from on-chain data. The bridge event message should include at minimum: <code>{ userPk, type (&quot;deposit&quot;|&quot;withdrawal&quot;), aux, amount, recipient, blockHeight, txHash }</code>.</p>
+<p>The exact schema for <code>zeko.l1.bridge-events</code> messages is defined by spike 006 (L1 Watcher). The available data is deterministic: the L1 Watcher can extract user PKs, amounts, compute aux from on-chain data, and decode withdrawal finalization events. The bridge event message should include at minimum: <code>{ userPk, type (&quot;deposit&quot;|&quot;withdrawal&quot;), aux, amount, recipient, blockHeight, txHash }</code>; withdrawal finalization events must additionally include the contract-emitted <code>withdrawalIndex</code>.</p>
 <h3 id="source-2-inner-action-fields-supplementary" tabindex="-1"><a class="header-anchor" href="#source-2-inner-action-fields-supplementary">Source 2: Inner action fields (supplementary)</a></h3>
 <p>Inner actions on L2 carry fields that encode bridge parameters. For deposits: <code>inner_actions.fields</code> contains the deposit params from which <code>recipient</code> can be parsed. For withdrawals: fields contain <code>[recipient1, recipient2, amount]</code>. This provides a backup path if <code>zeko.l1.bridge-events</code> data is delayed.</p>
 <h3 id="data-flow" tabindex="-1"><a class="header-anchor" href="#data-flow">Data flow</a></h3>
@@ -496,11 +496,11 @@ Zeko Indexer:
                                     │ ROLLED_BACK │
                                     └─────────────┘
 </code></pre>
-<p><strong><code>SUBMITTED</code></strong> — The user submits a withdrawal on L2. The L2 transaction is indexed from <code>zeko.l2.transactions</code>, and the inner action on <code>INNER_PK</code> with <code>aux</code> is extracted. At this point the indexer creates the <code>bridge_operation</code> with <code>sender</code>/<code>recipient</code> parsed from the inner action fields (<code>[recipient1, recipient2, amount]</code>), computes <code>withdrawalAux()</code>, and records the L2 tx hash. For withdrawals, <code>SUBMITTED</code> and <code>L2_WITNESSED</code> happen in the same message since the user's L2 submission IS the inner action.</p>
+<p><strong><code>SUBMITTED</code></strong> — The user submits a withdrawal on L2. The L2 transaction is indexed from <code>zeko.l2.transactions</code>, and the inner action on <code>INNER_PK</code> with <code>aux</code> is extracted. At this point the indexer creates the <code>bridge_operation</code> with <code>sender</code>/<code>recipient</code> parsed from the inner action fields, computes <code>withdrawalAux()</code>, records the L2 tx hash, and stores <code>withdrawal_index = inner_action.action_index</code>. For withdrawals, <code>SUBMITTED</code> and <code>L2_WITNESSED</code> happen in the same message since the user's L2 submission IS the inner action.</p>
 <p><strong><code>L2_WITNESSED</code></strong> — Same event as <code>SUBMITTED</code> for withdrawals. The inner action with this withdrawal's <code>aux</code> on <code>INNER_PK</code> is the canonical evidence. Separate from <code>SUBMITTED</code> conceptually because for deposits, the submission (user's L1 tx) and the witness (outer action on OUTER_PK) are distinct events.</p>
 <p><strong><code>COMMITTED</code></strong> — An L1 commit action's <code>innerActionState</code> covers this withdrawal's inner action (see association algorithm below). The withdrawal is now part of a settled batch.</p>
 <p><strong><code>DELAY_PASSED</code></strong> — The on-chain withdrawal delay has elapsed: <code>current_l1_slot &gt; commit.slotRangeUpper + withdrawal_delay</code>. Detected when processing new slot information from <code>zeko.l1.outer-actions</code> or <code>zeko.l1.settlements</code>. The finalize withdrawal contract enforces this via a <code>valid_while</code> precondition with <code>lower = slot + withdrawal_delay</code> (<code>rule_bridge_finalize_withdrawal.ml:197-200</code>). The withdrawal delay value is a known constant.</p>
-<p><strong><code>COMPLETED</code></strong> — An outer witness with matching <code>aux</code> appears on <code>OUTER_PK</code> via <code>zeko.l1.outer-actions</code>. This means the user has finalized the withdrawal on L1 (called <code>finalizeWithdrawal</code>, which triggers <code>rule_action_witness</code> to emit the witness action). The <code>rule_bridge_finalize_withdrawal.ml</code> also emits events <code>(withdrawal_index, withdrawal_params)</code> on the main account update (line 256), providing additional verification data.</p>
+<p><strong><code>COMPLETED</code></strong> — An outer witness with matching checksum <code>aux</code> appears on <code>OUTER_PK</code> via <code>zeko.l1.outer-actions</code>, and the L1 finalize-withdrawal event emits <code>(withdrawal_index, withdrawal_params)</code>. The indexer completes the withdrawal by looking up <code>withdrawal_index</code>, then cross-checking decoded params and witness aux. It must not complete withdrawals by aux alone.</p>
 <p><strong><code>ROLLED_BACK</code></strong> — Same two paths as deposits: L1 fork via <code>zeko.l1.rollbacks</code>, or L2 hash chain break for inner actions.</p>
 <h3 id="commit-to-bridge-operation-association-algorithm" tabindex="-1"><a class="header-anchor" href="#commit-to-bridge-operation-association-algorithm">Commit-to-bridge-operation association algorithm</a></h3>
 <p>When a commit action is indexed from <code>zeko.l1.outer-actions</code>, the indexer must determine which bridge operations it covers:</p>
@@ -508,7 +508,7 @@ Zeko Indexer:
 <li>Read the commit's <code>innerActionState</code> and <code>innerActionStateLength</code> from its fields (<code>outer.ts:54-62</code>).</li>
 <li>Query <code>inner_action</code> records: walk backward from <code>innerActionState</code> through the <code>before_state</code>/<code>after_state</code> chain for <code>innerActionStateLength</code> steps. This yields the set of inner actions included in this commit.</li>
 <li>Collect all <code>aux</code> values from these inner actions.</li>
-<li>Match each <code>aux</code> to its <code>bridge_operation</code> via <code>(aux, aux_sequence)</code> lookup (FIFO order).</li>
+<li>For deposits, match each <code>aux</code> to its <code>bridge_operation</code> via <code>(aux, aux_sequence)</code> lookup (FIFO order). For withdrawals, match finalization by <code>withdrawal_index</code> and use aux only as a checksum.</li>
 <li>Update matched bridge_operations: set <code>commit_action_state</code>, transition status to <code>COMMITTED</code>.</li>
 <li>Create the <code>l1_action_link</code> graph edge from the <code>outer_action</code> (commit) to each affected <code>bridge_operation</code>.</li>
 </ol>
@@ -647,7 +647,9 @@ Zeko Indexer:
 │                                                                      │
 │  Queries:                                                            │
 │  - bridgeOperations(publicKey, type?, status?)                       │
-│  - bridgeOperation(aux, auxSequence)                                 │
+│  - bridgeOperation(id)                                                │
+│  - depositBridgeOperation(aux, auxSequence)                           │
+│  - withdrawalBridgeOperation(sourceNetwork, bridgeInstance, index)    │
 │  - outerActions, innerActions (for low-level action chain queries)   │
 └─────────────────────────────────────────────────────────────────────┘
 </code></pre>
@@ -656,7 +658,7 @@ Zeko Indexer:
 <p>The indexer handles this with a <strong>first-side-wins</strong> strategy:</p>
 <ol>
 <li>Whichever NATS message references a bridge operation first creates the <code>bridge_operation</code> record.</li>
-<li>Subsequent messages for the same operation (matched by aux + FIFO sequence) update the existing record.</li>
+<li>Subsequent messages for the same operation update the existing record. Deposits match by <code>(aux, aux_sequence)</code>; withdrawals match by <code>(source_network, bridge_instance, withdrawal_index)</code> and use aux only as a checksum.</li>
 <li>Status is recalculated after every update based on which fields are populated.</li>
 </ol>
 <p>For example: a deposit might be created by <code>zeko.l1.bridge-events</code> (with user PK and amount), then updated by <code>zeko.l1.outer-actions</code> (adding L1 witness data), then updated by <code>zeko.l2.transactions</code> (adding L2 completion data).</p>
@@ -736,7 +738,7 @@ DEFINE INDEX idx_ia_aux           ON inner_action FIELDS aux;
 DEFINE INDEX idx_ia_canonical     ON inner_action FIELDS marked_as_canonical_at;
 DEFINE INDEX idx_ia_block_height  ON inner_action FIELDS block_height;
 </code></pre>
-<p><strong><code>bridge_operation</code></strong> — new. Record ID: <code>bridge_operation:⟨{aux}_{aux_sequence}⟩</code>.</p>
+<p><strong><code>bridge_operation</code></strong> — new. Record ID: stable indexer-assigned SurrealDB record ID. Natural blockchain identifiers remain secondary indexes: deposits use <code>(aux, aux_sequence)</code>; withdrawals use <code>(source_network, bridge_instance, withdrawal_index)</code>.</p>
 <pre><code class="language-surql">DEFINE TABLE bridge_operation SCHEMAFULL;
 
 -- Identity
@@ -749,8 +751,12 @@ DEFINE FIELD status            ON bridge_operation TYPE string
   ];
 
 -- Correlation key
+DEFINE FIELD source_network    ON bridge_operation TYPE string;
+DEFINE FIELD bridge_instance   ON bridge_operation TYPE string;
 DEFINE FIELD aux               ON bridge_operation TYPE string;
 DEFINE FIELD aux_sequence      ON bridge_operation TYPE int DEFAULT 0;
+DEFINE FIELD withdrawal_index  ON bridge_operation TYPE option&lt;int&gt;;
+DEFINE FIELD withdrawal_params_hash ON bridge_operation TYPE option&lt;string&gt;;
 
 -- User-facing fields
 DEFINE FIELD sender            ON bridge_operation TYPE string;
@@ -795,6 +801,7 @@ DEFINE INDEX idx_bo_sender     ON bridge_operation FIELDS sender;
 DEFINE INDEX idx_bo_recipient  ON bridge_operation FIELDS recipient;
 DEFINE INDEX idx_bo_aux        ON bridge_operation FIELDS aux;
 DEFINE INDEX idx_bo_aux_unique ON bridge_operation FIELDS aux, aux_sequence UNIQUE;
+DEFINE INDEX idx_bo_withdrawal_index ON bridge_operation FIELDS source_network, bridge_instance, type, withdrawal_index;
 DEFINE INDEX idx_bo_status     ON bridge_operation FIELDS status;
 DEFINE INDEX idx_bo_type_status ON bridge_operation FIELDS type, status;
 DEFINE INDEX idx_bo_sender_type ON bridge_operation FIELDS sender, type;
@@ -906,8 +913,16 @@ type BridgeOperationConnection {
     after: String
   ): BridgeOperationConnection!
 
-  # Single operation detail with linked actions
-  bridgeOperation(aux: String!, auxSequence: Int!): BridgeOperation
+  # Single operation detail by stable Relay Node.id / SurrealDB record ID
+  bridgeOperation(id: ID!): BridgeOperation
+
+  # Natural-key lookups. Aux lookup is deposit-only; withdrawals use index.
+  depositBridgeOperation(aux: String!, auxSequence: Int!): BridgeOperation
+  withdrawalBridgeOperation(
+    sourceNetwork: String!
+    bridgeInstance: String!
+    withdrawalIndex: Int!
+  ): BridgeOperation
 
   # Low-level action chain queries (for indexer/debugging)
   outerActions(afterState: String, limit: Int): [OuterAction!]!
@@ -984,12 +999,12 @@ type Subscription {
 </tr>
 </tbody>
 </table>
-<p>The <code>zeko.l1.bridge-events</code> schema is the most significant dependency. This spike has established WHAT data must be in those messages (user PK, operation type, aux, amount, recipient, timeout for deposits, block height, tx hash) and WHY (to populate bridge_operation sender/recipient without archive scans). Spike 006 must design HOW the L1 Watcher extracts this data from L1 chain observation.</p>
+<p>The <code>zeko.l1.bridge-events</code> schema is the most significant dependency. This spike has established WHAT data must be in those messages (user PK, operation type, aux, amount, recipient, timeout for deposits, withdrawal index for withdrawal finalizations, block height, tx hash) and WHY (to populate bridge_operation sender/recipient without archive scans and to avoid aux-only withdrawal false positives). Spike 006 must design HOW the L1 Watcher extracts this data from L1 chain observation.</p>
 
         </article>
       </div>
     </section>
-    <footer>Converted from spikes/002-bridge-correlation/results.md</footer>
+    <footer>Spike 002 · Bridge Correlation · Results</footer>
   </main>
   <script>
     document.querySelectorAll('article table').forEach((table) => {

@@ -214,14 +214,14 @@ The L1 Watcher is the TypeScript component that reads the network's L1 settlemen
 - `zeko.l1.settlements` — settlement detections and finality updates.
 - `zeko.l1.rollbacks` — L1 block orphan/reorg facts that reference affected published fact IDs.
 - `zeko.l1.outer-actions` — Zeko-M Commit/Witness actions from `OUTER_PK`. Zeko-E emits settlement and bridge facts through the shared settlement/bridge subjects unless its adapter defines an equivalent outer-action domain fact.
-- `zeko.l1.bridge-events` — bridge operation facts with user keys, amounts, correlation keys, and transaction/block identity.
+- `zeko.l1.bridge-events` — bridge operation facts with user keys, amounts, deposit correlation keys, withdrawal indexes, and transaction/block identity.
 - `zeko.health` — watcher freshness, lag, dependency status, and machine-readable limitations.
 
 
 **Zeko-M / Mina bridge detection:**
 
 - **Deposit submissions:** The user's `submitDeposit` creates a signed `AccountUpdate` on the user's own public key. That account update emits actions containing recipient, amount, timeout, holder account, and outer PK. The Mina adapter extracts the signer public key and deposit params, then computes `depositAux()` as the correlation key.
-- **Withdrawal finalizations:** `finalizeWithdrawal` emits an outer witness action on `OUTER_PK` and finalize-withdrawal event fields. The Mina adapter verifies the witness `aux` against the decoded withdrawal params and extracts the finalizer user key when available.
+- **Withdrawal finalizations:** `finalizeWithdrawal` emits an outer witness action on `OUTER_PK` and finalize-withdrawal event fields containing `(withdrawal_index, withdrawal_params)`. The Mina adapter publishes `withdrawalIndex`, verifies the witness `aux` against the decoded withdrawal params, and extracts the finalizer user key when available. Aux is a checksum for withdrawals, not the identity.
 - **Deposit cancellations:** Cancellation advances `helperAccountL1.zkappState[0]`. The Mina adapter detects cancel transactions by scanning account updates/preconditions and uses the helper counter as a consistency check.
 
 
@@ -288,13 +288,13 @@ A single unified indexer consuming all NATS streams. Normalizes raw data and wri
 - `zeko.da.signatures` → optional direct DA signature aggregation, signer detail, and faster `batch.da_status` updates.
 - `zeko.l1.outer-actions` → `outer_action` (Commits, Witnesses). Queryable by state range.
 - `zeko.l2.transactions` → extract inner actions → `inner_action`. Queryable by state range.
-- `zeko.l1.bridge-events` → `bridge_operation` with user PK, amount, aux, type. Graph edges (`l1_action_link`, `l2_action_link`) to outer/inner actions.
+- `zeko.l1.bridge-events` → `bridge_operation` with user PK, amount, aux, type, and withdrawal index where applicable. Graph edges (`l1_action_link`, `l2_action_link`) to outer/inner actions.
 - Maintains `sync_status`. Network status aggregates are derived from canonical
 SurrealDB tables using count indexes and bounded time-window queries; the
 indexer does not maintain a `network_stats` table.
 
 
-**Bridge operation indexing:** The indexer correlates L1 and L2 bridge events into unified `bridge_operation` records indexed by user public key. See Section 5.3 for correlation mechanics, lifecycles, and algorithms. See [Spike 002 results](./spikes/002-bridge-correlation/results.html) for the full spike investigation and the [Spike 002 acceptance test scenarios](./spikes/002-bridge-correlation/test-scenarios/) for acceptance tests.
+**Bridge operation indexing:** The indexer correlates L1 and L2 bridge events into unified `bridge_operation` records indexed by user public key. Deposits use aux plus FIFO collision handling; withdrawals use the contract-emitted `withdrawal_index` as identity and aux as a checksum. See Section 5.3 for correlation mechanics, lifecycles, and algorithms. See [Spike 002 results](./spikes/002-bridge-correlation/results.html) and the [withdrawal-index addendum](./spikes/002-bridge-correlation/addendums/withdrawal-index-correlation.html) for the full bridge correlation investigation and the [Spike 002 acceptance test scenarios](./spikes/002-bridge-correlation/test-scenarios/) for acceptance tests.
 
 **Partial L1 bridge data:** The indexer records bridge operations from whichever side arrives first and attaches data-quality metadata to L1-backed fields. Missing `zeko.l1.bridge-events` data can make sender, amount, cancellation, or historical detail unknown, but it does not hide unrelated transactions, batches, account activity, or bridge records inferred from other evidence. APIs expose `syncing`, `degraded`, `unavailable`, and `unrecoverable_gap` states so the frontend can render partial records accurately.
 
@@ -315,7 +315,7 @@ The indexer maintains a `ledger_hash → NATS sequence number` mapping (in-memor
 
 Graph relations, record links, full-text search, live queries, schemafull mode. **Rebuildable read model** — NATS JetStream is the source of truth.
 
-**Record IDs and keys:** public GraphQL identity uses stable SurrealDB record IDs encoded into Relay `Node.id` values. Natural blockchain identifiers remain unique secondary indexes, for example transaction hash, account public key, action state, and bridge `(aux, aux_sequence)`. Paginated queries use explicit indexed sort tuples rather than relying on natural identifiers as ordering keys. Rationale and full schema strategy: [Spike 005 results](./spikes/005-relay-pagination/results.html) and [Spike 008 results](./spikes/008-surrealdb-schema/results.html).
+**Record IDs and keys:** public GraphQL identity uses stable SurrealDB record IDs encoded into Relay `Node.id` values. Natural blockchain identifiers remain unique secondary indexes, for example transaction hash, account public key, action state, deposit bridge `(aux, aux_sequence)`, and withdrawal `withdrawal_index`. Paginated queries use explicit indexed sort tuples rather than relying on natural identifiers as ordering keys. Rationale and full schema strategy: [Spike 005 results](./spikes/005-relay-pagination/results.html) and [Spike 008 results](./spikes/008-surrealdb-schema/results.html).
 
 Schema sync, rollout migrations, seeding, and declarative database tests are managed with [SurrealKit](https://github.com/surrealdb/surrealkit). NATS JetStream remains the explorer source of truth; SurrealDB is a rebuildable read model.
 
@@ -339,7 +339,7 @@ Schema sync, rollout migrations, seeding, and declarative database tests are man
 
 - `outer_action` — Record ID: `outer_action:⟨after_state⟩`. Flattened from the existing PostgreSQL `outer_actions` + `commit_actions` + `witness_actions` tables. Kind (commit/witness), before/after state, block height, txn hash, fields, slot range, timestamp. Commit-specific optional fields: `inner_action_state`, `inner_action_state_length`, `ledger`, `synchronized_outer_action_state`. Witness-specific optional field: `aux`. Indexed on `after_state` (unique), `before_state`, `index` (unique), `aux`, `kind`, `block_height`.
 - `inner_action` — Record ID: `inner_action:⟨after_state⟩`. Before/after state, `aux`, block height, txn hash, fields, timestamp. Indexed on `after_state` (unique), `before_state`, `index` (unique), `aux`, `block_height`.
-- `bridge_operation` — Record ID: `bridge_operation:⟨{aux}_{aux_sequence}⟩`. Type (deposit/withdrawal), status (`submitted`, `l1_witnessed`, `l2_witnessed`, `committed`, `delay_passed`, `completed`, `timed_out`, `cancelled`, `rolled_back`), `aux` + `aux_sequence` (composite unique key for collision handling), `sender`, `recipient`, `amount`, submission details (`submit_tx_hash`, `submit_block_height`, `submit_timestamp`), deposit-specific (`timeout_slot`, `holder_account_l1`), L1 witness fields, L2 action fields, commit reference, cancel reference, timestamps, and `data_quality` metadata for partial or unrecoverable L1 bridge data. **Indexed by sender, recipient, and (sender, type) / (recipient, type) for per-user queries.**
+- `bridge_operation` — Stable SurrealDB record ID assigned by the indexer. Type (deposit/withdrawal), status (`submitted`, `l1_witnessed`, `l2_witnessed`, `committed`, `delay_passed`, `completed`, `timed_out`, `cancelled`, `rolled_back`), `aux` + `aux_sequence` for deposit FIFO collision handling and search, withdrawal-specific `withdrawal_index` plus params evidence, `sender`, `recipient`, `amount`, submission details (`submit_tx_hash`, `submit_block_height`, `submit_timestamp`), deposit-specific (`timeout_slot`, `holder_account_l1`), L1 witness fields, L2 action fields, commit reference, cancel reference, timestamps, and `data_quality` metadata for partial or unrecoverable L1 bridge data. **Indexed by sender, recipient, and (sender, type) / (recipient, type) for per-user queries; withdrawal completion uses `withdrawal_index`, never aux alone.**
 - `l1_action_link` — Graph relation: `outer_action → bridge_operation`. Role: "witness" or "commit". Created when outer actions are correlated to bridge operations.
 - `l2_action_link` — Graph relation: `bridge_operation → inner_action`. Role: "mint" or "burn". Created when inner actions are correlated to bridge operations.
 
@@ -414,9 +414,11 @@ See [Spike 002 results](./spikes/002-bridge-correlation/results.html) for the fu
 
 #### [5.3.1 Correlation Key](#531-correlation-key)
 
-L1 and L2 sides of a bridge operation are correlated via the `aux` field — a Poseidon hash of the bridge parameters. `depositAux()` hashes `(holderAccountL1, amount, recipient, timeout)`. `withdrawalAux()` hashes `(amount, recipient)`. The `aux` field appears as `action[1]` on both outer witness actions (L1, on `OUTER_PK`) and inner actions (L2, on `INNER_PK`).
+L1 and L2 sides of a deposit are correlated via the `aux` field — a Poseidon hash of the bridge parameters. `depositAux()` hashes `(holderAccountL1, amount, recipient, timeout)`. The `aux` field appears as `action[1]` on outer witness actions (L1, on `OUTER_PK`) and inner actions (L2, on `INNER_PK`).
 
-**`aux` is NOT unique.** Identical bridge operations produce the same `aux`. The indexer disambiguates via `(aux, aux_sequence)` as a composite unique key, mirroring the on-chain FIFO counter semantics (`prevNextDeposit`, `prevNextWithdrawal`, `prevNextCancelledDeposit` stored in helper account zkApp state). When a bridge operation is created, `aux_sequence = count of existing records with the same aux`. When the second side arrives, it matches to the lowest `aux_sequence` record missing that side (FIFO).
+**`aux` is NOT unique.** Identical deposits produce the same `aux`. The indexer disambiguates deposits via `(aux, aux_sequence)` as a composite collision key, mirroring on-chain FIFO counter semantics. When a deposit bridge operation is created, `aux_sequence = count of existing records with the same aux`. When the second side arrives, it matches to the lowest `aux_sequence` record missing that side.
+
+**Withdrawals use `withdrawal_index` as identity.** The finalize-withdrawal contract event emits `(withdrawal_index, withdrawal_params)`. The indexer stores `withdrawal_index = inner_action.action_index` at L2 submission and completes the withdrawal by that index after cross-checking decoded params and witness aux. Aux is a checksum for withdrawals, not a completion key. See the [Spike 002 withdrawal-index addendum](./spikes/002-bridge-correlation/addendums/withdrawal-index-correlation.html).
 
 #### [5.3.2 User Public Key Extraction](#532-user-public-key-extraction)
 
@@ -432,7 +434,7 @@ The indexer watches zkApp contract PKs (`OUTER_PK`, `INNER_PK`), not individual 
 
 #### [5.3.4 Commit Association and Partial Records](#534-commit-association-and-partial-records)
 
-**Commit-to-bridge-operation association:** When a commit action is indexed, the indexer walks the inner action state chain backward from the commit's `innerActionState` for `innerActionStateLength` steps, collecting `aux` values. Each `aux` is matched to its `bridge_operation` via `(aux, aux_sequence)` lookup (FIFO). This is O(N) where N = `innerActionStateLength`, executed once per commit.
+**Commit-to-bridge-operation association:** When a commit action is indexed, the indexer walks the inner action state chain backward from the commit's `innerActionState` for `innerActionStateLength` steps. Deposits are matched via `(aux, aux_sequence)` lookup (FIFO). Withdrawals are matched by inner action index / `withdrawal_index` and use aux only as a checksum. This is O(N) where N = `innerActionStateLength`, executed once per commit.
 
 **First-side-wins partial records:** Events from different NATS streams arrive independently. Whichever message references a bridge operation first creates the record. Subsequent messages update the existing record and recalculate status based on which fields are populated.
 
@@ -445,7 +447,9 @@ The Bridge API follows the same project-wide pagination conventions as the Explo
 **Queries:**
 
 - `bridgeOperations(publicKey, type?, status?, first?, after?)` — primary query replacing `findDeposits`/`findWithdrawals` archive scans. Matches user as sender OR recipient. Returns `BridgeOperationConnection` using the full Relay shape with data-quality metadata for partial L1 bridge facts.
-- `bridgeOperation(aux, auxSequence)` — single operation detail with graph-traversed linked L1 and L2 actions plus data-quality metadata.
+- `bridgeOperation(id)` — single operation detail by stable Relay `Node.id` / SurrealDB record ID, with graph-traversed linked L1 and L2 actions plus data-quality metadata.
+- `depositBridgeOperation(aux, auxSequence)` — deposit-only natural-key lookup for FIFO collision handling and debugging.
+- `withdrawalBridgeOperation(sourceNetwork, bridgeInstance, withdrawalIndex)` — withdrawal natural-key lookup. Aux is not accepted as a withdrawal lookup key.
 - `outerActions(afterState?, limit?)` — low-level action chain queries for indexer/debugging.
 - `innerActions(afterState?, limit?)` — low-level action chain queries.
 
@@ -659,7 +663,7 @@ All domain logic test-first. Unit tests use mocked repositories. Integration tes
 Before Milestone 1 implementation begins, the following spikes must be completed. Each has a dedicated document in the [spikes directory](./spikes/).
 
 1. **Sequencer Connector** ([Spike 001 results](./spikes/001-sequencer-connector/results.html)) — **Complete.** Resolved: sequencer publishes directly to NATS (no separate connector), consumer-side rollback detection, backfill service design, bootstrap strategy.
-2. **Bridge Operation Correlation** ([Spike 002 results](./spikes/002-bridge-correlation/results.html)) — **Complete.** Resolved: `aux` confirmed as correlation key (Poseidon hash, NOT unique — disambiguated via FIFO `aux_sequence`), user PK extraction via `zeko.l1.bridge-events`, cancel deposit produces no outer action (detected via L1 Watcher), full deposit/withdrawal lifecycle state machines, SurrealDB schema with graph edges, Bridge GraphQL API design.
+2. **Bridge Operation Correlation** ([Spike 002 results](./spikes/002-bridge-correlation/results.html)) — **Complete.** Resolved: deposits use `aux` with FIFO `aux_sequence` collision handling; withdrawals use contract-emitted `withdrawal_index` as identity and aux as a checksum (see [withdrawal-index addendum](./spikes/002-bridge-correlation/addendums/withdrawal-index-correlation.html)); user PK extraction via `zeko.l1.bridge-events`; cancel deposit produces no outer action (detected via L1 Watcher); full deposit/withdrawal lifecycle state machines; SurrealDB schema with graph edges; Bridge GraphQL API design.
 3. **zkApp State Display** ([Spike 003 results](./spikes/003-zkapp-state-display/results.html)) — **Complete.** Resolved: the indexer stores raw state / event / action fields only; human-readable labels come from an opt-in community schema registry served via a `contractSchema(network, address)` GraphQL query; decoding runs client-side by default. See Section 5.2.10 for the display approach and [Spike 003 examples](./spikes/003-zkapp-state-display/addendums/examples/) for the schema format, submission pipeline, and reference implementation.
 4. **Deployment Topology + Unified Gateway** ([Spike 004 results](./spikes/004-deployment-topology/results.html)) — **Complete.** Resolved: Docker Desktop Kubernetes locally, Hetzner/Talos Kubernetes remotely, FluxCD + Flux Operator reconciliation from `zeko-k8s`, Cloudflare-hosted Hive gateway over private Explorer, Bridge, and Contract Registry APIs, private API routing through Cloudflare Tunnel, and per-network persistence/host topology.
 5. **Pagination Schema** ([Spike 005 results](./spikes/005-relay-pagination/results.html)) — **Complete.** Resolved: full Relay Connections (`Node` interface, global IDs, `Connection`/`Edge`/`PageInfo`) for every paginated list. Every indexed row carries a **ULID** primary key serving simultaneously as the SurrealDB record ID and the inner ID inside the standard Pothos `base64("Type:<ulid>")` `Node.id` envelope; that envelope is the default normalized-cache key in both Apollo and urql graphcache. Natural keys (`tx_hash`, `(aux, auxSequence)`, `public_key`) remain queryable via dedicated root fields alongside `node(id:)` for polymorphic refetch. Range-bounded reads with a fixed window keep the flat-list shape.
@@ -683,7 +687,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - SurrealDB: schema sync, rollout migrations, seeding, and tests via SurrealKit; backup cron.
 - Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only). SSE subscriptions.
 - Contract Registry API (Pothos, Cloudflare Worker): single `contractSchema(network, address)` query, reads from Cloudflare KV. Backed by the `zeko-contract-registry` public submission repo. See Section 5.2.10.
-- Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(aux, auxSequence)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
+- Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(id)`, deposit-only `depositBridgeOperation(aux, auxSequence)`, `withdrawalBridgeOperation(sourceNetwork, bridgeInstance, withdrawalIndex)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
 - Code-Mode MCP Server: search() + execute() with generated SDK from the unified gateway schema.
 - Per-concern packages: `nats-protocol`, `domain`, `db`.
 - Docker Desktop Kubernetes + wrangler for local dev, OCI image builds for Kubernetes workloads, CF Worker deployment for frontend/gateway/Contract Registry API/MCP, and private API routing through Cloudflare Tunnel.

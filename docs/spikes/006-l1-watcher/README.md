@@ -40,7 +40,7 @@ The PRD defines the L1 Watcher at a high level (Section 5.2.2), but the followin
 
 ### 4. Bridge Event Detection (`zeko.l1.bridge-events`)
 
-Spike 002 established that the indexer requires `zeko.l1.bridge-events` messages to populate `bridge_operation` records with user PKs, amounts, and correlation keys. The L1 Watcher must detect three event types — each with distinct on-chain signatures. See `spikes/002-bridge-correlation/results.md` §3–4 for the full analysis.
+Spike 002 established that the indexer requires `zeko.l1.bridge-events` messages to populate `bridge_operation` records with user PKs, amounts, deposit correlation keys, and withdrawal indexes. The L1 Watcher must detect three event types — each with distinct on-chain signatures. See `spikes/002-bridge-correlation/results.html` §3–4 for the full analysis.
 
 #### 4a. Deposit Submission Detection
 
@@ -53,11 +53,12 @@ Spike 002 established that the indexer requires `zeko.l1.bridge-events` messages
 
 - The user calls `finalizeWithdrawal` on L1, which triggers `rule_action_witness` (emits a witness action on `OUTER_PK` with `action[1] = aux`) and `rule_bridge_finalize_withdrawal` (emits events containing `(withdrawal_index, withdrawal_params)` at line 256).
 - The outer witness is already captured by `zeko.l1.outer-actions`. The bridge event adds the user PK and withdrawal details.
-- `withdrawalAux()` computes: `Poseidon.hashWithPrefix("Withdrawal_params - qFB3jXP*)", [Field(0), ...amount.toFields(), ...recipient.toFields()])` (`zeko-bridge-sdk/src/utils.ts:88-94`).
+- Per [Spike 002 withdrawal-index addendum](../002-bridge-correlation/addendums/withdrawal-index-correlation.html), the bridge event must include `withdrawalIndex` decoded from the contract event. `aux` is a checksum, not the withdrawal identity.
+- `withdrawalAux()` must be recomputed from the full decoded withdrawal params and compared with the OUTER_PK witness `aux` before publishing the bridge event.
 
 #### 4c. Cancel Deposit Detection
 
-- **Critical finding from spike 002:** Cancel deposit does NOT emit an outer witness action on `OUTER_PK`. The cancel contract rule (`rule_bridge_finalize_cancelled_deposit.ml`) includes `witness_outer` as a precondition witness with **no `actions` field** — only preconditions. See `spikes/002-bridge-correlation/results.md` §4 for the full OCaml contract analysis.
+- **Critical finding from spike 002:** Cancel deposit does NOT emit an outer witness action on `OUTER_PK`. The cancel contract rule (`rule_bridge_finalize_cancelled_deposit.ml`) includes `witness_outer` as a precondition witness with **no `actions` field** — only preconditions. See `spikes/002-bridge-correlation/results.html` §4 for the full OCaml contract analysis.
 - Cancellation advances the `prevNextCancelledDeposit` counter on `helperAccountL1.zkappState[0]`.
 - The L1 Watcher must detect cancel transactions by observing L1 transactions that interact with the Zeko zkApp contract and advance `prevNextCancelledDeposit`.
 - **Fallback verification:** The watcher (or indexer) can periodically read `helperAccountL1.zkappState[0]` to verify counter advancement as a consistency check.
@@ -71,7 +72,7 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 {
   userPk: string,           // user's public key (signer)
   type: "deposit" | "withdrawal" | "cancel",
-  aux: string,              // Poseidon hash correlation key
+  aux: string,              // Poseidon hash checksum/search field
   amount: string,           // bridge amount
   recipient: string,        // destination public key
   blockHeight: number,      // L1 block height
@@ -79,10 +80,12 @@ Spike 002 established the minimum required fields. The exact schema must be defi
   // Deposit-specific:
   timeout?: number,         // timeout slot
   holderAccountL1?: string  // holder account on L1
+  // Withdrawal-specific:
+  withdrawalIndex?: number  // contract-emitted withdrawal identity
 }
 ```
 
-**Key design question:** `aux` is NOT unique — identical deposits/withdrawals produce the same `aux` (see `spikes/002-bridge-correlation/results.md` §2). The indexer disambiguates via `(aux, aux_sequence)` using FIFO ordering. Should the L1 Watcher compute `aux_sequence`, or should it publish raw events and let the indexer assign sequence numbers?
+**Key design question:** `aux` is NOT unique — identical deposits/withdrawals can produce the same `aux` (see `spikes/002-bridge-correlation/results.html` §2). The indexer disambiguates deposits via `(aux, aux_sequence)` using FIFO ordering. Withdrawals must use the contract-emitted `withdrawalIndex` as identity and `aux` only as a checksum. Should the L1 Watcher compute deposit `aux_sequence`, or should it publish raw deposit events and let the indexer assign sequence numbers?
 
 ### 5. Abstract L1 Interface
 
@@ -126,8 +129,9 @@ Spike 002 established the minimum required fields. The exact schema must be defi
 - `zeko-ui/services/actions/api` — current bridge API
 - Mina daemon GraphQL schema
 - Mina archive node GraphQL schema
-- Spike 002 results (`spikes/002-bridge-correlation/results.md`) — §2 aux collision handling, §3 user PK extraction, §4 cancel deposit observability, §5 bridge operation lifecycle
+- Spike 002 results (`spikes/002-bridge-correlation/results.html`) — §2 aux collision handling, §3 user PK extraction, §4 cancel deposit observability, §5 bridge operation lifecycle
 - `zeko-bridge-sdk/src/utils.ts` — `depositAux()` / `withdrawalAux()` Poseidon hash computation
 - `zeko-bridge-sdk/src/index.ts` — `submitDeposit` / `submitWithdrawal` / `finalizeWithdrawal` user-level transactions
+- Spike 002 withdrawal-index addendum — withdrawal finalization correlation must use `withdrawal_index`
 - `zeko/src/app/zeko/circuits/rule_bridge_finalize_cancelled_deposit.ml` — cancel deposit contract (no outer action emitted)
 - `zeko/src/app/zeko/circuits/rule_action_witness.ml` — witness action emission

@@ -4,6 +4,7 @@
 **Blocking:** Milestone 1 (bridge indexer)
 **Owner:** TBD
 **Results:** [results.html](./results.html)
+**Addendums:** [Withdrawal correlation must use `withdrawal_index`](./addendums/withdrawal-index-correlation.html)
 
 ---
 
@@ -57,6 +58,7 @@ The new bridge indexer must correlate L1 and L2 events into unified `bridge_oper
 ## References
 
 - [WEB-415](https://linear.app/zeko-labs/issue/WEB-415) — Index L1 deposit submissions so bridge bootstrap no longer scans wallet archive history
+- [WEB-484](https://linear.app/zeko-labs/issue/WEB-484/fix-zeko-explorer-withdrawal-correlation-to-use-contract-withdrawal) — Fix withdrawal correlation to use contract `withdrawal_index`
 - `zeko-ui/services/actions/indexer` — current bridge indexer source
 - `zeko-ui/services/actions/api` — current bridge API source
 - `zeko/src/app/zeko/circuits/` — OCaml smart contract code (cancel deposit behavior)
