@@ -42,9 +42,14 @@ Use Conventional Commits:
 
 ## PR Workflow
 
-1. Ensure the PR title matches the required format and allowed types.
-2. If using `gh pr create --fill`, confirm the latest commit subject already matches the required format.
-3. If needed, pass an explicit `--title` or update the title with `gh pr edit --title`.
+Opening or updating a GitHub PR is mandatory for every agent-made repository change. The user should not need to ask for a PR because review happens through GitHub.
+
+1. After committing agent-made changes, push the branch and open a PR before handing back to the user unless the user explicitly asked not to.
+2. If the branch already has an open PR, update that PR instead of creating a duplicate.
+3. When changes are made in a worktree, create the commit, push, and open or update the PR from that worktree.
+4. Ensure the PR title matches the required format and allowed types.
+5. If using `gh pr create --fill`, confirm the latest commit subject already matches the required format.
+6. If needed, pass an explicit `--title` or update the title with `gh pr edit --title`.
 
 ## Examples
 

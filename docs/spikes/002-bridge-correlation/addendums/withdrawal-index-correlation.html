@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Withdrawal Correlation Must Use withdrawal_index</title>
+  <style>
+:root { --bg: #07111f; --panel: #0f1b2e; --ink: #e6edf7; --muted: #9fb0c7; --line: #2b3d57; --cyan: #22d3ee; --blue: #60a5fa; --green: #34d399; --amber: #fbbf24; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(circle at 18% 0%, rgba(34,211,238,.15), transparent 30rem), radial-gradient(circle at 84% 10%, rgba(96,165,250,.12), transparent 32rem), var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.58; }
+a { color: var(--cyan); text-decoration: none; } a:hover { text-decoration: underline; }
+.page { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 80px; }
+.hero, .content, .toc { background: linear-gradient(180deg, rgba(15,27,46,.97), rgba(9,20,35,.97)); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.24); }
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 24px; padding: 32px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+h1 { margin: 12px 0 10px; font-size: clamp(34px, 5vw, 56px); line-height: 1.03; letter-spacing: 0; }
+.subtitle, p, li { color: var(--muted); }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.nav a { color: var(--ink); background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.diagram { border: 1px solid var(--line); border-radius: 12px; background: #081425; min-height: 260px; display: grid; place-items: center; overflow: hidden; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; }
+.toc { position: sticky; top: 18px; padding: 18px; }
+.toc h2 { font-size: 14px; margin: 0 0 12px; color: var(--cyan); letter-spacing: .06em; text-transform: uppercase; }
+.toc a { display: block; color: var(--muted); border-left: 2px solid transparent; padding: 6px 0 6px 10px; font-size: 14px; }
+.toc a:hover { color: var(--ink); border-left-color: var(--cyan); text-decoration: none; }
+.content { padding: 30px; }
+.content h2 { margin: 34px 0 14px; font-size: 28px; letter-spacing: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.content h2:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+.content h3 { margin: 26px 0 10px; color: var(--ink); font-size: 20px; letter-spacing: 0; }
+ul { padding-left: 22px; margin: 10px 0 18px; }
+li { margin: 7px 0; }
+strong { color: var(--ink); }
+code { color: #d8b4fe; background: rgba(216,180,254,.08); border: 1px solid rgba(216,180,254,.16); padding: .1rem .28rem; border-radius: 5px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: .92em; }
+pre { margin: 16px 0 20px; padding: 16px; overflow-x: auto; color: #dce7f7; background: #081425; border: 1px solid var(--line); border-radius: 12px; }
+pre code { color: inherit; background: transparent; border: 0; padding: 0; }
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 22px; }
+.callout { border: 1px solid var(--line); border-radius: 12px; background: rgba(19,37,63,.52); padding: 16px; }
+.callout strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.callout span { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); text-align: center; margin-top: 26px; font-size: 13px; }
+@media (max-width: 900px) { .page { width: min(100% - 24px, 1120px); padding-top: 20px; } .hero, .layout { grid-template-columns: 1fr; } .toc { position: static; } .callouts { grid-template-columns: 1fr; } .content { padding: 22px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Spike 002 · Bridge Correlation Addendum</div>
+        <h1>Withdrawal Correlation Must Use <code>withdrawal_index</code></h1>
+        <p class="subtitle">Correction to the bridge correlation model: withdrawal finalization identity comes from the contract-emitted index, while aux remains a checksum and search field.</p>
+        <nav class="nav"><a href="../results.html">Spike 002 Results</a><a href="../README.md">README</a><a href="../../../PRD.html">PRD</a><a href="https://linear.app/zeko-labs/issue/WEB-484/fix-zeko-explorer-withdrawal-correlation-to-use-contract-withdrawal">WEB-484</a></nav>
+      </div>
+      <div class="diagram" aria-label="Withdrawal correlation flow"><svg viewBox="0 0 760 300" role="img"><rect width="760" height="300" fill="#081425"/><g fill="#10233d" stroke-width="2"><rect x="34" y="70" width="170" height="72" rx="12" stroke="#22d3ee"/><rect x="295" y="70" width="170" height="72" rx="12" stroke="#34d399"/><rect x="556" y="70" width="170" height="72" rx="12" stroke="#60a5fa"/><rect x="295" y="194" width="170" height="62" rx="12" stroke="#fbbf24"/></g><g fill="#e6edf7" font-size="15" font-weight="700" text-anchor="middle"><text x="119" y="105">L2 inner action</text><text x="380" y="105">L1 finalize event</text><text x="641" y="105">bridge_operation</text><text x="380" y="229">aux checksum</text></g><g fill="#9fb0c7" font-size="12" text-anchor="middle"><text x="119" y="128">action_index = N</text><text x="380" y="128">withdrawal_index = N</text><text x="641" y="128">lookup by index</text><text x="380" y="248">verify params and witness aux</text></g><g stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#arrow)"><path d="M204 106H295"/><path d="M465 106H556"/><path d="M380 142V194"/></g><defs><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#64748b"/></marker></defs></svg></div>
+    </section>
+    <section class="layout">
+      <aside class="toc"><h2>On This Page</h2><a href="#problem">Problem</a><a href="#contract-facts">Contract Facts</a><a href="#decision">Decision</a><a href="#required-cross-checks">Required Cross-Checks</a><a href="#repository-implementation-map">Repository Implementation Map</a><a href="#acceptance-criteria">Acceptance Criteria</a></aside>
+      <article class="content">
+        <h2 id="problem">Problem</h2>
+        <p>Spike 002 correctly identified that <code>aux</code> is not globally unique. The original FIFO proposal is sufficient for representing duplicate bridge operations, but it is too weak for withdrawal finalization if the finalizer matches by <code>aux</code>, <code>amount</code>, and <code>recipient</code>.</p>
+        <p>Repeated identical withdrawals can share those values. If an L1 finalization event is correlated to the first pending row with matching <code>aux</code>, the indexer can mark the wrong withdrawal as completed.</p>
+        <p>For withdrawals, <code>aux</code> must be treated as a checksum and search field, not as the operation identity.</p>
+
+        <h2 id="contract-facts">Contract Facts</h2>
+        <p>The bridge contract already emits the discriminator the indexer needs.</p>
+        <h3><code>zeko/src/app/zeko/circuits/rule_bridge_finalize_withdrawal.ml</code></h3>
+        <ul>
+          <li>The finalize proof reconstructs the exact L2 withdrawal action and checks it is connected to the supplied inner action-state extension.</li>
+          <li><code>next_withdrawal</code> is read from the inner action-state length after that action is pushed.</li>
+          <li>The emitted <code>withdrawal_index</code> is <code>next_withdrawal - 1</code>.</li>
+          <li>The L1 finalize-withdrawal event emits <code>(withdrawal_index, withdrawal_params)</code>.</li>
+        </ul>
+        <h3><code>zeko/src/app/zeko/circuits/bridge_state.ml</code></h3>
+        <ul>
+          <li><code>Withdrawal_params_base</code> is <code>{ children; amount; recipient }</code>.</li>
+          <li>Withdrawal <code>aux</code> is a hash of the full withdrawal params type, not a unique operation counter.</li>
+        </ul>
+        <p>Therefore, the contract-level identity for a withdrawal is its inner action index, surfaced on L1 as <code>withdrawal_index</code>.</p>
+
+        <h2 id="decision">Decision</h2>
+        <p>Use <code>withdrawal_index</code> as the canonical withdrawal correlation key.</p>
+        <pre><code>(source_network, bridge_instance, withdrawal_index)</code></pre>
+        <ul>
+          <li><code>source_network</code> distinguishes devnet, mainnet, local, and future L1 networks.</li>
+          <li><code>bridge_instance</code> distinguishes the configured bridge contract/account set.</li>
+          <li><code>withdrawal_index</code> is the global L2 inner action index for the withdrawal.</li>
+        </ul>
+        <p>The indexer may continue to store <code>(aux, aux_sequence)</code> for generic bridge search, display, compatibility, and duplicate diagnostics. It must not use <code>(aux, aux_sequence)</code> as the primary key for completing withdrawals.</p>
+
+        <h2 id="required-cross-checks">Required Cross-Checks</h2>
+        <p>When the L1 watcher observes a withdrawal finalization, it must decode the finalize-withdrawal event tuple and publish the decoded <code>withdrawalIndex</code>.</p>
+        <p>Before publishing or before the indexer accepts the event, the pipeline must verify:</p>
+        <ul>
+          <li>The decoded <code>withdrawal_params</code> recompute to the OUTER_PK witness <code>aux</code>.</li>
+          <li>The decoded <code>amount</code> matches the indexed L2 withdrawal row.</li>
+          <li>The decoded <code>recipient</code> matches the indexed L2 withdrawal row.</li>
+          <li>The decoded params hash or raw params fields match the indexed L2 evidence.</li>
+          <li>The <code>withdrawalIndex</code> matches the indexed <code>inner_action.action_index</code>.</li>
+        </ul>
+        <p>If any check fails, the indexer must not complete a bridge operation. It should record a degraded or unrecoverable data-quality reason for operator review.</p>
+
+        <h2 id="repository-implementation-map">Repository Implementation Map</h2>
+        <div class="callouts">
+          <div class="callout"><strong><code>zeko</code></strong><span>No circuit change expected. Create a core follow-up only if Mina archive or event decoding cannot expose <code>(withdrawal_index, withdrawal_params)</code>.</span></div>
+          <div class="callout"><strong><code>zeko-explorer</code></strong><span>Canonical fix: NATS schema, L1 watcher decoder, SurrealDB fields/indexes, and indexer projection.</span></div>
+          <div class="callout"><strong><code>zeko-ui</code></strong><span>Legacy SDK/actions API must stop relying on aux-only withdrawal lookup.</span></div>
+        </div>
+        <h3><code>zeko-explorer</code></h3>
+        <ul>
+          <li>Update <code>services/nats/src/index.ts</code>: add <code>withdrawalIndex</code> and params evidence to withdrawal bridge events.</li>
+          <li>Update <code>services/l1-watcher/src/service.ts</code>: decode <code>(withdrawal_index, withdrawal_params)</code>, recompute full withdrawal aux, and publish only when it matches the OUTER_PK witness aux.</li>
+          <li>Update <code>services/database/surrealkit/database/schema/000_schema.surql</code> and migrations: add <code>withdrawal_index</code>, params evidence, and a withdrawal lookup index over network, bridge instance, type, and <code>withdrawal_index</code>.</li>
+          <li>Update <code>services/zeko-indexer</code>: create withdrawal rows with <code>withdrawal_index = inner_action.action_index</code> and complete rows by <code>withdrawal_index</code> after all cross-checks pass.</li>
+        </ul>
+        <h3><code>zeko-ui</code></h3>
+        <ul>
+          <li>Relevant files: <code>packages/bridge-sdk/src/withdrawals.ts</code>, <code>packages/bridge-sdk/src/diagnostics.ts</code>, <code>packages/graphql/src/bridge-indexer.ts</code>, <code>services/actions/api/src/schema/inner.ts</code>, <code>services/actions/api/src/schema/outer.ts</code>, and <code>services/actions/indexer/src/modules/inner.ts</code>.</li>
+          <li>Use inner action or witness indexes as the primary withdrawal discriminator.</li>
+          <li>Keep aux comparisons as validation only.</li>
+          <li>Add tests where two identical withdrawals share aux but only the matching index is finalized.</li>
+        </ul>
+
+        <h2 id="acceptance-criteria">Acceptance Criteria</h2>
+        <ul>
+          <li>Two identical withdrawals with the same aux are indexed as separate operations.</li>
+          <li>L1 finalization for withdrawal index <code>N</code> completes only withdrawal <code>N</code>.</li>
+          <li>L1 finalization for withdrawal index <code>N + 1</code> does not complete withdrawal <code>N</code> even when both withdrawals share aux, amount, and recipient.</li>
+          <li>Aux or params mismatch blocks completion and records a data-quality issue.</li>
+          <li>No withdrawal completion path matches by aux alone.</li>
+        </ul>
+      </article>
+    </section>
+    <footer>Spike 002 addendum · Withdrawal index correlation · WEB-484</footer>
+  </main>
+</body>
+</html>
