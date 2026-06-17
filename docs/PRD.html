@@ -752,7 +752,9 @@ indexer does not maintain a <code>network_stats</code> table.</li>
 <p><strong>Queries:</strong></p>
 <ul>
 <li><code>bridgeOperations(publicKey, type?, status?, first?, after?)</code> — primary query replacing <code>findDeposits</code>/<code>findWithdrawals</code> archive scans. Matches user as sender OR recipient. Returns <code>BridgeOperationConnection</code> using the full Relay shape with data-quality metadata for partial L1 bridge facts.</li>
-<li><code>bridgeOperation(aux, auxSequence)</code> — single operation detail with graph-traversed linked L1 and L2 actions plus data-quality metadata.</li>
+<li><code>bridgeOperation(id)</code> — single operation detail by stable Relay <code>Node.id</code> / SurrealDB record ID, with graph-traversed linked L1 and L2 actions plus data-quality metadata.</li>
+<li><code>depositBridgeOperation(aux, auxSequence)</code> — deposit-only natural-key lookup for FIFO collision handling and debugging.</li>
+<li><code>withdrawalBridgeOperation(sourceNetwork, bridgeInstance, withdrawalIndex)</code> — withdrawal natural-key lookup. Aux is not accepted as a withdrawal lookup key.</li>
 <li><code>outerActions(afterState?, limit?)</code> — low-level action chain queries for indexer/debugging.</li>
 <li><code>innerActions(afterState?, limit?)</code> — low-level action chain queries.</li>
 </ul>
@@ -1004,7 +1006,7 @@ indexer does not maintain a <code>network_stats</code> table.</li>
 <li>SurrealDB: schema sync, rollout migrations, seeding, and tests via SurrealKit; backup cron.</li>
 <li>Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only). SSE subscriptions.</li>
 <li>Contract Registry API (Pothos, Cloudflare Worker): single <code>contractSchema(network, address)</code> query, reads from Cloudflare KV. Backed by the <code>zeko-contract-registry</code> public submission repo. See Section 5.2.10.</li>
-<li>Bridge GraphQL API (Pothos): <code>bridgeOperations(publicKey)</code>, <code>bridgeOperation(aux, auxSequence)</code>, <code>outerActions</code>, <code>innerActions</code>. SSE subscription: <code>bridgeOperationUpdated(publicKey)</code>.</li>
+<li>Bridge GraphQL API (Pothos): <code>bridgeOperations(publicKey)</code>, <code>bridgeOperation(id)</code>, deposit-only <code>depositBridgeOperation(aux, auxSequence)</code>, <code>withdrawalBridgeOperation(sourceNetwork, bridgeInstance, withdrawalIndex)</code>, <code>outerActions</code>, <code>innerActions</code>. SSE subscription: <code>bridgeOperationUpdated(publicKey)</code>.</li>
 <li>Code-Mode MCP Server: search() + execute() with generated SDK from the unified gateway schema.</li>
 <li>Per-concern packages: <code>nats-protocol</code>, <code>domain</code>, <code>db</code>.</li>
 <li>Docker Desktop Kubernetes + wrangler for local dev, OCI image builds for Kubernetes workloads, CF Worker deployment for frontend/gateway/Contract Registry API/MCP, and private API routing through Cloudflare Tunnel.</li>

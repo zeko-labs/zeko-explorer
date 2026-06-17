@@ -647,7 +647,9 @@ Zeko Indexer:
 │                                                                      │
 │  Queries:                                                            │
 │  - bridgeOperations(publicKey, type?, status?)                       │
-│  - bridgeOperation(aux, auxSequence)                                 │
+│  - bridgeOperation(id)                                                │
+│  - depositBridgeOperation(aux, auxSequence)                           │
+│  - withdrawalBridgeOperation(sourceNetwork, bridgeInstance, index)    │
 │  - outerActions, innerActions (for low-level action chain queries)   │
 └─────────────────────────────────────────────────────────────────────┘
 </code></pre>
@@ -656,7 +658,7 @@ Zeko Indexer:
 <p>The indexer handles this with a <strong>first-side-wins</strong> strategy:</p>
 <ol>
 <li>Whichever NATS message references a bridge operation first creates the <code>bridge_operation</code> record.</li>
-<li>Subsequent messages for the same operation (matched by aux + FIFO sequence) update the existing record.</li>
+<li>Subsequent messages for the same operation update the existing record. Deposits match by <code>(aux, aux_sequence)</code>; withdrawals match by <code>(source_network, bridge_instance, withdrawal_index)</code> and use aux only as a checksum.</li>
 <li>Status is recalculated after every update based on which fields are populated.</li>
 </ol>
 <p>For example: a deposit might be created by <code>zeko.l1.bridge-events</code> (with user PK and amount), then updated by <code>zeko.l1.outer-actions</code> (adding L1 witness data), then updated by <code>zeko.l2.transactions</code> (adding L2 completion data).</p>
@@ -736,7 +738,7 @@ DEFINE INDEX idx_ia_aux           ON inner_action FIELDS aux;
 DEFINE INDEX idx_ia_canonical     ON inner_action FIELDS marked_as_canonical_at;
 DEFINE INDEX idx_ia_block_height  ON inner_action FIELDS block_height;
 </code></pre>
-<p><strong><code>bridge_operation</code></strong> — new. Record ID: <code>bridge_operation:⟨{aux}_{aux_sequence}⟩</code>.</p>
+<p><strong><code>bridge_operation</code></strong> — new. Record ID: stable indexer-assigned SurrealDB record ID. Natural blockchain identifiers remain secondary indexes: deposits use <code>(aux, aux_sequence)</code>; withdrawals use <code>(source_network, bridge_instance, withdrawal_index)</code>.</p>
 <pre><code class="language-surql">DEFINE TABLE bridge_operation SCHEMAFULL;
 
 -- Identity
@@ -749,6 +751,8 @@ DEFINE FIELD status            ON bridge_operation TYPE string
   ];
 
 -- Correlation key
+DEFINE FIELD source_network    ON bridge_operation TYPE string;
+DEFINE FIELD bridge_instance   ON bridge_operation TYPE string;
 DEFINE FIELD aux               ON bridge_operation TYPE string;
 DEFINE FIELD aux_sequence      ON bridge_operation TYPE int DEFAULT 0;
 DEFINE FIELD withdrawal_index  ON bridge_operation TYPE option&lt;int&gt;;
@@ -797,7 +801,7 @@ DEFINE INDEX idx_bo_sender     ON bridge_operation FIELDS sender;
 DEFINE INDEX idx_bo_recipient  ON bridge_operation FIELDS recipient;
 DEFINE INDEX idx_bo_aux        ON bridge_operation FIELDS aux;
 DEFINE INDEX idx_bo_aux_unique ON bridge_operation FIELDS aux, aux_sequence UNIQUE;
-DEFINE INDEX idx_bo_withdrawal_index ON bridge_operation FIELDS type, withdrawal_index;
+DEFINE INDEX idx_bo_withdrawal_index ON bridge_operation FIELDS source_network, bridge_instance, type, withdrawal_index;
 DEFINE INDEX idx_bo_status     ON bridge_operation FIELDS status;
 DEFINE INDEX idx_bo_type_status ON bridge_operation FIELDS type, status;
 DEFINE INDEX idx_bo_sender_type ON bridge_operation FIELDS sender, type;
@@ -909,8 +913,16 @@ type BridgeOperationConnection {
     after: String
   ): BridgeOperationConnection!
 
-  # Single operation detail with linked actions
-  bridgeOperation(aux: String!, auxSequence: Int!): BridgeOperation
+  # Single operation detail by stable Relay Node.id / SurrealDB record ID
+  bridgeOperation(id: ID!): BridgeOperation
+
+  # Natural-key lookups. Aux lookup is deposit-only; withdrawals use index.
+  depositBridgeOperation(aux: String!, auxSequence: Int!): BridgeOperation
+  withdrawalBridgeOperation(
+    sourceNetwork: String!
+    bridgeInstance: String!
+    withdrawalIndex: Int!
+  ): BridgeOperation
 
   # Low-level action chain queries (for indexer/debugging)
   outerActions(afterState: String, limit: Int): [OuterAction!]!

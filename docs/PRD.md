@@ -447,7 +447,9 @@ The Bridge API follows the same project-wide pagination conventions as the Explo
 **Queries:**
 
 - `bridgeOperations(publicKey, type?, status?, first?, after?)` — primary query replacing `findDeposits`/`findWithdrawals` archive scans. Matches user as sender OR recipient. Returns `BridgeOperationConnection` using the full Relay shape with data-quality metadata for partial L1 bridge facts.
-- `bridgeOperation(aux, auxSequence)` — single operation detail with graph-traversed linked L1 and L2 actions plus data-quality metadata.
+- `bridgeOperation(id)` — single operation detail by stable Relay `Node.id` / SurrealDB record ID, with graph-traversed linked L1 and L2 actions plus data-quality metadata.
+- `depositBridgeOperation(aux, auxSequence)` — deposit-only natural-key lookup for FIFO collision handling and debugging.
+- `withdrawalBridgeOperation(sourceNetwork, bridgeInstance, withdrawalIndex)` — withdrawal natural-key lookup. Aux is not accepted as a withdrawal lookup key.
 - `outerActions(afterState?, limit?)` — low-level action chain queries for indexer/debugging.
 - `innerActions(afterState?, limit?)` — low-level action chain queries.
 
@@ -685,7 +687,7 @@ Before Milestone 1 implementation begins, the following spikes must be completed
 - SurrealDB: schema sync, rollout migrations, seeding, and tests via SurrealKit; backup cron.
 - Explorer GraphQL API (Pothos): transactions, accounts, batches, search, system status, events/actions (raw fields only). SSE subscriptions.
 - Contract Registry API (Pothos, Cloudflare Worker): single `contractSchema(network, address)` query, reads from Cloudflare KV. Backed by the `zeko-contract-registry` public submission repo. See Section 5.2.10.
-- Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(aux, auxSequence)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
+- Bridge GraphQL API (Pothos): `bridgeOperations(publicKey)`, `bridgeOperation(id)`, deposit-only `depositBridgeOperation(aux, auxSequence)`, `withdrawalBridgeOperation(sourceNetwork, bridgeInstance, withdrawalIndex)`, `outerActions`, `innerActions`. SSE subscription: `bridgeOperationUpdated(publicKey)`.
 - Code-Mode MCP Server: search() + execute() with generated SDK from the unified gateway schema.
 - Per-concern packages: `nats-protocol`, `domain`, `db`.
 - Docker Desktop Kubernetes + wrangler for local dev, OCI image builds for Kubernetes workloads, CF Worker deployment for frontend/gateway/Contract Registry API/MCP, and private API routing through Cloudflare Tunnel.
