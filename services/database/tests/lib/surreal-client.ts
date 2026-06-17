@@ -4,6 +4,7 @@ import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "nod
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import databaseImages from "../../database-images.json" with { type: "json" };
 
 export const serviceDir = path.resolve(import.meta.dirname, "../..");
 export const surrealKitDir = path.join(serviceDir, "surrealkit");
@@ -171,7 +172,7 @@ export async function startSurreal(): Promise<string> {
   }
   const port = Number(process.env.DATABASE_TEST_SURREAL_PORT ?? 8128);
   endpoint = `http://127.0.0.1:${port}`;
-  const dockerImage = process.env.DATABASE_TEST_SURREAL_IMAGE ?? "surrealdb/surrealdb:v3";
+  const dockerImage = process.env.DATABASE_TEST_SURREAL_IMAGE ?? databaseImages.surrealdb;
   dockerContainer = `zeko-database-test-${process.pid}-${port}`;
   server = spawn("docker", [
     "run",
@@ -260,7 +261,7 @@ async function runSurrealKit(
   projectDir = surrealKitDir,
 ): Promise<void> {
   assert.ok(endpoint !== undefined, "SurrealDB server is not started");
-  const image = process.env.SURREALKIT_IMAGE ?? "ghcr.io/surrealdb/surrealkit:latest";
+  const image = process.env.SURREALKIT_IMAGE ?? databaseImages.surrealkit;
   const copiedProjectDir =
     projectDir === surrealKitDir ? await writableProjectCopy(projectDir) : undefined;
   const workDir = copiedProjectDir ?? projectDir;
@@ -275,6 +276,8 @@ async function runSurrealKit(
       `${workDir}:/work`,
       "--workdir",
       "/work",
+      "--env",
+      "SURREALDB_FOLDER=/work/database",
       image,
       "--host",
       surrealKitHost(),
