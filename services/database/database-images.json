@@ -1,0 +1,4 @@
+{
+  "surrealdb": "surrealdb/surrealdb:v3",
+  "surrealkit": "ghcr.io/surrealdb/surrealkit:latest"
+}

@@ -6,7 +6,8 @@ let surreal_pass = ($env.SURREAL_PASS? | default "root")
 let surreal_namespace = ($env.SURREAL_NAMESPACE? | default "zeko")
 let surreal_database = ($env.SURREAL_DATABASE? | default "explorer")
 let root_dir = ($env.FILE_PWD | path join "../../.." | path expand)
-let surrealkit_image = ($env.SURREALKIT_IMAGE? | default "ghcr.io/surrealdb/surrealkit:latest")
+let database_images = (open ($root_dir | path join "services/database/database-images.json"))
+let surrealkit_image = ($env.SURREALKIT_IMAGE? | default $database_images.surrealkit)
 let docker_host_url = ($surreal_url | str replace "localhost" "host.docker.internal")
 let surrealkit_dir = ($root_dir | path join "services/database/surrealkit")
 
@@ -15,6 +16,7 @@ docker run \
   --add-host "host.docker.internal:host-gateway" \
   --volume $"($surrealkit_dir):/work" \
   --workdir /work \
+  --env SURREALDB_FOLDER=/work/database \
   $surrealkit_image \
   --host $docker_host_url \
   --ns $surreal_namespace \
